@@ -828,13 +828,17 @@ CRITICAL RULES:
               req.log.warn({ player: playerName, pick }, "Stripped prop leg: no real market found");
               return null;
             }
+            // Ensure player name is always in the pick text
+            const normalizedPick = playerName && !pick.toLowerCase().includes(playerName.toLowerCase())
+              ? `${playerName} ${pick}`
+              : pick;
             return {
               gameId: resolved.gameId,
               sport: leg.sport || game?.sport || "",
               homeTeam: resolved.homeTeam,
               awayTeam: resolved.awayTeam,
               startTime: resolved.startTime,
-              pick,
+              pick: normalizedPick,
               betType,
               bookmaker: resolved.bookmaker,
               odds: resolved.odds,

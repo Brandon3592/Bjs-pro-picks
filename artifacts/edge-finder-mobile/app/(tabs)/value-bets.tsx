@@ -263,7 +263,9 @@ function ParlayCard({
                   : leg.homeTeam || leg.awayTeam || "Today's game"}
               </Text>
               <Text style={[styles.legPick, { color: colors.foreground }]}>
-                {leg.pick}
+                {leg.player && !leg.pick.toLowerCase().includes(leg.player.toLowerCase())
+                  ? `${leg.player} ${leg.pick}`
+                  : leg.pick}
               </Text>
             </View>
             <Text style={[styles.legOdds, { color: accent }]}>{fmtOdds(leg.odds)}</Text>
@@ -508,7 +510,7 @@ export default function AiPicksScreen() {
                 sublabel="2–3 legs, solid value (+175 to +500)"
                 accent="#22c55e"
               />
-              {safeParlay ? (
+              {safeParlay && safeParlay.legs.length > 0 ? (
                 <ParlayCard
                   parlay={safeParlay}
                   accent="#22c55e"
@@ -531,7 +533,7 @@ export default function AiPicksScreen() {
                 sublabel="4–6 legs, big payout (+800 to +3000)"
                 accent="#a855f7"
               />
-              {lottoParlay ? (
+              {lottoParlay && lottoParlay.legs.length > 0 ? (
                 <ParlayCard
                   parlay={lottoParlay}
                   accent="#a855f7"
@@ -552,7 +554,7 @@ export default function AiPicksScreen() {
                 sublabel="Moneyline, spread & O/U only — no props"
                 accent="#3b82f6"
               />
-              {gameParlay ? (
+              {gameParlay && gameParlay.legs.length > 0 ? (
                 <ParlayCard
                   parlay={gameParlay}
                   accent="#3b82f6"
@@ -573,7 +575,7 @@ export default function AiPicksScreen() {
                 sublabel="All player performance props"
                 accent="#f97316"
               />
-              {propParlay ? (
+              {propParlay && propParlay.legs.length > 0 ? (
                 <ParlayCard
                   parlay={propParlay}
                   accent="#f97316"
@@ -594,7 +596,7 @@ export default function AiPicksScreen() {
                 sublabel="Game bets + player props combined"
                 accent="#14b8a6"
               />
-              {mixParlay ? (
+              {mixParlay && mixParlay.legs.length > 0 ? (
                 <ParlayCard
                   parlay={mixParlay}
                   accent="#14b8a6"
