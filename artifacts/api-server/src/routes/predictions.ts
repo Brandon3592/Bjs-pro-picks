@@ -109,7 +109,8 @@ async function getRealValueBets(minEdge = 2.5): Promise<ValueBet[]> {
     }
   }
 
-  return allBets.length > 0 ? allBets : mockValueBets;
+  // Return real bets (may be empty — real markets are efficient, 0.5%+ edge is genuine)
+  return allBets;
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -178,7 +179,7 @@ router.get("/value-bets", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Invalid query params" });
   const { sport, minEdge, sortBy, sortDir } = parsed.data;
 
-  let result = await getRealValueBets(minEdge ?? 2.5);
+  let result = await getRealValueBets(minEdge ?? 0.5);
 
   if (sport !== "all") result = result.filter((vb) => vb.sport === sport);
   if (minEdge !== undefined) result = result.filter((vb) => vb.edge >= minEdge);

@@ -10,9 +10,9 @@ function EdgeBadge({ edge }: { edge: number }) {
   return (
     <span className={cn(
       "inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold border",
-      edge >= 5 ? "edge-bg-high" : edge >= 3 ? "edge-bg-medium" : "edge-bg-low"
+      edge >= 2 ? "edge-bg-high" : edge >= 1 ? "edge-bg-medium" : "edge-bg-low"
     )}>
-      +{edge.toFixed(1)}%
+      +{edge.toFixed(2)}%
     </span>
   );
 }
@@ -80,8 +80,8 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard label="Live Games" value={data?.liveGamesCount ?? 0} icon={Activity} color="bg-red-500/10 text-red-400" />
           <StatCard label="Upcoming" value={data?.upcomingGamesCount ?? 0} icon={BarChart2} color="bg-blue-500/10 text-blue-400" />
-          <StatCard label="Value Bets" value={data?.totalValueBets ?? 0} sub="with 3%+ edge" icon={TrendingUp} color="bg-primary/10 text-primary" />
-          <StatCard label="Avg Edge" value={`${(data?.avgEdge ?? 0).toFixed(1)}%`} sub="across all bets" icon={Zap} color="bg-yellow-500/10 text-yellow-400" />
+          <StatCard label="Value Bets" value={data?.totalValueBets ?? 0} sub={data?.isLiveData ? "live market data" : "with edge detected"} icon={TrendingUp} color="bg-primary/10 text-primary" />
+          <StatCard label="Avg Edge" value={data?.totalValueBets ? `${(data?.avgEdge ?? 0).toFixed(2)}%` : "—"} sub="across all bets" icon={Zap} color="bg-yellow-500/10 text-yellow-400" />
         </div>
       )}
 

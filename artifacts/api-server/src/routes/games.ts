@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { GetGamesQueryParams } from "@workspace/api-zod";
 import { fetchAllSportOdds, fetchAllSportScores, SPORT_KEYS, hasApiKey } from "../lib/odds-api";
-import { gameStatus, consensusProb } from "../lib/model";
+import { gameStatus, bestEdgeForGame } from "../lib/model";
 
 const router = Router();
 
@@ -111,8 +111,7 @@ async function getLiveGames() {
     for (const ev of events) {
       const scores = scoreMap.get(ev.id);
       const status = scores?.completed ? "final" : gameStatus(ev);
-      const cp = consensusProb(ev, "h2h");
-      const topEdge = cp ? parseFloat(((Math.max(...cp) - 0.5) * 20).toFixed(1)) : null;
+      const topEdge = bestEdgeForGame(ev);
 
       games.push({
         id: ev.id,

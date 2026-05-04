@@ -11,9 +11,9 @@ function EdgeBadge({ edge }: { edge: number }) {
   return (
     <span className={cn(
       "inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold border",
-      edge >= 5 ? "edge-bg-high" : edge >= 3 ? "edge-bg-medium" : "edge-bg-low"
+      edge >= 2 ? "edge-bg-high" : edge >= 1 ? "edge-bg-medium" : "edge-bg-low"
     )}>
-      +{edge.toFixed(1)}%
+      +{edge.toFixed(2)}%
     </span>
   );
 }
@@ -77,7 +77,9 @@ export default function ValueBets() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-bold">Value Bets</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Bets with 3%+ edge over implied probability</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Live market edges via consensus de-vig · {bets.data?.length ?? 0} bet{(bets.data?.length ?? 0) !== 1 ? "s" : ""} found
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Filter className="h-3.5 w-3.5 text-muted-foreground" />
@@ -136,8 +138,11 @@ export default function ValueBets() {
                 ))
               ) : (bets.data ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={cols.length} className="px-4 py-10 text-center text-muted-foreground text-sm">
-                    No value bets found for current filters.
+                  <td colSpan={cols.length} className="px-4 py-12 text-center">
+                    <div className="text-muted-foreground text-sm font-medium">No value bets detected</div>
+                    <div className="text-muted-foreground text-xs mt-1 max-w-xs mx-auto">
+                      The market is currently efficient — all books are pricing within {sport === "all" ? "0.5%" : `0.5%`} of consensus. Check back as lines move closer to game time.
+                    </div>
                   </td>
                 </tr>
               ) : (

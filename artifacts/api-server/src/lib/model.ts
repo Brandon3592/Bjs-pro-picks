@@ -68,7 +68,7 @@ export function kellyFraction(modelProb: number, odds: number): number {
 
 // ─── Value Bet Detection ──────────────────────────────────────────────────────
 
-export const MIN_EDGE = 2.5; // percent
+export const MIN_EDGE = 0.5; // percent — real markets are efficient; 0.5%+ is genuine value
 
 export interface ValueBet {
   id: string;
@@ -248,9 +248,30 @@ export function gameStatus(event: OddsEvent): "live" | "upcoming" | "final" {
   const now = Date.now();
   const start = new Date(event.commence_time).getTime();
   if (start > now) return "upcoming";
-  // If no scores and bookmakers still quoting, likely live
-  if (now - start < 5 * 60 * 60 * 1000) return "live"; // within 5 hours of start
+  if (now - start < 5 * 60 * 60 * 1000) return "live";
   return "final";
+}
+
+/**
+ * Find the best actual edge available for a game across all bookmakers.
+ * Uses consensus prob as the "fair" line, then finds the book offering
+ * the best price on either side.
+ */
+export function bestEdgeForGame(event: OddsEvent): number | null {
+  const cp = consensusProb(event, "h2h");
+  if (!cp) return null;
+  const [homeProb, awayProb] = cp;
+
+  let maxEdge = 0;
+  for (const bk of event.bookmakers) {
+    const h2h = bk.markets.find((m) => m.key === "h2h");
+    if (!h2h) continue;
+    const homeOut = h2h.outcomes.find((o) => o.name === event.home_team);
+    const awayOut = h2h.outcomes.find((o) => o.name === event.away_team);
+    if (homeOut) maxEdge = Math.max(maxEdge, (homeProb - americanToImplied(homeOut.price)) * 100);
+    if (awayOut) maxEdge = Math.max(maxEdge, (awayProb - americanToImplied(awayOut.price)) * 100);
+  }
+  return maxEdge > 0 ? parseFloat(maxEdge.toFixed(2)) : null;
 }
 
 export function bestMoneylineForGame(bk: OddsBookmaker, teamName: string): number | null {

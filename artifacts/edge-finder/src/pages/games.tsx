@@ -26,9 +26,9 @@ function EdgeBadge({ edge }: { edge: number }) {
   return (
     <span className={cn(
       "inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold border",
-      edge >= 5 ? "edge-bg-high" : edge >= 3 ? "edge-bg-medium" : "edge-bg-low"
+      edge >= 2 ? "edge-bg-high" : edge >= 1 ? "edge-bg-medium" : "edge-bg-low"
     )}>
-      +{edge.toFixed(1)}% edge
+      +{edge.toFixed(2)}% edge
     </span>
   );
 }
