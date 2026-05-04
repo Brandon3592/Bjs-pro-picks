@@ -3,20 +3,34 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: EdgeFinder sports betting value prediction API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: games
+    description: Live and upcoming games
+  - name: odds
+    description: Odds across bookmakers
+  - name: predictions
+    description: Model predictions and edge calculations
+  - name: bets
+    description: Bet tracker
+  - name: dashboard
+    description: Dashboard summary data
+  - name: alerts
+    description: Push alert subscriptions
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +38,336 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/user:
+    get:
+      operationId: getAuthUser
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /games:
+    get:
+      operationId: getGames
+      tags: [games]
+      summary: Get live and upcoming games
+      parameters:
+        - name: sport
+          in: query
+          schema:
+            type: string
+            enum: [NFL, NBA, MLB, NHL, all]
+            default: all
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [live, upcoming, final, all]
+            default: all
+      responses:
+        "200":
+          description: List of games
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Game"
+
+  /games/{gameId}:
+    get:
+      operationId: getGame
+      tags: [games]
+      summary: Get a specific game with odds and prediction
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Game detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameDetail"
+        "404":
+          description: Game not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /odds:
+    get:
+      operationId: getOdds
+      tags: [odds]
+      summary: Get current odds across all bookmakers
+      parameters:
+        - name: gameId
+          in: query
+          schema:
+            type: string
+        - name: sport
+          in: query
+          schema:
+            type: string
+            enum: [NFL, NBA, MLB, NHL, all]
+            default: all
+        - name: bookmaker
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of odds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OddsEntry"
+
+  /predictions:
+    get:
+      operationId: getPredictions
+      tags: [predictions]
+      summary: Get model predictions for games
+      parameters:
+        - name: sport
+          in: query
+          schema:
+            type: string
+            enum: [NFL, NBA, MLB, NHL, all]
+            default: all
+        - name: minEdge
+          in: query
+          schema:
+            type: number
+            default: 0
+      responses:
+        "200":
+          description: List of predictions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Prediction"
+
+  /value-bets:
+    get:
+      operationId: getValueBets
+      tags: [predictions]
+      summary: Get value bets with 3%+ edge flagged
+      parameters:
+        - name: sport
+          in: query
+          schema:
+            type: string
+            enum: [NFL, NBA, MLB, NHL, all]
+            default: all
+        - name: minEdge
+          in: query
+          schema:
+            type: number
+            default: 3
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [edge, odds, kellyStake, sport]
+            default: edge
+        - name: sortDir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        "200":
+          description: Value bets sorted by edge
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ValueBet"
+
+  /bets:
+    get:
+      operationId: getBets
+      tags: [bets]
+      summary: Get tracked bets for the current user
+      parameters:
+        - name: sport
+          in: query
+          schema:
+            type: string
+            enum: [NFL, NBA, MLB, NHL, all]
+            default: all
+        - name: result
+          in: query
+          schema:
+            type: string
+            enum: [win, loss, pending, all]
+            default: all
+      responses:
+        "200":
+          description: List of tracked bets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrackedBet"
+    post:
+      operationId: createBet
+      tags: [bets]
+      summary: Log a new bet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBetBody"
+      responses:
+        "201":
+          description: Bet created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrackedBet"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bets/{betId}:
+    patch:
+      operationId: updateBet
+      tags: [bets]
+      summary: Update a bet (e.g. set result after game)
+      parameters:
+        - name: betId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBetBody"
+      responses:
+        "200":
+          description: Updated bet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrackedBet"
+        "404":
+          description: Bet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteBet
+      tags: [bets]
+      summary: Delete a tracked bet
+      parameters:
+        - name: betId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Bet deleted
+        "404":
+          description: Bet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bets/stats:
+    get:
+      operationId: getBetStats
+      tags: [bets]
+      summary: Get ROI, win rate, and bankroll stats for current user
+      responses:
+        "200":
+          description: Bet statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BetStats"
+
+  /bets/chart:
+    get:
+      operationId: getBankrollChart
+      tags: [bets]
+      summary: Get bankroll growth chart data over time
+      responses:
+        "200":
+          description: Bankroll chart data points
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BankrollDataPoint"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard overview — live games, top edges, sport breakdowns
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /alerts/subscribe:
+    post:
+      operationId: subscribeAlerts
+      tags: [alerts]
+      summary: Subscribe to push alerts for edge opportunities and odds shifts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertSubscribeBody"
+      responses:
+        "200":
+          description: Subscription confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertSubscription"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +375,445 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required: [error]
+
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        profileImage:
+          type: string
+        isAuthenticated:
+          type: boolean
+      required: [id, isAuthenticated]
+
+    Game:
+      type: object
+      properties:
+        id:
+          type: string
+        sport:
+          type: string
+          enum: [NFL, NBA, MLB, NHL]
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        homeScore:
+          type: integer
+          nullable: true
+        awayScore:
+          type: integer
+          nullable: true
+        startTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [live, upcoming, final]
+        quarter:
+          type: string
+          nullable: true
+        timeRemaining:
+          type: string
+          nullable: true
+        venue:
+          type: string
+          nullable: true
+        weather:
+          $ref: "#/components/schemas/WeatherInfo"
+          nullable: true
+        topEdge:
+          type: number
+          nullable: true
+      required: [id, sport, homeTeam, awayTeam, startTime, status]
+
+    WeatherInfo:
+      type: object
+      properties:
+        temp:
+          type: number
+        condition:
+          type: string
+        windSpeed:
+          type: number
+        precipitation:
+          type: number
+      required: [temp, condition, windSpeed, precipitation]
+
+    GameDetail:
+      type: object
+      properties:
+        game:
+          $ref: "#/components/schemas/Game"
+        odds:
+          type: array
+          items:
+            $ref: "#/components/schemas/OddsEntry"
+        prediction:
+          $ref: "#/components/schemas/Prediction"
+          nullable: true
+        injuries:
+          type: array
+          items:
+            $ref: "#/components/schemas/InjuryReport"
+      required: [game, odds]
+
+    InjuryReport:
+      type: object
+      properties:
+        player:
+          type: string
+        team:
+          type: string
+        status:
+          type: string
+        position:
+          type: string
+        impact:
+          type: string
+          enum: [high, medium, low]
+      required: [player, team, status, position, impact]
+
+    OddsEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        gameId:
+          type: string
+        bookmaker:
+          type: string
+        homeMoneyline:
+          type: integer
+          nullable: true
+        awayMoneyline:
+          type: integer
+          nullable: true
+        homeSpread:
+          type: number
+          nullable: true
+        awaySpread:
+          type: number
+          nullable: true
+        homeSpreadOdds:
+          type: integer
+          nullable: true
+        awaySpreadOdds:
+          type: integer
+          nullable: true
+        overUnder:
+          type: number
+          nullable: true
+        overOdds:
+          type: integer
+          nullable: true
+        underOdds:
+          type: integer
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, gameId, bookmaker, updatedAt]
+
+    Prediction:
+      type: object
+      properties:
+        gameId:
+          type: string
+        sport:
+          type: string
+        homeWinProb:
+          type: number
+        awayWinProb:
+          type: number
+        drawProb:
+          type: number
+          nullable: true
+        edgeHome:
+          type: number
+        edgeAway:
+          type: number
+        recommendedBet:
+          type: string
+          nullable: true
+        recommendedBookmaker:
+          type: string
+          nullable: true
+        confidence:
+          type: string
+          enum: [high, medium, low]
+        modelFactors:
+          type: array
+          items:
+            type: string
+        updatedAt:
+          type: string
+          format: date-time
+      required: [gameId, sport, homeWinProb, awayWinProb, edgeHome, edgeAway, confidence, modelFactors, updatedAt]
+
+    ValueBet:
+      type: object
+      properties:
+        id:
+          type: string
+        gameId:
+          type: string
+        sport:
+          type: string
+          enum: [NFL, NBA, MLB, NHL]
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        team:
+          type: string
+        betType:
+          type: string
+          enum: [moneyline, spread, over, under]
+        bookmaker:
+          type: string
+        odds:
+          type: integer
+        impliedProb:
+          type: number
+        modelProb:
+          type: number
+        edge:
+          type: number
+        kellyStake:
+          type: number
+        status:
+          type: string
+          enum: [live, upcoming]
+      required: [id, gameId, sport, homeTeam, awayTeam, startTime, team, betType, bookmaker, odds, impliedProb, modelProb, edge, kellyStake, status]
+
+    TrackedBet:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: string
+        gameId:
+          type: string
+          nullable: true
+        sport:
+          type: string
+          enum: [NFL, NBA, MLB, NHL]
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        team:
+          type: string
+        betType:
+          type: string
+          enum: [moneyline, spread, over, under]
+        bookmaker:
+          type: string
+        odds:
+          type: integer
+        stake:
+          type: number
+        result:
+          type: string
+          enum: [win, loss, pending]
+        profit:
+          type: number
+          nullable: true
+        gameDate:
+          type: string
+          format: date-time
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, userId, sport, homeTeam, awayTeam, team, betType, bookmaker, odds, stake, result, gameDate, createdAt]
+
+    CreateBetBody:
+      type: object
+      properties:
+        gameId:
+          type: string
+          nullable: true
+        sport:
+          type: string
+          enum: [NFL, NBA, MLB, NHL]
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        team:
+          type: string
+        betType:
+          type: string
+          enum: [moneyline, spread, over, under]
+        bookmaker:
+          type: string
+        odds:
+          type: integer
+        stake:
+          type: number
+        gameDate:
+          type: string
+          format: date-time
+        notes:
+          type: string
+          nullable: true
+      required: [sport, homeTeam, awayTeam, team, betType, bookmaker, odds, stake, gameDate]
+
+    UpdateBetBody:
+      type: object
+      properties:
+        result:
+          type: string
+          enum: [win, loss, pending]
+        notes:
+          type: string
+          nullable: true
+
+    BetStats:
+      type: object
+      properties:
+        totalBets:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        pending:
+          type: integer
+        winRate:
+          type: number
+        roi:
+          type: number
+        totalStaked:
+          type: number
+        totalProfit:
+          type: number
+        currentBankroll:
+          type: number
+        bestSport:
+          type: string
+          nullable: true
+        bestBookmaker:
+          type: string
+          nullable: true
+      required: [totalBets, wins, losses, pending, winRate, roi, totalStaked, totalProfit, currentBankroll]
+
+    BankrollDataPoint:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        bankroll:
+          type: number
+        profit:
+          type: number
+        cumulativeProfit:
+          type: number
+      required: [date, bankroll, profit, cumulativeProfit]
+
+    DashboardSummary:
+      type: object
+      properties:
+        liveGamesCount:
+          type: integer
+        upcomingGamesCount:
+          type: integer
+        totalValueBets:
+          type: integer
+        avgEdge:
+          type: number
+        topValueBets:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValueBet"
+        sportBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/SportBreakdown"
+        bookmakerBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/BookmakerBreakdown"
+        lastRefreshed:
+          type: string
+          format: date-time
+      required: [liveGamesCount, upcomingGamesCount, totalValueBets, avgEdge, topValueBets, sportBreakdown, bookmakerBreakdown, lastRefreshed]
+
+    SportBreakdown:
+      type: object
+      properties:
+        sport:
+          type: string
+        valueBets:
+          type: integer
+        avgEdge:
+          type: number
+        games:
+          type: integer
+      required: [sport, valueBets, avgEdge, games]
+
+    BookmakerBreakdown:
+      type: object
+      properties:
+        bookmaker:
+          type: string
+        valueBets:
+          type: integer
+        avgEdge:
+          type: number
+      required: [bookmaker, valueBets, avgEdge]
+
+    AlertSubscribeBody:
+      type: object
+      properties:
+        endpoint:
+          type: string
+        keys:
+          type: object
+          properties:
+            p256dh:
+              type: string
+            auth:
+              type: string
+          required: [p256dh, auth]
+        minEdge:
+          type: number
+          default: 3
+        sports:
+          type: array
+          items:
+            type: string
+      required: [endpoint, keys]
+
+    AlertSubscription:
+      type: object
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+        message:
+          type: string
+      required: [id, status]
