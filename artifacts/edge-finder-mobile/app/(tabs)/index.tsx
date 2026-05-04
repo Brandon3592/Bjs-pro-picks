@@ -5,20 +5,20 @@ import {
   type LineMovement,
   type ValueBet,
 } from "@workspace/api-client-react";
-import React from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 
-import { EmptyState } from "@/components/EmptyState";
 import { EdgeBadge } from "@/components/EdgeBadge";
+import { QuickAddModal, type QuickAddBet } from "@/components/QuickAddModal";
 import { StatPill } from "@/components/StatPill";
 import { useColors } from "@/hooks/useColors";
 
@@ -40,10 +40,14 @@ function directionIcon(dir: string) {
   return "minus";
 }
 
-function TopBetRow({ bet }: { bet: ValueBet }) {
+function TopBetRow({ bet, onTrack }: { bet: ValueBet; onTrack: () => void }) {
   const colors = useColors();
   return (
-    <View style={[styles.topBetRow, { borderBottomColor: colors.border }]}>
+    <TouchableOpacity
+      style={[styles.topBetRow, { borderBottomColor: colors.border }]}
+      onPress={onTrack}
+      activeOpacity={0.75}
+    >
       <View style={styles.topBetLeft}>
         <Text style={[styles.topBetMatchup, { color: colors.foreground }]} numberOfLines={1}>
           {bet.team} {bet.betType}
@@ -58,7 +62,8 @@ function TopBetRow({ bet }: { bet: ValueBet }) {
           {formatOdds(bet.odds)}
         </Text>
       </View>
-    </View>
+      <Feather name="plus-circle" size={16} color={colors.primary} style={styles.trackIcon} />
+    </TouchableOpacity>
   );
 }
 
@@ -68,18 +73,31 @@ function MovementRow({ m }: { m: LineMovement }) {
   const isUp = moved > 0;
   return (
     <View style={[styles.moveRow, { borderBottomColor: colors.border }]}>
-      <View style={[styles.moveIconWrap, { backgroundColor: isUp ? colors.positive + "20" : colors.negative + "20" }]}>
-        <Feather name={directionIcon(m.direction)} size={14} color={isUp ? colors.positive : colors.negative} />
+      <View
+        style={[
+          styles.moveIconWrap,
+          { backgroundColor: isUp ? colors.positive + "20" : colors.negative + "20" },
+        ]}
+      >
+        <Feather
+          name={directionIcon(m.direction)}
+          size={14}
+          color={isUp ? colors.positive : colors.negative}
+        />
       </View>
       <View style={styles.moveBody}>
         <Text style={[styles.moveGame, { color: colors.foreground }]} numberOfLines={1}>
           {m.awayTeam} @ {m.homeTeam}
         </Text>
         <Text style={[styles.moveSub, { color: colors.mutedForeground }]}>
-          {m.bookmaker} · {m.outcomeName} · {m.oldPrice > 0 ? "+" : ""}{m.oldPrice} → {m.newPrice > 0 ? "+" : ""}{m.newPrice}
+          {m.bookmaker} · {m.outcomeName} · {m.oldPrice > 0 ? "+" : ""}
+          {m.oldPrice} → {m.newPrice > 0 ? "+" : ""}
+          {m.newPrice}
         </Text>
       </View>
-      <Text style={[styles.moveTime, { color: colors.mutedForeground }]}>{timeSince(m.newTime)}</Text>
+      <Text style={[styles.moveTime, { color: colors.mutedForeground }]}>
+        {timeSince(m.newTime)}
+      </Text>
     </View>
   );
 }
@@ -87,11 +105,11 @@ function MovementRow({ m }: { m: LineMovement }) {
 export default function DashboardScreen() {
   const colors = useColors();
   const isWeb = Platform.OS === "web";
+  const [quickAdd, setQuickAdd] = useState<QuickAddBet | null>(null);
 
   const summaryQ = useGetDashboardSummary();
-  const movementsQ = useGetLineMovements({ hours: 3, limit: 10 });
+  const movementsQ = useGetLineMovements({ hours: 6, limit: 30 });
 
-  const isLoading = summaryQ.isLoading && movementsQ.isLoading;
   const isRefreshing = summaryQ.isFetching || movementsQ.isFetching;
   const summary = summaryQ.data;
   const movements = movementsQ.data ?? [];
@@ -101,26 +119,28 @@ export default function DashboardScreen() {
     movementsQ.refetch();
   };
 
-  if (isLoading) {
-    return (
-      <View style={[styles.loader, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.primary} size="large" />
-      </View>
-    );
-  }
-
   return (
     <ScrollView
       style={[styles.root, { backgroundColor: colors.background }]}
       contentContainerStyle={[styles.content, isWeb && styles.webContent]}
-      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.primary}
+        />
+      }
     >
       {/* Stats row */}
       <View style={styles.statsRow}>
         <StatPill label="Live Games" value={summary?.liveGamesCount ?? 0} />
         <StatPill label="Upcoming" value={summary?.upcomingGamesCount ?? 0} />
         <StatPill label="Value Bets" value={summary?.totalValueBets ?? 0} accent />
-        <StatPill label="Avg Edge" value={`${(summary?.avgEdge ?? 0).toFixed(1)}%`} accent />
+        <StatPill
+          label="Avg Edge"
+          value={`${(summary?.avgEdge ?? 0).toFixed(1)}%`}
+          accent
+        />
       </View>
 
       {/* Top Value Bets */}
@@ -128,11 +148,38 @@ export default function DashboardScreen() {
         <View style={styles.sectionHeader}>
           <Feather name="zap" size={16} color={colors.primary} />
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Top Value Bets</Text>
+          {summaryQ.isLoading && (
+            <ActivityIndicator size="small" color={colors.mutedForeground} style={styles.inlineLoader} />
+          )}
         </View>
-        {!summary?.topValueBets?.length ? (
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No value bets right now</Text>
+        {summaryQ.isLoading ? (
+          <View style={styles.skeletonWrap}>
+            {[1, 2, 3].map((i) => (
+              <View key={i} style={[styles.skeletonRow, { borderBottomColor: colors.border }]}>
+                <View style={[styles.skeletonLine, { backgroundColor: colors.muted, width: "60%" }]} />
+                <View style={[styles.skeletonLine, { backgroundColor: colors.muted, width: "30%" }]} />
+              </View>
+            ))}
+          </View>
+        ) : !summary?.topValueBets?.length ? (
+          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+            No value bets right now — pull to refresh
+          </Text>
         ) : (
-          summary.topValueBets.slice(0, 6).map((b) => <TopBetRow key={b.id} bet={b} />)
+          summary.topValueBets.slice(0, 6).map((b) => (
+            <TopBetRow
+              key={b.id}
+              bet={b}
+              onTrack={() =>
+                setQuickAdd({
+                  matchup: `${b.awayTeam} @ ${b.homeTeam}`,
+                  pick: `${b.team} ${b.betType}`,
+                  bookmaker: b.bookmaker,
+                  odds: b.odds,
+                })
+              }
+            />
+          ))
         )}
       </View>
 
@@ -141,32 +188,73 @@ export default function DashboardScreen() {
         <View style={styles.sectionHeader}>
           <Feather name="activity" size={16} color={colors.primary} />
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Line Movements</Text>
+          {movementsQ.isLoading && (
+            <ActivityIndicator size="small" color={colors.mutedForeground} style={styles.inlineLoader} />
+          )}
         </View>
-        {!movements.length ? (
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No recent movements</Text>
+        {movementsQ.isLoading ? (
+          <View style={styles.skeletonWrap}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <View key={i} style={[styles.skeletonRow, { borderBottomColor: colors.border }]}>
+                <View style={[styles.skeletonLine, { backgroundColor: colors.muted, width: "70%" }]} />
+                <View style={[styles.skeletonLine, { backgroundColor: colors.muted, width: "40%" }]} />
+              </View>
+            ))}
+          </View>
+        ) : !movements.length ? (
+          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+            No recent movements
+          </Text>
         ) : (
           movements.map((m, i) => <MovementRow key={`${m.gameId}-${i}`} m={m} />)
         )}
       </View>
 
       {/* Sport Breakdown */}
-      {!!summary?.sportBreakdown?.length && (
+      {(summaryQ.isLoading || !!summary?.sportBreakdown?.length) && (
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.sectionHeader}>
             <Feather name="bar-chart-2" size={16} color={colors.primary} />
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>By Sport</Text>
           </View>
-          {summary.sportBreakdown.map((s) => (
-            <View key={s.sport} style={[styles.sportRow, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.sportName, { color: colors.foreground }]}>{s.sport}</Text>
-              <View style={styles.sportStats}>
-                <Text style={[styles.sportStat, { color: colors.mutedForeground }]}>{s.valueBets} bets</Text>
-                <Text style={[styles.sportEdge, { color: colors.positive }]}>+{s.avgEdge.toFixed(1)}% avg</Text>
-              </View>
+          {summaryQ.isLoading ? (
+            <View style={styles.skeletonWrap}>
+              {[1, 2, 3].map((i) => (
+                <View key={i} style={[styles.skeletonRow, { borderBottomColor: colors.border }]}>
+                  <View style={[styles.skeletonLine, { backgroundColor: colors.muted, width: "30%" }]} />
+                  <View style={[styles.skeletonLine, { backgroundColor: colors.muted, width: "50%" }]} />
+                </View>
+              ))}
             </View>
-          ))}
+          ) : (
+            summary?.sportBreakdown?.map((s) => (
+              <View key={s.sport} style={[styles.sportRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.sportName, { color: colors.foreground }]}>{s.sport}</Text>
+                <View style={styles.sportStats}>
+                  <Text style={[styles.sportStat, { color: colors.mutedForeground }]}>
+                    {s.games} games
+                  </Text>
+                  <Text style={[styles.sportStat, { color: colors.mutedForeground }]}>
+                    {s.valueBets} value bet{s.valueBets !== 1 ? "s" : ""}
+                  </Text>
+                  {s.avgEdge > 0 && (
+                    <Text style={[styles.sportEdge, { color: colors.positive }]}>
+                      +{s.avgEdge.toFixed(1)}%
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))
+          )}
         </View>
       )}
+
+      <QuickAddModal
+        visible={!!quickAdd}
+        bet={quickAdd}
+        onClose={() => setQuickAdd(null)}
+        onAdded={() => setQuickAdd(null)}
+      />
     </ScrollView>
   );
 }
@@ -175,13 +263,8 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { padding: 16, gap: 14 },
   webContent: { paddingTop: 83 },
-  loader: { flex: 1, alignItems: "center", justifyContent: "center" },
   statsRow: { flexDirection: "row", gap: 8 },
-  section: {
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
+  section: { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -189,29 +272,39 @@ const styles = StyleSheet.create({
     padding: 14,
     paddingBottom: 10,
   },
-  sectionTitle: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-  },
+  sectionTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", flex: 1 },
+  inlineLoader: { marginLeft: "auto" },
   emptyText: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     padding: 14,
     paddingTop: 0,
+    paddingBottom: 14,
   },
-  topBetRow: {
+  skeletonWrap: { paddingBottom: 4 },
+  skeletonRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+  },
+  skeletonLine: { height: 12, borderRadius: 6 },
+  topBetRow: {
+    flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 8,
   },
-  topBetLeft: { flex: 1, marginRight: 10 },
+  topBetLeft: { flex: 1 },
   topBetMatchup: { fontSize: 13, fontFamily: "Inter_500Medium" },
   topBetSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
   topBetRight: { alignItems: "flex-end", gap: 3 },
   topBetOdds: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  trackIcon: { marginLeft: 4 },
   moveRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -240,7 +333,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   sportName: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  sportStats: { flexDirection: "row", gap: 12, alignItems: "center" },
+  sportStats: { flexDirection: "row", gap: 10, alignItems: "center" },
   sportStat: { fontSize: 12, fontFamily: "Inter_400Regular" },
   sportEdge: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
 });

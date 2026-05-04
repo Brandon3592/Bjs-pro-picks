@@ -13,6 +13,7 @@ import {
 import { BetCard } from "@/components/BetCard";
 import { EmptyState } from "@/components/EmptyState";
 import { FilterChips } from "@/components/FilterChips";
+import { QuickAddModal, type QuickAddBet } from "@/components/QuickAddModal";
 import { useColors } from "@/hooks/useColors";
 
 const SPORTS = [
@@ -24,17 +25,18 @@ const SPORTS = [
 ];
 
 const EDGES = [
+  { label: "Any", value: "0" },
   { label: "1%+", value: "1" },
   { label: "3%+", value: "3" },
   { label: "5%+", value: "5" },
-  { label: "7%+", value: "7" },
 ];
 
 export default function ValueBetsScreen() {
   const colors = useColors();
   const isWeb = Platform.OS === "web";
   const [sport, setSport] = useState("all");
-  const [minEdge, setMinEdge] = useState("1");
+  const [minEdge, setMinEdge] = useState("0");
+  const [quickAdd, setQuickAdd] = useState<QuickAddBet | null>(null);
 
   const { data, isLoading, isFetching, refetch } = useGetValueBets(
     { sport: sport as "all" | "NFL" | "NBA" | "MLB" | "NHL", minEdge: Number(minEdge) }
@@ -57,7 +59,11 @@ export default function ValueBetsScreen() {
         <EmptyState
           icon="trending-up"
           title="No value bets found"
-          subtitle={`No edges above ${minEdge}% right now. Try lowering the threshold or check back soon.`}
+          subtitle={
+            minEdge === "0"
+              ? "No edges detected right now. Check back soon."
+              : `No edges above ${minEdge}% right now. Try "Any" to see all bets.`
+          }
         />
       ) : (
         <FlatList
@@ -75,6 +81,14 @@ export default function ValueBetsScreen() {
               edge={item.edge}
               kellyStake={item.kellyStake}
               status={item.status}
+              onPress={() =>
+                setQuickAdd({
+                  matchup: `${item.awayTeam} @ ${item.homeTeam}`,
+                  pick: `${item.team} ${item.betType}`,
+                  bookmaker: item.bookmaker,
+                  odds: item.odds,
+                })
+              }
             />
           )}
           contentContainerStyle={styles.list}
@@ -83,12 +97,19 @@ export default function ValueBetsScreen() {
           }
           ListHeaderComponent={
             <Text style={[styles.count, { color: colors.mutedForeground }]}>
-              {bets.length} bets · sorted by edge
+              {bets.length} bet{bets.length !== 1 ? "s" : ""} · sorted by edge · tap any to track
             </Text>
           }
-          scrollEnabled={!!bets.length}
+          scrollEnabled={bets.length > 0}
         />
       )}
+
+      <QuickAddModal
+        visible={!!quickAdd}
+        bet={quickAdd}
+        onClose={() => setQuickAdd(null)}
+        onAdded={() => setQuickAdd(null)}
+      />
     </View>
   );
 }

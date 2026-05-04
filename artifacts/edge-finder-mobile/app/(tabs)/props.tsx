@@ -16,6 +16,7 @@ import {
 import { EdgeBadge } from "@/components/EdgeBadge";
 import { EmptyState } from "@/components/EmptyState";
 import { FilterChips } from "@/components/FilterChips";
+import { QuickAddModal, type QuickAddBet } from "@/components/QuickAddModal";
 import { useColors } from "@/hooks/useColors";
 
 const SPORTS = [
@@ -29,7 +30,7 @@ const NBA_MARKETS = [
   { label: "Points", value: "player_points" },
   { label: "Rebounds", value: "player_rebounds" },
   { label: "Assists", value: "player_assists" },
-  { label: "3-Pointers", value: "player_threes" },
+  { label: "3-Ptrs", value: "player_threes" },
   { label: "Blocks", value: "player_blocks" },
   { label: "Steals", value: "player_steals" },
 ];
@@ -52,7 +53,7 @@ const NHL_MARKETS = [
   { label: "Shots", value: "player_shots_on_goal" },
 ];
 
-const SPORT_MARKETS: Record<string, typeof NBA_MARKETS> = {
+const SPORT_MARKETS: Record<string, { label: string; value: string }[]> = {
   NBA: NBA_MARKETS,
   NFL: NFL_MARKETS,
   MLB: MLB_MARKETS,
@@ -70,15 +71,17 @@ export default function PropsScreen() {
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const markets = SPORT_MARKETS[sport];
   const [selectedMarket, setSelectedMarket] = useState(markets[0].value);
+  const [quickAdd, setQuickAdd] = useState<QuickAddBet | null>(null);
 
   const gamesQ = useGetPropsGames({ sport });
   const games = gamesQ.data ?? [];
-
   const activeGame = selectedGame ?? games[0]?.id ?? null;
+  const activeGameData = games.find((g) => g.id === activeGame);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const propsQ = useGetProps(
     { gameId: activeGame ?? "", sport, markets: selectedMarket },
-    { query: { enabled: !!activeGame, queryKey: [] } }
+    { query: { enabled: !!activeGame } } as any
   );
   const props = propsQ.data ?? [];
 
@@ -101,24 +104,41 @@ export default function PropsScreen() {
         <View style={styles.miniLoader}>
           <ActivityIndicator color={colors.primary} size="small" />
         </View>
-      ) : games.length === 0 ? null : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gameScroll}>
+      ) : games.length === 0 ? (
+        <View style={[styles.noGamesBar, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.noGamesText, { color: colors.mutedForeground }]}>
+            No {sport} games scheduled
+          </Text>
+        </View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.gameScroll}
+          style={[styles.gameScrollBg, { borderBottomColor: colors.border }]}
+        >
           {games.map((g) => {
-            const active = (activeGame === g.id);
+            const active = activeGame === g.id;
             return (
               <TouchableOpacity
                 key={g.id}
                 style={[
                   styles.gameChip,
                   {
-                    backgroundColor: active ? colors.foreground : colors.muted,
-                    borderColor: active ? colors.foreground : colors.border,
+                    backgroundColor: active ? colors.primary : colors.muted,
+                    borderColor: active ? colors.primary : colors.border,
                   },
                 ]}
                 onPress={() => setSelectedGame(g.id)}
-                activeOpacity={0.8}
+                activeOpacity={0.75}
               >
-                <Text style={[styles.gameChipText, { color: active ? colors.background : colors.foreground }]} numberOfLines={1}>
+                <Text
+                  style={[
+                    styles.gameChipText,
+                    { color: active ? colors.primaryForeground : colors.foreground },
+                  ]}
+                  numberOfLines={1}
+                >
                   {g.awayTeam} @ {g.homeTeam}
                 </Text>
               </TouchableOpacity>
@@ -134,49 +154,93 @@ export default function PropsScreen() {
 
       {/* Props list */}
       {!activeGame ? (
-        <EmptyState icon="user" title="No games available" subtitle="Check back when games are scheduled." />
+        <EmptyState
+          icon="user"
+          title="No games available"
+          subtitle="Check back when games are scheduled."
+        />
       ) : propsQ.isLoading ? (
         <View style={styles.loader}>
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
       ) : !props.length ? (
-        <EmptyState icon="user" title="No props found" subtitle="No edge on this market. Try another." />
+        <EmptyState
+          icon="user"
+          title="No props found"
+          subtitle="No edge detected on this market. Try a different stat or game."
+        />
       ) : (
         <FlatList
           data={props}
           keyExtractor={(item, i) => `${item.player}-${item.market}-${i}`}
           renderItem={({ item }) => (
-            <View style={[styles.propCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <TouchableOpacity
+              style={[styles.propCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() =>
+                setQuickAdd({
+                  matchup: activeGameData
+                    ? `${activeGameData.awayTeam} @ ${activeGameData.homeTeam}`
+                    : sport,
+                  pick: `${item.player} ${item.side} ${item.line} ${item.marketLabel}`,
+                  bookmaker: item.bookmaker,
+                  odds: item.odds,
+                })
+              }
+              activeOpacity={0.8}
+            >
               <View style={styles.propHeader}>
                 <View style={styles.propLeft}>
-                  <Text style={[styles.propPlayer, { color: colors.foreground }]}>{item.player}</Text>
+                  <Text style={[styles.propPlayer, { color: colors.foreground }]}>
+                    {item.player}
+                  </Text>
                   <Text style={[styles.propMarket, { color: colors.mutedForeground }]}>
                     {item.side} {item.line} {item.marketLabel}
                   </Text>
                 </View>
                 <EdgeBadge edge={item.edge} />
               </View>
-              <View style={[styles.propFooter, { borderTopColor: colors.border }]}>
-                <Text style={[styles.propBook, { color: colors.mutedForeground }]}>{item.bookmaker}</Text>
-                <Text style={[styles.propOdds, { color: colors.primary }]}>{formatOdds(item.odds)}</Text>
-                <Text style={[styles.propProb, { color: colors.mutedForeground }]}>
-                  {(item.impliedProb * 100).toFixed(0)}% implied
+              <View style={[styles.propFooter, { borderTopColor: colors.border, backgroundColor: colors.muted }]}>
+                <Text style={[styles.propBook, { color: colors.mutedForeground }]}>
+                  {item.bookmaker}
                 </Text>
+                <Text style={[styles.propOdds, { color: colors.primary }]}>
+                  {formatOdds(item.odds)}
+                </Text>
+                <View style={styles.propRight}>
+                  <Text style={[styles.propProb, { color: colors.mutedForeground }]}>
+                    {item.impliedProb.toFixed(1)}% implied
+                  </Text>
+                  <View style={styles.trackHint}>
+                    <Feather name="plus-circle" size={12} color={colors.primary} />
+                    <Text style={[styles.trackHintText, { color: colors.primary }]}>Track</Text>
+                  </View>
+                </View>
               </View>
-            </View>
+            </TouchableOpacity>
           )}
           contentContainerStyle={styles.list}
           refreshControl={
-            <RefreshControl refreshing={propsQ.isFetching} onRefresh={() => propsQ.refetch()} tintColor={colors.primary} />
+            <RefreshControl
+              refreshing={propsQ.isFetching}
+              onRefresh={() => propsQ.refetch()}
+              tintColor={colors.primary}
+            />
           }
           ListHeaderComponent={
             <Text style={[styles.count, { color: colors.mutedForeground }]}>
-              {props.length} props · sorted by edge
+              {props.length} prop{props.length !== 1 ? "s" : ""} · tap to track
             </Text>
           }
-          scrollEnabled={!!props.length}
+          scrollEnabled={props.length > 0}
         />
       )}
+
+      <QuickAddModal
+        visible={!!quickAdd}
+        bet={quickAdd}
+        onClose={() => setQuickAdd(null)}
+        onAdded={() => setQuickAdd(null)}
+      />
     </View>
   );
 }
@@ -186,7 +250,19 @@ const styles = StyleSheet.create({
   webRoot: { paddingTop: 67 },
   sportTabs: { borderBottomWidth: StyleSheet.hairlineWidth },
   miniLoader: { padding: 12, alignItems: "center" },
-  gameScroll: { paddingHorizontal: 16, paddingVertical: 10, gap: 8, flexDirection: "row" },
+  noGamesBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  noGamesText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  gameScrollBg: { borderBottomWidth: StyleSheet.hairlineWidth, flexGrow: 0 },
+  gameScroll: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+    flexDirection: "row",
+  },
   gameChip: {
     paddingHorizontal: 12,
     paddingVertical: 7,
@@ -198,7 +274,12 @@ const styles = StyleSheet.create({
   marketRow: { borderBottomWidth: StyleSheet.hairlineWidth },
   loader: { flex: 1, alignItems: "center", justifyContent: "center" },
   list: { paddingTop: 8, paddingBottom: 100 },
-  count: { fontSize: 12, fontFamily: "Inter_400Regular", paddingHorizontal: 16, paddingVertical: 8 },
+  count: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
   propCard: {
     marginHorizontal: 16,
     marginBottom: 10,
@@ -221,10 +302,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 8,
   },
   propBook: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
   propOdds: { fontSize: 14, fontFamily: "Inter_700Bold" },
-  propProb: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "right", flex: 1 },
+  propRight: { flex: 1, alignItems: "flex-end", gap: 2 },
+  propProb: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  trackHint: { flexDirection: "row", alignItems: "center", gap: 3 },
+  trackHintText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
 });
