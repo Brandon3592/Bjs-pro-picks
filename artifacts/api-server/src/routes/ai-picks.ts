@@ -102,7 +102,8 @@ async function fetchRealPropsForAI(
       const markets = SPORT_MARKETS[sport] ?? [];
       const propEvent = await fetchPlayerPropsForEvent(sport, event.id, markets);
       if (!propEvent) return [];
-      return parsePropEvent(propEvent, sportLabel, event);
+      // Pass the API key (sport) so prop.sport matches the sportApiKey filter downstream
+      return parsePropEvent(propEvent, sport, event);
     })
   );
 
@@ -729,6 +730,48 @@ CRITICAL RULES:
     // Build a case-insensitive set of valid player names from real props
     const validPlayerSet = new Set(filteredProps.map((p) => p.player.toLowerCase()));
 
+    // Build player → props lookup map for real odds resolution
+    const propsByPlayer = new Map<string, typeof filteredProps>();
+    for (const prop of filteredProps) {
+      const key = prop.player.toLowerCase();
+      if (!propsByPlayer.has(key)) propsByPlayer.set(key, []);
+      propsByPlayer.get(key)!.push(prop);
+    }
+
+    // Given a player_prop leg, find the real bookmaker odds from filteredProps.
+    // Extracts the line from the pick text and matches against the prop catalog.
+    function lookupPropOdds(playerName: string, pick: string): { odds: number; bookmaker: string } | null {
+      const playerKey = playerName.toLowerCase();
+      // Also try scanning whitelist for a name that appears in the pick text
+      let props = propsByPlayer.get(playerKey);
+      if (!props || props.length === 0) {
+        const pickLower = pick.toLowerCase();
+        for (const [name, list] of propsByPlayer) {
+          if (pickLower.includes(name)) { props = list; break; }
+        }
+      }
+      if (!props || props.length === 0) return null;
+
+      // Determine direction (over/under) and line from pick text
+      const direction = /\bunder\b/i.test(pick) ? "under" : "over";
+      const lineMatch = pick.match(/(\d+\.?\d*)/);
+      const line = lineMatch ? parseFloat(lineMatch[1]) : null;
+
+      if (line !== null) {
+        // Try to find exact line match first, then closest
+        const exact = props.find((p) => p.line === line);
+        const best = exact ?? props.reduce((a, b) =>
+          Math.abs(a.line - line) <= Math.abs(b.line - line) ? a : b
+        );
+        const odds = direction === "over" ? best.overOdds : best.underOdds;
+        return { odds, bookmaker: best.bestBook };
+      }
+
+      // No line found — just return the most liquid prop for that player
+      const odds = direction === "over" ? props[0].overOdds : props[0].underOdds;
+      return { odds, bookmaker: props[0].bestBook };
+    }
+
     // Find game by scanning pick text for any team name
     function findGameByPickText(pick: string): (OddsEvent & { sport: string }) | null {
       const p = pick.toLowerCase();
@@ -765,6 +808,12 @@ CRITICAL RULES:
             }
           }
 
+          // For player_prop legs, always use real bookmaker odds from props catalog
+          const playerName = leg.player ?? "";
+          const realProp = betType === "player_prop"
+            ? lookupPropOdds(playerName, pick)
+            : null;
+
           return {
             gameId: game?.id || leg.gameId || "",
             sport: leg.sport || game?.sport || "",
@@ -773,9 +822,9 @@ CRITICAL RULES:
             startTime: leg.startTime || game?.commence_time || new Date().toISOString(),
             pick,
             betType,
-            bookmaker: leg.bookmaker ?? "DraftKings",
-            odds: typeof leg.odds === "number" ? leg.odds : -110,
-            player: leg.player ?? null,
+            bookmaker: realProp?.bookmaker ?? leg.bookmaker ?? "DraftKings",
+            odds: realProp?.odds ?? (typeof leg.odds === "number" ? leg.odds : -110),
+            player: playerName || null,
           };
         })
         .filter((l): l is AIPickLeg => l !== null);
