@@ -334,7 +334,7 @@ export default function AiPicksScreen() {
   const sportParam = selectedSport === "all" ? undefined : selectedSport;
   const { data, isLoading, isFetching, refetch } = useGetAiPicks(
     sportParam ? { sport: sportParam } : undefined,
-    { query: { staleTime: 0, gcTime: 0, refetchOnMount: true, refetchOnWindowFocus: false } as any },
+    { query: { staleTime: 15 * 60_000, gcTime: 15 * 60_000, refetchOnMount: true, refetchOnWindowFocus: false } as any },
   );
   const { mutate: doRefresh, isPending: isRefreshing } = useRefreshAiPicks();
 
@@ -434,14 +434,21 @@ export default function AiPicksScreen() {
         {data?.summary ? (
           <View style={[styles.summaryBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.summaryLeft}>
-              <View style={[styles.aiBadge, {
-                backgroundColor: isAI ? colors.primary + "22" : colors.border,
-                borderColor: isAI ? colors.primary + "44" : colors.border,
-              }]}>
-                <Feather name="cpu" size={11} color={isAI ? colors.primary : colors.mutedForeground} />
-                <Text style={[styles.aiBadgeText, { color: isAI ? colors.primary : colors.mutedForeground }]}>
-                  {isAI ? "AI Generated" : "Model Picks"}
-                </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <View style={[styles.aiBadge, {
+                  backgroundColor: isAI ? colors.primary + "22" : colors.border,
+                  borderColor: isAI ? colors.primary + "44" : colors.border,
+                }]}>
+                  <Feather name="cpu" size={11} color={isAI ? colors.primary : colors.mutedForeground} />
+                  <Text style={[styles.aiBadgeText, { color: isAI ? colors.primary : colors.mutedForeground }]}>
+                    {isAI ? "AI Generated" : "Model Picks"}
+                  </Text>
+                </View>
+                {data.generatedAt ? (
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
+                    Updated {new Date(data.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                  </Text>
+                ) : null}
               </View>
               <Text style={[styles.summaryText, { color: colors.mutedForeground }]} numberOfLines={3}>
                 {data.summary}

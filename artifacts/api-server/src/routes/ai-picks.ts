@@ -176,7 +176,7 @@ function parsePropEvent(
 // ─── Cache ────────────────────────────────────────────────────────────────────
 
 const picksCacheMap = new Map<string, { data: AIPicksResponse; expiresAt: number }>();
-const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
 const SPORT_LABEL: Record<string, string> = {
   NBA: "basketball_nba",
