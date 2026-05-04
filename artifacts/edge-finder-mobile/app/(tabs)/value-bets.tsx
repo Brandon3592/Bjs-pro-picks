@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BookmakerSheet } from "@/components/BookmakerSheet";
 import { QuickAddModal, type QuickAddBet } from "@/components/QuickAddModal";
 import { useColors } from "@/hooks/useColors";
-import type { AIPick, AIParlay, AIPickLeg } from "@workspace/api-client-react";
+import type { AIPick, AIParlay, AIPickLeg, AILadderParlay } from "@workspace/api-client-react";
 
 // ─── Sport tabs ──────────────────────────────────────────────────────────────
 
@@ -304,6 +304,141 @@ function ParlayCard({
   );
 }
 
+// ─── Ladder parlay card ───────────────────────────────────────────────────────
+
+const LADDER_ACCENT = "#10b981";
+
+function fmtPayout(n: number): string {
+  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+  return `$${n.toFixed(0)}`;
+}
+
+function LadderParlayCard({
+  parlay,
+  onBet,
+}: {
+  parlay: AILadderParlay;
+  onBet: (leg: AIPickLeg) => void;
+}) {
+  const colors = useColors();
+  const [expanded, setExpanded] = useState(false);
+  const steps = parlay.steps ?? [];
+  const finalPayout = steps[steps.length - 1]?.runningPayout ?? 0;
+
+  const previewSteps = steps.length > 4
+    ? [steps[0], steps[Math.floor(steps.length / 2)], steps[steps.length - 1]]
+    : steps;
+
+  return (
+    <TouchableOpacity
+      style={[styles.parlayCard, { backgroundColor: colors.card, borderColor: LADDER_ACCENT + "55" }]}
+      onPress={() => { Haptics.selectionAsync(); setExpanded((e) => !e); }}
+      activeOpacity={0.88}
+    >
+      {/* Header */}
+      <View style={styles.parlayHeader}>
+        <View style={[styles.parlayBadge, { backgroundColor: LADDER_ACCENT + "22", borderColor: LADDER_ACCENT + "44", borderWidth: 1 }]}>
+          <Text style={[styles.parlayBadgeText, { color: LADDER_ACCENT }]}>
+            {steps.length}-Leg Ladder
+          </Text>
+        </View>
+        <Text style={[styles.parlayOdds, { color: LADDER_ACCENT }]}>{fmtOdds(parlay.combinedOdds)}</Text>
+      </View>
+
+      <Text style={[styles.parlayName, { color: colors.foreground }]}>{parlay.name}</Text>
+
+      {/* Progression preview */}
+      <View style={[ladderStyles.progressBar, { backgroundColor: LADDER_ACCENT + "10", borderColor: LADDER_ACCENT + "30" }]}>
+        <View style={ladderStyles.progressItem}>
+          <Text style={[ladderStyles.progressLabel, { color: colors.mutedForeground }]}>Stake</Text>
+          <Text style={[ladderStyles.progressValue, { color: colors.foreground }]}>${parlay.startStake}</Text>
+        </View>
+        {previewSteps.map((step, i) => (
+          <React.Fragment key={i}>
+            <Feather name="arrow-right" size={11} color={LADDER_ACCENT} />
+            <View style={ladderStyles.progressItem}>
+              <Text style={[ladderStyles.progressLabel, { color: colors.mutedForeground }]}>
+                Leg {i === previewSteps.length - 1 && steps.length > 4 ? steps.length : i + 1}
+              </Text>
+              <Text style={[ladderStyles.progressValue, { color: LADDER_ACCENT }]}>
+                {fmtPayout(step.runningPayout)}
+              </Text>
+            </View>
+          </React.Fragment>
+        ))}
+      </View>
+
+      {/* Target badge */}
+      <View style={ladderStyles.targetRow}>
+        <Feather name="target" size={13} color={LADDER_ACCENT} />
+        <Text style={[ladderStyles.targetText, { color: colors.mutedForeground }]}>
+          Target: <Text style={{ color: LADDER_ACCENT, fontFamily: "Inter_700Bold" }}>${parlay.targetPayout.toLocaleString()}</Text>
+          {"  "}·{"  "}
+          Projected: <Text style={{ color: LADDER_ACCENT, fontFamily: "Inter_700Bold" }}>{fmtPayout(finalPayout)}</Text>
+        </Text>
+      </View>
+
+      {/* Step-by-step list */}
+      <View style={[styles.legList, { borderTopColor: colors.border }]}>
+        {steps.map((step, i) => (
+          <View
+            key={i}
+            style={[
+              styles.legRow,
+              i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+            ]}
+          >
+            <View style={[ladderStyles.stepNum, { backgroundColor: LADDER_ACCENT + "20" }]}>
+              <Text style={[ladderStyles.stepNumText, { color: LADDER_ACCENT }]}>{i + 1}</Text>
+            </View>
+            <View style={styles.legInfo}>
+              <Text style={[styles.legMatchup, { color: colors.mutedForeground }]} numberOfLines={1}>
+                {step.leg.awayTeam && step.leg.homeTeam
+                  ? `${step.leg.awayTeam} @ ${step.leg.homeTeam}`
+                  : "Today's game"}
+              </Text>
+              <Text style={[styles.legPick, { color: colors.foreground }]}>{step.leg.pick}</Text>
+            </View>
+            <View style={ladderStyles.stepRight}>
+              <Text style={[styles.legOdds, { color: LADDER_ACCENT }]}>{fmtOdds(step.leg.odds)}</Text>
+              <Text style={[ladderStyles.stepPayout, { color: colors.mutedForeground }]}>
+                → {fmtPayout(step.runningPayout)}
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View>
+
+      {/* Confidence */}
+      <View style={styles.confRow}>
+        <View style={[styles.confBar, { backgroundColor: colors.border }]}>
+          <View style={[styles.confFill, { backgroundColor: "#ef4444", width: `${parlay.confidence}%` as any }]} />
+        </View>
+        <Text style={[styles.confLabel, { color: "#ef4444" }]}>{parlay.confidence}% confidence</Text>
+      </View>
+
+      {/* Reasoning */}
+      {expanded && (
+        <View style={[styles.reasoning, { borderTopColor: colors.border }]}>
+          <View style={styles.reasoningHeader}>
+            <Feather name="trending-up" size={13} color={LADDER_ACCENT} />
+            <Text style={[styles.reasoningLabel, { color: LADDER_ACCENT }]}>How the ladder works</Text>
+          </View>
+          <Text style={[styles.reasoningText, { color: colors.foreground }]}>{parlay.reasoning}</Text>
+        </View>
+      )}
+
+      <TouchableOpacity
+        style={[styles.actionBtnFull, { backgroundColor: LADDER_ACCENT }]}
+        onPress={(e) => { e.stopPropagation?.(); onBet(parlay.legs[0]); }}
+      >
+        <Feather name="external-link" size={14} color="#fff" />
+        <Text style={styles.betBtnText}>Place Ladder Parlay</Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+}
+
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function SkeletonCard({ height = 160 }: { height?: number }) {
@@ -346,6 +481,14 @@ export default function AiPicksScreen() {
   const gameParlay = data?.gameParlayOfTheDay ?? null;
   const propParlay = data?.propParlayOfTheDay ?? null;
   const mixParlay = data?.mixParlayOfTheDay ?? null;
+  const hrParlay = data?.hrParlay ?? null;
+  const goalScorerParlay = data?.goalScorerParlay ?? null;
+  const threePtParlay = data?.threePtParlay ?? null;
+  const tdParlay = data?.tdParlay ?? null;
+  const nbaLadder = (data?.nbaLadder ?? null) as AILadderParlay | null;
+  const mlbLadder = (data?.mlbLadder ?? null) as AILadderParlay | null;
+  const nhlLadder = (data?.nhlLadder ?? null) as AILadderParlay | null;
+  const nflLadder = (data?.nflLadder ?? null) as AILadderParlay | null;
   const isAI = data?.isAI ?? false;
 
   function openTrack(pick: AIPick) {
@@ -608,6 +751,186 @@ export default function AiPicksScreen() {
                 </View>
               )}
             </View>
+
+            {/* ── Divider: Sport-Specific Parlays ── */}
+            <View style={[styles.dividerSection, { borderTopColor: colors.border }]}>
+              <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>SPORT PROP PARLAYS</Text>
+            </View>
+
+            {/* ── MLB Home Run Parlay ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="💣"
+                label="MLB Home Run Parlay"
+                sublabel="Multi-HR bomber parlay · high variance"
+                accent="#3b82f6"
+              />
+              {(hrParlay?.legs?.length ?? 0) > 0 ? (
+                <ParlayCard
+                  parlay={hrParlay!}
+                  accent="#3b82f6"
+                  onBet={(leg) => openBet({ ...leg, pick: `${hrParlay!.name} (HR parlay)`, odds: hrParlay!.combinedOdds })}
+                />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No HR parlay today — check back when MLB games are on.</Text>
+                </View>
+              )}
+            </View>
+
+            {/* ── NHL Goal Scorer Parlay ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="🏒"
+                label="NHL Goal Scorer Parlay"
+                sublabel="Anytime goal scorer combo"
+                accent="#8b5cf6"
+              />
+              {(goalScorerParlay?.legs?.length ?? 0) > 0 ? (
+                <ParlayCard
+                  parlay={goalScorerParlay!}
+                  accent="#8b5cf6"
+                  onBet={(leg) => openBet({ ...leg, pick: `${goalScorerParlay!.name} (goal scorer parlay)`, odds: goalScorerParlay!.combinedOdds })}
+                />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No goal scorer parlay — check back on NHL game days.</Text>
+                </View>
+              )}
+            </View>
+
+            {/* ── NBA 3PT Parlay ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="🏀"
+                label="NBA 3-Pointer Parlay"
+                sublabel="Volume shooters from deep"
+                accent="#f97316"
+              />
+              {(threePtParlay?.legs?.length ?? 0) > 0 ? (
+                <ParlayCard
+                  parlay={threePtParlay!}
+                  accent="#f97316"
+                  onBet={(leg) => openBet({ ...leg, pick: `${threePtParlay!.name} (3PT parlay)`, odds: threePtParlay!.combinedOdds })}
+                />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No 3PT parlay — check back on NBA game days.</Text>
+                </View>
+              )}
+            </View>
+
+            {/* ── NFL TD Parlay ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="🏈"
+                label="NFL TD Scorer Parlay"
+                sublabel="Anytime touchdown combo"
+                accent="#22c55e"
+              />
+              {(tdParlay?.legs?.length ?? 0) > 0 ? (
+                <ParlayCard
+                  parlay={tdParlay!}
+                  accent="#22c55e"
+                  onBet={(leg) => openBet({ ...leg, pick: `${tdParlay!.name} (TD parlay)`, odds: tdParlay!.combinedOdds })}
+                />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No TD parlay — check back on NFL game days.</Text>
+                </View>
+              )}
+            </View>
+
+            {/* ── Divider: Ladder Parlays ── */}
+            <View style={[styles.dividerSection, { borderTopColor: colors.border }]}>
+              <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>LADDER PARLAYS · $10 → $10K</Text>
+            </View>
+            <View style={[styles.ladderIntro, { backgroundColor: LADDER_ACCENT + "10", borderColor: LADDER_ACCENT + "30" }]}>
+              <Feather name="trending-up" size={14} color={LADDER_ACCENT} />
+              <Text style={[styles.ladderIntroText, { color: colors.mutedForeground }]}>
+                Each leg compounds on the last. If all hit, a $10 stake turns into $10,000+.
+              </Text>
+            </View>
+
+            {/* ── NBA Ladder ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="🏀"
+                label="NBA $10 → $10K Ladder"
+                sublabel="Stack NBA props + game lines"
+                accent={LADDER_ACCENT}
+              />
+              {nbaLadder && (nbaLadder.steps?.length ?? 0) >= 3 ? (
+                <LadderParlayCard
+                  parlay={nbaLadder}
+                  onBet={(leg) => openBet({ ...leg, pick: `${nbaLadder.name} (ladder)`, odds: nbaLadder.combinedOdds })}
+                />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>NBA ladder not available today.</Text>
+                </View>
+              )}
+            </View>
+
+            {/* ── MLB Ladder ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="⚾"
+                label="MLB $10 → $10K Ladder"
+                sublabel="HR props + underdog MLs"
+                accent={LADDER_ACCENT}
+              />
+              {mlbLadder && (mlbLadder.steps?.length ?? 0) >= 3 ? (
+                <LadderParlayCard
+                  parlay={mlbLadder}
+                  onBet={(leg) => openBet({ ...leg, pick: `${mlbLadder.name} (ladder)`, odds: mlbLadder.combinedOdds })}
+                />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>MLB ladder not available today.</Text>
+                </View>
+              )}
+            </View>
+
+            {/* ── NHL Ladder ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="🏒"
+                label="NHL $10 → $10K Ladder"
+                sublabel="Goal scorers + puck line underdogs"
+                accent={LADDER_ACCENT}
+              />
+              {nhlLadder && (nhlLadder.steps?.length ?? 0) >= 3 ? (
+                <LadderParlayCard
+                  parlay={nhlLadder}
+                  onBet={(leg) => openBet({ ...leg, pick: `${nhlLadder.name} (ladder)`, odds: nhlLadder.combinedOdds })}
+                />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>NHL ladder not available today.</Text>
+                </View>
+              )}
+            </View>
+
+            {/* ── NFL Ladder ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="🏈"
+                label="NFL $10 → $10K Ladder"
+                sublabel="TD scorers + yardage props"
+                accent={LADDER_ACCENT}
+              />
+              {nflLadder && (nflLadder.steps?.length ?? 0) >= 3 ? (
+                <LadderParlayCard
+                  parlay={nflLadder}
+                  onBet={(leg) => openBet({ ...leg, pick: `${nflLadder.name} (ladder)`, odds: nflLadder.combinedOdds })}
+                />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>NFL ladder not available today.</Text>
+                </View>
+              )}
+            </View>
           </>
         )}
       </ScrollView>
@@ -816,5 +1139,90 @@ const styles = StyleSheet.create({
   },
   tabIcon: { fontSize: 13 },
   tabLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
+
+  dividerSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 20,
+    marginBottom: 16,
+    alignItems: "center",
+  },
+  dividerLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 1.2,
+  },
+  ladderIntro: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  ladderIntroText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 18,
+  },
   tabLabelActive: { fontFamily: "Inter_700Bold" },
+});
+
+// ─── Ladder-specific styles ───────────────────────────────────────────────────
+
+const ladderStyles = StyleSheet.create({
+  progressBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    flexWrap: "wrap",
+  },
+  progressItem: {
+    alignItems: "center",
+    gap: 1,
+  },
+  progressLabel: {
+    fontSize: 9,
+    fontFamily: "Inter_400Regular",
+  },
+  progressValue: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+  },
+  targetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+  },
+  targetText: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+  },
+  stepNum: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  stepNumText: {
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+  },
+  stepRight: {
+    alignItems: "flex-end",
+    gap: 1,
+  },
+  stepPayout: {
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+  },
 });

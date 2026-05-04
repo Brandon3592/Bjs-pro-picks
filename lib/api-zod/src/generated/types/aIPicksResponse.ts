@@ -5,6 +5,7 @@
  * EdgeFinder sports betting value prediction API
  * OpenAPI spec version: 0.1.0
  */
+import type { AILadderParlay } from "./aILadderParlay";
 import type { AIParlay } from "./aIParlay";
 import type { AIPick } from "./aIPick";
 
@@ -15,6 +16,14 @@ export interface AIPicksResponse {
   gameParlayOfTheDay?: AIParlay | null;
   propParlayOfTheDay?: AIParlay | null;
   mixParlayOfTheDay?: AIParlay | null;
+  hrParlay?: AIParlay | null;
+  goalScorerParlay?: AIParlay | null;
+  threePtParlay?: AIParlay | null;
+  tdParlay?: AIParlay | null;
+  nbaLadder?: AILadderParlay | null;
+  mlbLadder?: AILadderParlay | null;
+  nhlLadder?: AILadderParlay | null;
+  nflLadder?: AILadderParlay | null;
   summary: string;
   generatedAt: Date;
   isAI: boolean;

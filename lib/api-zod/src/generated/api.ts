@@ -157,6 +157,286 @@ export const GetAiPicksResponse = zod.object({
       reasoning: zod.string(),
     })
     .nullish(),
+  hrParlay: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      legs: zod.array(
+        zod.object({
+          gameId: zod.string(),
+          sport: zod.string(),
+          homeTeam: zod.string(),
+          awayTeam: zod.string(),
+          startTime: zod.coerce.date(),
+          pick: zod.string(),
+          betType: zod.string(),
+          bookmaker: zod.string(),
+          odds: zod.number(),
+          player: zod.string().nullish(),
+        }),
+      ),
+      combinedOdds: zod.number(),
+      confidence: zod.number(),
+      reasoning: zod.string(),
+    })
+    .nullish(),
+  goalScorerParlay: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      legs: zod.array(
+        zod.object({
+          gameId: zod.string(),
+          sport: zod.string(),
+          homeTeam: zod.string(),
+          awayTeam: zod.string(),
+          startTime: zod.coerce.date(),
+          pick: zod.string(),
+          betType: zod.string(),
+          bookmaker: zod.string(),
+          odds: zod.number(),
+          player: zod.string().nullish(),
+        }),
+      ),
+      combinedOdds: zod.number(),
+      confidence: zod.number(),
+      reasoning: zod.string(),
+    })
+    .nullish(),
+  threePtParlay: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      legs: zod.array(
+        zod.object({
+          gameId: zod.string(),
+          sport: zod.string(),
+          homeTeam: zod.string(),
+          awayTeam: zod.string(),
+          startTime: zod.coerce.date(),
+          pick: zod.string(),
+          betType: zod.string(),
+          bookmaker: zod.string(),
+          odds: zod.number(),
+          player: zod.string().nullish(),
+        }),
+      ),
+      combinedOdds: zod.number(),
+      confidence: zod.number(),
+      reasoning: zod.string(),
+    })
+    .nullish(),
+  tdParlay: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      legs: zod.array(
+        zod.object({
+          gameId: zod.string(),
+          sport: zod.string(),
+          homeTeam: zod.string(),
+          awayTeam: zod.string(),
+          startTime: zod.coerce.date(),
+          pick: zod.string(),
+          betType: zod.string(),
+          bookmaker: zod.string(),
+          odds: zod.number(),
+          player: zod.string().nullish(),
+        }),
+      ),
+      combinedOdds: zod.number(),
+      confidence: zod.number(),
+      reasoning: zod.string(),
+    })
+    .nullish(),
+  nbaLadder: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      legs: zod.array(
+        zod.object({
+          gameId: zod.string(),
+          sport: zod.string(),
+          homeTeam: zod.string(),
+          awayTeam: zod.string(),
+          startTime: zod.coerce.date(),
+          pick: zod.string(),
+          betType: zod.string(),
+          bookmaker: zod.string(),
+          odds: zod.number(),
+          player: zod.string().nullish(),
+        }),
+      ),
+      combinedOdds: zod.number(),
+      confidence: zod.number(),
+      reasoning: zod.string(),
+    })
+    .and(
+      zod.object({
+        sport: zod.string(),
+        startStake: zod.number(),
+        targetPayout: zod.number(),
+        steps: zod.array(
+          zod.object({
+            leg: zod.object({
+              gameId: zod.string(),
+              sport: zod.string(),
+              homeTeam: zod.string(),
+              awayTeam: zod.string(),
+              startTime: zod.coerce.date(),
+              pick: zod.string(),
+              betType: zod.string(),
+              bookmaker: zod.string(),
+              odds: zod.number(),
+              player: zod.string().nullish(),
+            }),
+            runningPayout: zod.number(),
+          }),
+        ),
+      }),
+    )
+    .nullish(),
+  mlbLadder: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      legs: zod.array(
+        zod.object({
+          gameId: zod.string(),
+          sport: zod.string(),
+          homeTeam: zod.string(),
+          awayTeam: zod.string(),
+          startTime: zod.coerce.date(),
+          pick: zod.string(),
+          betType: zod.string(),
+          bookmaker: zod.string(),
+          odds: zod.number(),
+          player: zod.string().nullish(),
+        }),
+      ),
+      combinedOdds: zod.number(),
+      confidence: zod.number(),
+      reasoning: zod.string(),
+    })
+    .and(
+      zod.object({
+        sport: zod.string(),
+        startStake: zod.number(),
+        targetPayout: zod.number(),
+        steps: zod.array(
+          zod.object({
+            leg: zod.object({
+              gameId: zod.string(),
+              sport: zod.string(),
+              homeTeam: zod.string(),
+              awayTeam: zod.string(),
+              startTime: zod.coerce.date(),
+              pick: zod.string(),
+              betType: zod.string(),
+              bookmaker: zod.string(),
+              odds: zod.number(),
+              player: zod.string().nullish(),
+            }),
+            runningPayout: zod.number(),
+          }),
+        ),
+      }),
+    )
+    .nullish(),
+  nhlLadder: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      legs: zod.array(
+        zod.object({
+          gameId: zod.string(),
+          sport: zod.string(),
+          homeTeam: zod.string(),
+          awayTeam: zod.string(),
+          startTime: zod.coerce.date(),
+          pick: zod.string(),
+          betType: zod.string(),
+          bookmaker: zod.string(),
+          odds: zod.number(),
+          player: zod.string().nullish(),
+        }),
+      ),
+      combinedOdds: zod.number(),
+      confidence: zod.number(),
+      reasoning: zod.string(),
+    })
+    .and(
+      zod.object({
+        sport: zod.string(),
+        startStake: zod.number(),
+        targetPayout: zod.number(),
+        steps: zod.array(
+          zod.object({
+            leg: zod.object({
+              gameId: zod.string(),
+              sport: zod.string(),
+              homeTeam: zod.string(),
+              awayTeam: zod.string(),
+              startTime: zod.coerce.date(),
+              pick: zod.string(),
+              betType: zod.string(),
+              bookmaker: zod.string(),
+              odds: zod.number(),
+              player: zod.string().nullish(),
+            }),
+            runningPayout: zod.number(),
+          }),
+        ),
+      }),
+    )
+    .nullish(),
+  nflLadder: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      legs: zod.array(
+        zod.object({
+          gameId: zod.string(),
+          sport: zod.string(),
+          homeTeam: zod.string(),
+          awayTeam: zod.string(),
+          startTime: zod.coerce.date(),
+          pick: zod.string(),
+          betType: zod.string(),
+          bookmaker: zod.string(),
+          odds: zod.number(),
+          player: zod.string().nullish(),
+        }),
+      ),
+      combinedOdds: zod.number(),
+      confidence: zod.number(),
+      reasoning: zod.string(),
+    })
+    .and(
+      zod.object({
+        sport: zod.string(),
+        startStake: zod.number(),
+        targetPayout: zod.number(),
+        steps: zod.array(
+          zod.object({
+            leg: zod.object({
+              gameId: zod.string(),
+              sport: zod.string(),
+              homeTeam: zod.string(),
+              awayTeam: zod.string(),
+              startTime: zod.coerce.date(),
+              pick: zod.string(),
+              betType: zod.string(),
+              bookmaker: zod.string(),
+              odds: zod.number(),
+              player: zod.string().nullish(),
+            }),
+            runningPayout: zod.number(),
+          }),
+        ),
+      }),
+    )
+    .nullish(),
   summary: zod.string(),
   generatedAt: zod.coerce.date(),
   isAI: zod.boolean(),

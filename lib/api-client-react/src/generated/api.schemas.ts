@@ -520,6 +520,18 @@ export interface AIParlay {
   reasoning: string;
 }
 
+export interface AILadderStep {
+  leg: AIPickLeg;
+  runningPayout: number;
+}
+
+export type AILadderParlay = AIParlay & {
+  sport: string;
+  startStake: number;
+  targetPayout: number;
+  steps: AILadderStep[];
+};
+
 export interface AIPicksResponse {
   lockOfTheDay?: AIPick | null;
   safeParlay?: AIParlay | null;
@@ -527,6 +539,14 @@ export interface AIPicksResponse {
   gameParlayOfTheDay?: AIParlay | null;
   propParlayOfTheDay?: AIParlay | null;
   mixParlayOfTheDay?: AIParlay | null;
+  hrParlay?: AIParlay | null;
+  goalScorerParlay?: AIParlay | null;
+  threePtParlay?: AIParlay | null;
+  tdParlay?: AIParlay | null;
+  nbaLadder?: AILadderParlay | null;
+  mlbLadder?: AILadderParlay | null;
+  nhlLadder?: AILadderParlay | null;
+  nflLadder?: AILadderParlay | null;
   summary: string;
   generatedAt: string;
   isAI: boolean;

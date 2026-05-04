@@ -1329,6 +1329,32 @@ components:
           type: string
       required: [id, name, legs, combinedOdds, confidence, reasoning]
 
+    AILadderStep:
+      type: object
+      properties:
+        leg:
+          $ref: "#/components/schemas/AIPickLeg"
+        runningPayout:
+          type: number
+      required: [leg, runningPayout]
+
+    AILadderParlay:
+      allOf:
+        - $ref: "#/components/schemas/AIParlay"
+        - type: object
+          properties:
+            sport:
+              type: string
+            startStake:
+              type: number
+            targetPayout:
+              type: number
+            steps:
+              type: array
+              items:
+                $ref: "#/components/schemas/AILadderStep"
+          required: [sport, startStake, targetPayout, steps]
+
     AIPicksResponse:
       type: object
       properties:
@@ -1349,6 +1375,30 @@ components:
           nullable: true
         mixParlayOfTheDay:
           $ref: "#/components/schemas/AIParlay"
+          nullable: true
+        hrParlay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
+        goalScorerParlay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
+        threePtParlay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
+        tdParlay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
+        nbaLadder:
+          $ref: "#/components/schemas/AILadderParlay"
+          nullable: true
+        mlbLadder:
+          $ref: "#/components/schemas/AILadderParlay"
+          nullable: true
+        nhlLadder:
+          $ref: "#/components/schemas/AILadderParlay"
+          nullable: true
+        nflLadder:
+          $ref: "#/components/schemas/AILadderParlay"
           nullable: true
         summary:
           type: string
