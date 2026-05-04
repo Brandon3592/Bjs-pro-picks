@@ -33,6 +33,13 @@ paths:
       operationId: getAiPicks
       tags: [ai-picks]
       summary: AI-powered picks and parlays for today's games
+      parameters:
+        - name: sport
+          in: query
+          schema:
+            type: string
+            enum: [all, NBA, MLB, NHL, NFL]
+            default: all
       responses:
         "200":
           description: AI picks and parlays

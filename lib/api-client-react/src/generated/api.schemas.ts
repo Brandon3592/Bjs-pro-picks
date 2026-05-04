@@ -532,6 +532,21 @@ export interface AIPicksResponse {
   isAI: boolean;
 }
 
+export type GetAiPicksParams = {
+  sport?: GetAiPicksSport;
+};
+
+export type GetAiPicksSport =
+  (typeof GetAiPicksSport)[keyof typeof GetAiPicksSport];
+
+export const GetAiPicksSport = {
+  all: "all",
+  NBA: "NBA",
+  MLB: "MLB",
+  NHL: "NHL",
+  NFL: "NFL",
+} as const;
+
 export type RefreshAiPicks200 = {
   ok: boolean;
 };

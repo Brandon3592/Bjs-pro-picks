@@ -31,6 +31,7 @@ import type {
   Game,
   GameDetail,
   GameLineHistory,
+  GetAiPicksParams,
   GetAllMarketsParams,
   GetBetsParams,
   GetGameLineHistoryParams,
@@ -67,41 +68,57 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 /**
  * @summary AI-powered picks and parlays for today's games
  */
-export const getGetAiPicksUrl = () => {
-  return `/api/ai-picks`;
+export const getGetAiPicksUrl = (params?: GetAiPicksParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/ai-picks?${stringifiedParams}`
+    : `/api/ai-picks`;
 };
 
 export const getAiPicks = async (
+  params?: GetAiPicksParams,
   options?: RequestInit,
 ): Promise<AIPicksResponse> => {
-  return customFetch<AIPicksResponse>(getGetAiPicksUrl(), {
+  return customFetch<AIPicksResponse>(getGetAiPicksUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getGetAiPicksQueryKey = () => {
-  return [`/api/ai-picks`] as const;
+export const getGetAiPicksQueryKey = (params?: GetAiPicksParams) => {
+  return [`/api/ai-picks`, ...(params ? [params] : [])] as const;
 };
 
 export const getGetAiPicksQueryOptions = <
   TData = Awaited<ReturnType<typeof getAiPicks>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getAiPicks>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: GetAiPicksParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAiPicks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetAiPicksQueryKey();
+  const queryKey = queryOptions?.queryKey ?? getGetAiPicksQueryKey(params);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof getAiPicks>>> = ({
     signal,
-  }) => getAiPicks({ signal, ...requestOptions });
+  }) => getAiPicks(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getAiPicks>>,
@@ -122,15 +139,18 @@ export type GetAiPicksQueryError = ErrorType<unknown>;
 export function useGetAiPicks<
   TData = Awaited<ReturnType<typeof getAiPicks>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getAiPicks>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetAiPicksQueryOptions(options);
+>(
+  params?: GetAiPicksParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAiPicks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAiPicksQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

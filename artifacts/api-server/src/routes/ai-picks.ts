@@ -172,8 +172,15 @@ function parsePropEvent(
 
 // ─── Cache ────────────────────────────────────────────────────────────────────
 
-let picksCache: { data: AIPicksResponse; expiresAt: number } | null = null;
+const picksCacheMap = new Map<string, { data: AIPicksResponse; expiresAt: number }>();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+const SPORT_LABEL: Record<string, string> = {
+  NBA: "basketball_nba",
+  MLB: "baseball_mlb",
+  NHL: "icehockey_nhl",
+  NFL: "americanfootball_nfl",
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -602,18 +609,35 @@ function buildFallbackPicks(): AIPicksResponse {
 // ─── Route ────────────────────────────────────────────────────────────────────
 
 router.get("/ai-picks", async (req, res) => {
-  if (picksCache && Date.now() < picksCache.expiresAt) {
-    return res.json(picksCache.data);
+  const sport = (typeof req.query.sport === "string" ? req.query.sport : "all").toUpperCase();
+  const cacheKey = sport === "ALL" ? "all" : sport;
+
+  const cached = picksCacheMap.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return res.json(cached.data);
   }
 
   try {
-    const [allOdds, valueBets] = await Promise.all([
+    const [allOddsRaw, valueBetsRaw] = await Promise.all([
       fetchAllSportOdds(),
       getRealValueBets(0),
     ]);
 
+    // Filter to requested sport if not "all"
+    const sportApiKey = cacheKey !== "all" ? SPORT_LABEL[cacheKey] : null;
+    const allOdds = sportApiKey
+      ? allOddsRaw.filter((s) => s.sport === sportApiKey)
+      : allOddsRaw;
+
+    const valueBets = sportApiKey
+      ? valueBetsRaw.filter((vb) => vb.sport.toUpperCase() === cacheKey || SPORT_LABEL[vb.sport.toUpperCase()] === sportApiKey)
+      : valueBetsRaw;
+
     // Fetch real player props (cached 15 min, ~3 API requests)
-    const realProps = await fetchRealPropsForAI(allOdds);
+    const realProps = await fetchRealPropsForAI(allOdds.length > 0 ? allOdds : allOddsRaw);
+    const filteredProps = sportApiKey
+      ? realProps.filter((p) => p.sport === sportApiKey)
+      : realProps;
 
     const gameData = buildCompactGameData(allOdds);
     const valueBetData = valueBets.slice(0, 8).map((vb) => ({
@@ -621,15 +645,17 @@ router.get("/ai-picks", async (req, res) => {
       pick: vb.team, betType: vb.betType, book: vb.bookmaker, odds: vb.odds, edge: vb.edge,
     }));
 
-    const propsSection = realProps.length > 0
-      ? `\nReal player props available (use these for propParlayOfTheDay, mixParlayOfTheDay, lockOfTheDay):\n${JSON.stringify(realProps)}`
+    const sportLabel = cacheKey === "all" ? "all sports" : cacheKey;
+    const propsSection = filteredProps.length > 0
+      ? `\nReal player props available (use these for propParlayOfTheDay, mixParlayOfTheDay, lockOfTheDay):\n${JSON.stringify(filteredProps)}`
       : "\nNo live player prop data available — use your knowledge of today's players for prop picks.";
 
     const userPrompt = `Date: ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
+Sport filter: ${sportLabel}
 Games: ${JSON.stringify(gameData)}
 Value bets detected by model: ${JSON.stringify(valueBetData)}${propsSection}
-Generate all six picks: lockOfTheDay, safeParlay, lottoParlay, gameParlayOfTheDay, propParlayOfTheDay, mixParlayOfTheDay.
-IMPORTANT: propParlayOfTheDay legs MUST use real player names and player_prop betType from the props data above. Do NOT use team names as the "player" field.`;
+Generate all six picks (${sportLabel} only): lockOfTheDay, safeParlay, lottoParlay, gameParlayOfTheDay, propParlayOfTheDay, mixParlayOfTheDay.
+IMPORTANT: propParlayOfTheDay legs MUST use real player names and player_prop betType from the props data above. Do NOT use team names as the "player" field.${cacheKey !== "all" ? `\nAll picks MUST be from ${cacheKey} games only.` : ""}`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -643,7 +669,13 @@ IMPORTANT: propParlayOfTheDay legs MUST use real player names and player_prop be
     req.log.info({ finish: response.choices[0]?.finish_reason, len: raw?.length }, "AI picks raw response");
     if (!raw) throw new Error("Empty AI response");
 
-    const jsonStr = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+    // Strip code fences, then fix +NNN odds that aren't valid JSON numbers
+    const jsonStr = raw
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```\s*$/, "")
+      .trim()
+      // "odds": +300  →  "odds": 300  (JSON doesn't allow leading +)
+      .replace(/:\s*\+(\d+)/g, ": $1");
     const parsed = JSON.parse(jsonStr) as {
       lockOfTheDay: AIPick;
       safeParlay: AIParlay;
@@ -725,20 +757,25 @@ IMPORTANT: propParlayOfTheDay legs MUST use real player names and player_prop be
       isAI: true,
     };
 
-    picksCache = { data: result, expiresAt: Date.now() + CACHE_TTL };
+    picksCacheMap.set(cacheKey, { data: result, expiresAt: Date.now() + CACHE_TTL });
     return res.json(result);
 
   } catch (err) {
     req.log.error({ err }, "AI picks generation failed, using fallback");
     const fallback = buildFallbackPicks();
-    picksCache = { data: fallback, expiresAt: Date.now() + 10 * 60_000 };
+    picksCacheMap.set(cacheKey, { data: fallback, expiresAt: Date.now() + 10 * 60_000 });
     return res.json(fallback);
   }
 });
 
-// Force refresh
-router.post("/ai-picks/refresh", (_req, res) => {
-  picksCache = null;
+// Force refresh — clears all sport caches or just one if ?sport= provided
+router.post("/ai-picks/refresh", (req, res) => {
+  const sport = typeof req.query.sport === "string" ? req.query.sport.toUpperCase() : null;
+  if (sport && sport !== "ALL") {
+    picksCacheMap.delete(sport);
+  } else {
+    picksCacheMap.clear();
+  }
   return res.json({ ok: true });
 });
 

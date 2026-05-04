@@ -11,6 +11,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  FlatList,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -18,6 +19,18 @@ import { BookmakerSheet } from "@/components/BookmakerSheet";
 import { QuickAddModal, type QuickAddBet } from "@/components/QuickAddModal";
 import { useColors } from "@/hooks/useColors";
 import type { AIPick, AIParlay, AIPickLeg } from "@workspace/api-client-react";
+
+// ─── Sport tabs ──────────────────────────────────────────────────────────────
+
+const SPORT_TABS = [
+  { key: "all", label: "All Sports", icon: "🌐" },
+  { key: "NBA",  label: "NBA",       icon: "🏀" },
+  { key: "MLB",  label: "MLB",       icon: "⚾" },
+  { key: "NHL",  label: "NHL",       icon: "🏒" },
+  { key: "NFL",  label: "NFL",       icon: "🏈" },
+] as const;
+
+type SportKey = typeof SPORT_TABS[number]["key"];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -307,6 +320,7 @@ export default function AiPicksScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const [quickAdd, setQuickAdd] = useState<QuickAddBet | null>(null);
+  const [selectedSport, setSelectedSport] = useState<SportKey>("all");
   const [bookmakerBet, setBookmakerBet] = useState<{
     matchup: string;
     pick: string;
@@ -315,9 +329,11 @@ export default function AiPicksScreen() {
     preferredBookmaker?: string;
   } | null>(null);
 
-  const { data, isLoading, isFetching, refetch } = useGetAiPicks({
-    query: { staleTime: 5 * 60_000, refetchOnWindowFocus: false } as any,
-  });
+  const sportParam = selectedSport === "all" ? undefined : selectedSport;
+  const { data, isLoading, isFetching, refetch } = useGetAiPicks(
+    sportParam ? { sport: sportParam } : undefined,
+    { query: { staleTime: 5 * 60_000, refetchOnWindowFocus: false } as any },
+  );
   const { mutate: doRefresh, isPending: isRefreshing } = useRefreshAiPicks();
 
   const lock = data?.lockOfTheDay ?? null;
@@ -354,8 +370,49 @@ export default function AiPicksScreen() {
     doRefresh(undefined, { onSettled: () => refetch() });
   }
 
+  function selectSport(key: SportKey) {
+    if (key === selectedSport) return;
+    Haptics.selectionAsync();
+    setSelectedSport(key);
+  }
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }, isWeb && styles.webRoot]}>
+      {/* ── Sport tab bar ── */}
+      <View style={[styles.tabBarWrapper, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <FlatList
+          data={SPORT_TABS}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(item) => item.key}
+          contentContainerStyle={styles.tabBarContent}
+          renderItem={({ item }) => {
+            const active = item.key === selectedSport;
+            return (
+              <TouchableOpacity
+                onPress={() => selectSport(item.key)}
+                style={[
+                  styles.tabPill,
+                  active
+                    ? { backgroundColor: colors.primary }
+                    : { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 },
+                ]}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.tabIcon}>{item.icon}</Text>
+                <Text style={[
+                  styles.tabLabel,
+                  { color: active ? "#fff" : colors.mutedForeground },
+                  active && styles.tabLabelActive,
+                ]}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+        />
+      </View>
+
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
@@ -719,4 +776,24 @@ const styles = StyleSheet.create({
   emptyCardText: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
 
   skelLine: { height: 12, borderRadius: 6, opacity: 0.4 },
+
+  tabBarWrapper: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 10,
+  },
+  tabBarContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  tabPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  tabIcon: { fontSize: 14 },
+  tabLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  tabLabelActive: { fontFamily: "Inter_700Bold" },
 });

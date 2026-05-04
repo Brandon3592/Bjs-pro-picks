@@ -10,6 +10,14 @@ import * as zod from "zod";
 /**
  * @summary AI-powered picks and parlays for today's games
  */
+export const getAiPicksQuerySportDefault = `all`;
+
+export const GetAiPicksQueryParams = zod.object({
+  sport: zod
+    .enum(["all", "NBA", "MLB", "NHL", "NFL"])
+    .default(getAiPicksQuerySportDefault),
+});
+
 export const GetAiPicksResponse = zod.object({
   lockOfTheDay: zod
     .object({
