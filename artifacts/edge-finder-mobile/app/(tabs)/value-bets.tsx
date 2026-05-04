@@ -510,7 +510,7 @@ export default function AiPicksScreen() {
                 sublabel="2–3 legs, solid value (+175 to +500)"
                 accent="#22c55e"
               />
-              {safeParlay && safeParlay.legs.length > 0 ? (
+              {(safeParlay?.legs?.length ?? 0) > 0 ? (
                 <ParlayCard
                   parlay={safeParlay}
                   accent="#22c55e"
@@ -533,7 +533,7 @@ export default function AiPicksScreen() {
                 sublabel="4–6 legs, big payout (+800 to +3000)"
                 accent="#a855f7"
               />
-              {lottoParlay && lottoParlay.legs.length > 0 ? (
+              {(lottoParlay?.legs?.length ?? 0) > 0 ? (
                 <ParlayCard
                   parlay={lottoParlay}
                   accent="#a855f7"
@@ -554,7 +554,7 @@ export default function AiPicksScreen() {
                 sublabel="Moneyline, spread & O/U only — no props"
                 accent="#3b82f6"
               />
-              {gameParlay && gameParlay.legs.length > 0 ? (
+              {(gameParlay?.legs?.length ?? 0) > 0 ? (
                 <ParlayCard
                   parlay={gameParlay}
                   accent="#3b82f6"
@@ -575,7 +575,7 @@ export default function AiPicksScreen() {
                 sublabel="All player performance props"
                 accent="#f97316"
               />
-              {propParlay && propParlay.legs.length > 0 ? (
+              {(propParlay?.legs?.length ?? 0) > 0 ? (
                 <ParlayCard
                   parlay={propParlay}
                   accent="#f97316"
@@ -596,7 +596,7 @@ export default function AiPicksScreen() {
                 sublabel="Game bets + player props combined"
                 accent="#14b8a6"
               />
-              {mixParlay && mixParlay.legs.length > 0 ? (
+              {(mixParlay?.legs?.length ?? 0) > 0 ? (
                 <ParlayCard
                   parlay={mixParlay}
                   accent="#14b8a6"

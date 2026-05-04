@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { jsonrepair } from "jsonrepair";
 import { openai } from "@workspace/integrations-openai-ai-server";
-import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, hasApiKey } from "../lib/odds-api";
+import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, hasApiKey } from "../lib/odds-api";
 import { getRealValueBets } from "./predictions";
 import { consensusProb, americanToDecimal, decimalToAmerican } from "../lib/model";
 import type { OddsEvent, PropEvent } from "../lib/odds-api";
@@ -615,8 +615,10 @@ function buildFallbackPicks(): AIPicksResponse {
 // ─── Route ────────────────────────────────────────────────────────────────────
 
 router.get("/ai-picks", async (req, res) => {
-  const sport = (typeof req.query.sport === "string" ? req.query.sport : "all").toUpperCase();
-  const cacheKey = sport === "ALL" ? "all" : sport;
+  const sportRaw = typeof req.query.sport === "string" ? req.query.sport.toLowerCase() : "all";
+  // Convert API key ("basketball_nba") → label key ("NBA"); keep "all" as-is
+  // allOddsRaw uses label keys ("NBA","MLB"…) so the cache key must also be a label key
+  const cacheKey = sportRaw === "all" ? "all" : (SPORT_FROM_KEY[sportRaw] ?? sportRaw.toUpperCase());
 
   const cached = picksCacheMap.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) {
@@ -629,11 +631,10 @@ router.get("/ai-picks", async (req, res) => {
       getRealValueBets(0),
     ]);
 
-    // Filter to requested sport if not "all"
-    // allOddsRaw uses uppercase label keys ("NBA"), while SPORT_LABEL maps to API keys ("basketball_nba")
+    // cacheKey is now a label key ("NBA","MLB"…) matching allOddsRaw[i].sport
     const sportApiKey = cacheKey !== "all" ? SPORT_LABEL[cacheKey] : null;
     const allOdds = cacheKey !== "all"
-      ? allOddsRaw.filter((s) => s.sport === cacheKey)   // e.g. "NBA" matches "NBA"
+      ? allOddsRaw.filter((s) => s.sport === cacheKey)
       : allOddsRaw;
 
     const valueBets = sportApiKey
@@ -846,12 +847,20 @@ CRITICAL RULES:
             };
           }
 
+          // For game legs (non-prop): require the game to be in our verified game data.
+          // If the AI hallucinated a team/game not in the allowed list, strip it.
+          if (!game) {
+            req.log.warn({ pick, homeTeam: leg.homeTeam, gameId: leg.gameId },
+              "Stripped game leg: not found in allowed games list");
+            return null;
+          }
+
           return {
-            gameId: game?.id || leg.gameId || "",
-            sport: leg.sport || game?.sport || "",
-            homeTeam: leg.homeTeam || game?.home_team || "",
-            awayTeam: leg.awayTeam || game?.away_team || "",
-            startTime: leg.startTime || game?.commence_time || new Date().toISOString(),
+            gameId: game.id,
+            sport: game.sport,
+            homeTeam: game.home_team,
+            awayTeam: game.away_team,
+            startTime: game.commence_time,
             pick,
             betType,
             bookmaker: leg.bookmaker ?? "DraftKings",
@@ -916,6 +925,30 @@ CRITICAL RULES:
       if (!p) continue;
       p.legs = dedupeLegs(normalizeLegs(p.legs), allowSameGame);
       if (p.legs.length >= 2) p.combinedOdds = calcCombinedOdds(p.legs);
+    }
+
+    // Normalize lockOfTheDay through the same pipeline — this validates the
+    // game is real and the player (if prop) is in the whitelist.
+    if (parsed.lockOfTheDay) {
+      const lock = parsed.lockOfTheDay;
+      const normalized = normalizeLegs([{
+        gameId: lock.gameId, sport: lock.sport,
+        homeTeam: lock.homeTeam, awayTeam: lock.awayTeam,
+        startTime: lock.startTime, pick: lock.pick,
+        betType: lock.betType, player: lock.player ?? null,
+        bookmaker: lock.bookmaker, odds: lock.odds,
+      }]);
+      if (normalized.length === 1) {
+        const n = normalized[0];
+        lock.gameId = n.gameId; lock.sport = n.sport;
+        lock.homeTeam = n.homeTeam; lock.awayTeam = n.awayTeam;
+        lock.startTime = n.startTime; lock.pick = n.pick;
+        lock.betType = n.betType; lock.odds = n.odds;
+        lock.bookmaker = n.bookmaker;
+      } else {
+        req.log.warn({ pick: lock.pick }, "lockOfTheDay failed validation — clearing");
+        parsed.lockOfTheDay = null as any;
+      }
     }
 
     // Ensure IDs
