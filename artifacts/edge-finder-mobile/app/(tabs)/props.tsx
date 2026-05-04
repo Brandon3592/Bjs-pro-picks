@@ -193,8 +193,8 @@ export default function PropsScreen() {
           title="No props found"
           subtitle={
             selectedMarket === "all"
-              ? "No edge detected for this game. Try another game."
-              : "No edge on this market. Try 'All' or a different stat."
+              ? "No props available for this game. Try another game."
+              : "No props on this market. Try 'All' or a different stat."
           }
         />
       ) : (
@@ -256,7 +256,7 @@ export default function PropsScreen() {
           }
           ListHeaderComponent={
             <Text style={[styles.count, { color: colors.mutedForeground }]}>
-              {filteredProps.length} prop{filteredProps.length !== 1 ? "s" : ""} with edge · tap to track
+              {filteredProps.length} prop{filteredProps.length !== 1 ? "s" : ""} · tap to track
             </Text>
           }
           scrollEnabled
