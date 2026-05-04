@@ -150,7 +150,7 @@ function LockCard({
           ) : null}
           <Text style={[styles.lockPick, { color: colors.foreground }]}>{pick.pick}</Text>
           <Text style={[styles.bookmakerText, { color: colors.mutedForeground }]}>
-            via {pick.bookmaker} · {pick.edge.toFixed(1)}% edge
+            via {pick.bookmaker}
           </Text>
         </View>
         <View style={styles.lockOddsBlock}>
@@ -512,9 +512,9 @@ export default function AiPicksScreen() {
               />
               {(safeParlay?.legs?.length ?? 0) > 0 ? (
                 <ParlayCard
-                  parlay={safeParlay}
+                  parlay={safeParlay!}
                   accent="#22c55e"
-                  onBet={(leg) => openBet({ ...leg, pick: `${safeParlay.name} (safe parlay)`, odds: safeParlay.combinedOdds })}
+                  onBet={(leg) => openBet({ ...leg, pick: `${safeParlay!.name} (safe parlay)`, odds: safeParlay!.combinedOdds })}
                 />
               ) : (
                 <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -535,9 +535,9 @@ export default function AiPicksScreen() {
               />
               {(lottoParlay?.legs?.length ?? 0) > 0 ? (
                 <ParlayCard
-                  parlay={lottoParlay}
+                  parlay={lottoParlay!}
                   accent="#a855f7"
-                  onBet={(leg) => openBet({ ...leg, pick: `${lottoParlay.name} (lotto parlay)`, odds: lottoParlay.combinedOdds })}
+                  onBet={(leg) => openBet({ ...leg, pick: `${lottoParlay!.name} (lotto parlay)`, odds: lottoParlay!.combinedOdds })}
                 />
               ) : (
                 <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -556,9 +556,9 @@ export default function AiPicksScreen() {
               />
               {(gameParlay?.legs?.length ?? 0) > 0 ? (
                 <ParlayCard
-                  parlay={gameParlay}
+                  parlay={gameParlay!}
                   accent="#3b82f6"
-                  onBet={(leg) => openBet({ ...leg, pick: `${gameParlay.name} (game parlay)`, odds: gameParlay.combinedOdds })}
+                  onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (game parlay)`, odds: gameParlay!.combinedOdds })}
                 />
               ) : (
                 <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -577,9 +577,9 @@ export default function AiPicksScreen() {
               />
               {(propParlay?.legs?.length ?? 0) > 0 ? (
                 <ParlayCard
-                  parlay={propParlay}
+                  parlay={propParlay!}
                   accent="#f97316"
-                  onBet={(leg) => openBet({ ...leg, pick: `${propParlay.name} (props parlay)`, odds: propParlay.combinedOdds })}
+                  onBet={(leg) => openBet({ ...leg, pick: `${propParlay!.name} (props parlay)`, odds: propParlay!.combinedOdds })}
                 />
               ) : (
                 <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -598,9 +598,9 @@ export default function AiPicksScreen() {
               />
               {(mixParlay?.legs?.length ?? 0) > 0 ? (
                 <ParlayCard
-                  parlay={mixParlay}
+                  parlay={mixParlay!}
                   accent="#14b8a6"
-                  onBet={(leg) => openBet({ ...leg, pick: `${mixParlay.name} (mix parlay)`, odds: mixParlay.combinedOdds })}
+                  onBet={(leg) => openBet({ ...leg, pick: `${mixParlay!.name} (mix parlay)`, odds: mixParlay!.combinedOdds })}
                 />
               ) : (
                 <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

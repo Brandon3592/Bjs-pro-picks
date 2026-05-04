@@ -17,7 +17,6 @@ import {
   View,
 } from "react-native";
 
-import { EdgeBadge } from "@/components/EdgeBadge";
 import { QuickAddModal, type QuickAddBet } from "@/components/QuickAddModal";
 import { StatPill } from "@/components/StatPill";
 import { useColors } from "@/hooks/useColors";
@@ -57,7 +56,6 @@ function TopBetRow({ bet, onTrack }: { bet: ValueBet; onTrack: () => void }) {
         </Text>
       </View>
       <View style={styles.topBetRight}>
-        <EdgeBadge edge={bet.edge} size="sm" />
         <Text style={[styles.topBetOdds, { color: colors.primary }]}>
           {formatOdds(bet.odds)}
         </Text>
@@ -136,11 +134,6 @@ export default function DashboardScreen() {
         <StatPill label="Live Games" value={summary?.liveGamesCount ?? 0} />
         <StatPill label="Upcoming" value={summary?.upcomingGamesCount ?? 0} />
         <StatPill label="Value Bets" value={summary?.totalValueBets ?? 0} accent />
-        <StatPill
-          label="Avg Edge"
-          value={`${(summary?.avgEdge ?? 0).toFixed(1)}%`}
-          accent
-        />
       </View>
 
       {/* Top Value Bets */}
@@ -237,11 +230,6 @@ export default function DashboardScreen() {
                   <Text style={[styles.sportStat, { color: colors.mutedForeground }]}>
                     {s.valueBets} value bet{s.valueBets !== 1 ? "s" : ""}
                   </Text>
-                  {s.avgEdge > 0 && (
-                    <Text style={[styles.sportEdge, { color: colors.positive }]}>
-                      +{s.avgEdge.toFixed(1)}%
-                    </Text>
-                  )}
                 </View>
               </View>
             ))

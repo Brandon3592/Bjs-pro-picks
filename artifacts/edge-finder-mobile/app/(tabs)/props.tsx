@@ -13,7 +13,6 @@ import {
   View,
 } from "react-native";
 
-import { EdgeBadge } from "@/components/EdgeBadge";
 import { EmptyState } from "@/components/EmptyState";
 import { FilterChips } from "@/components/FilterChips";
 import { QuickAddModal, type QuickAddBet } from "@/components/QuickAddModal";
@@ -225,8 +224,7 @@ export default function PropsScreen() {
                     {item.side} {item.line} {item.marketLabel}
                   </Text>
                 </View>
-                <EdgeBadge edge={item.edge} />
-              </View>
+                </View>
               <View style={[styles.propFooter, { borderTopColor: colors.border, backgroundColor: colors.muted }]}>
                 <Text style={[styles.propBook, { color: colors.mutedForeground }]}>
                   {item.bookmaker}
