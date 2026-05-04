@@ -1,0 +1,26 @@
+kind = "mobile"
+previewPath = "/mobile/"
+title = "EdgeFinder Mobile"
+version = "1.0.0"
+id = "artifacts/edge-finder-mobile"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+name = "expo"
+paths = [ "/mobile/" ]
+localPort = 22718
+
+[services.development]
+run = "pnpm --filter @workspace/edge-finder-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/edge-finder-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/edge-finder-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "22718"
+BASE_PATH = "/mobile/"

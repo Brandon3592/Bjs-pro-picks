@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "EdgeFinder",
+    "slug": "edge-finder-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "edge-finder-mobile",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0b0e18"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.edgefinder.app"
+    },
+    "android": {
+      "package": "com.edgefinder.app"
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

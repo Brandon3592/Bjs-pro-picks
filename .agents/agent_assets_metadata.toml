@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "g2GkgIX5guXrPh9JUa81C"
+uri = "file://artifacts/edge-finder-mobile/assets/images/icon.png"
+type = "image"
+title = "generated_image"
