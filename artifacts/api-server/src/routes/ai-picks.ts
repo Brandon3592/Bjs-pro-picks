@@ -72,34 +72,32 @@ async function fetchRealPropsForAI(
   allOdds: { sport: string; events: OddsEvent[] }[],
 ): Promise<CompactProp[]> {
   const now = Date.now();
-  const NBA_MARKETS = ["player_points", "player_rebounds", "player_assists", "player_threes"];
-  const MLB_MARKETS = ["pitcher_strikeouts", "batter_hits", "batter_total_bases", "batter_home_runs"];
-  const NHL_MARKETS = ["player_shots_on_goal", "player_points"];
 
-  const sportMarkets: Record<string, string[]> = {
-    NBA: NBA_MARKETS,
-    MLB: MLB_MARKETS,
-    NHL: NHL_MARKETS,
+  // allOdds uses full API keys (e.g. "basketball_nba"); translate to label for market lookup
+  // SPORT_KEYS is bidirectional: "basketball_nba" → "NBA"
+  const SPORT_MARKETS: Record<string, string[]> = {
+    basketball_nba: ["player_points", "player_rebounds", "player_assists", "player_threes"],
+    baseball_mlb:   ["pitcher_strikeouts", "batter_hits", "batter_total_bases", "batter_home_runs"],
+    icehockey_nhl:  ["player_shots_on_goal", "player_points"],
   };
 
-  // Pick top 1 upcoming game per sport (NBA, MLB, NHL) to limit credit usage
-  const targets: { sport: string; event: OddsEvent }[] = [];
+  // Pick top 3 upcoming games per sport to give the AI real player variety
+  const targets: { sport: string; sportLabel: string; event: OddsEvent }[] = [];
   for (const { sport, events } of allOdds) {
-    if (!sportMarkets[sport]) continue;
+    if (!SPORT_MARKETS[sport]) continue;
+    const sportLabel = SPORT_KEYS[sport] ?? sport; // e.g. "NBA"
     const upcoming = events
       .filter((e) => new Date(e.commence_time).getTime() > now)
-      .slice(0, 1);
-    for (const ev of upcoming) targets.push({ sport, event: ev });
+      .slice(0, 3);
+    for (const ev of upcoming) targets.push({ sport, sportLabel, event: ev });
   }
 
   const results = await Promise.allSettled(
-    targets.map(async ({ sport, event }) => {
-      const sportKey = SPORT_KEYS[sport];
-      if (!sportKey) return [];
-      const markets = sportMarkets[sport] ?? [];
-      const propEvent = await fetchPlayerPropsForEvent(sportKey, event.id, markets);
+    targets.map(async ({ sport, sportLabel, event }) => {
+      const markets = SPORT_MARKETS[sport] ?? [];
+      const propEvent = await fetchPlayerPropsForEvent(sport, event.id, markets);
       if (!propEvent) return [];
-      return parsePropEvent(propEvent, sport, event);
+      return parsePropEvent(propEvent, sportLabel, event);
     })
   );
 
@@ -650,12 +648,18 @@ router.get("/ai-picks", async (req, res) => {
       ? `\nReal player props available (use these for propParlayOfTheDay, mixParlayOfTheDay, lockOfTheDay):\n${JSON.stringify(filteredProps)}`
       : "\nNo live player prop data available — use your knowledge of today's players for prop picks.";
 
+    // Build a whitelist of real player names from the props data for the prompt
+    const realPlayerNames = [...new Set(filteredProps.map((p) => p.player))];
+    const playerWhitelistNote = realPlayerNames.length > 0
+      ? `\nALLOWED player names for player_prop legs (ONLY use names from this list): ${realPlayerNames.join(", ")}`
+      : "";
+
     const userPrompt = `Date: ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
 Sport filter: ${sportLabel}
 Games: ${JSON.stringify(gameData)}
-Value bets detected by model: ${JSON.stringify(valueBetData)}${propsSection}
+Value bets detected by model: ${JSON.stringify(valueBetData)}${propsSection}${playerWhitelistNote}
 Generate all six picks (${sportLabel} only): lockOfTheDay, safeParlay, lottoParlay, gameParlayOfTheDay, propParlayOfTheDay, mixParlayOfTheDay.
-IMPORTANT: propParlayOfTheDay legs MUST use real player names and player_prop betType from the props data above. Do NOT use team names as the "player" field.${cacheKey !== "all" ? `\nAll picks MUST be from ${cacheKey} games only.` : ""}`;
+CRITICAL: For ALL player_prop legs you MUST only use player names and lines from the "Real player props" list above. DO NOT invent players. DO NOT use players not listed. If a player is not in the list, do not use them.${cacheKey !== "all" ? `\nAll picks MUST be from ${cacheKey} games only.` : ""}`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -692,6 +696,9 @@ IMPORTANT: propParlayOfTheDay legs MUST use real player names and player_prop be
       for (const ev of events) gameMap.set(ev.id, { ...ev, sport });
     }
 
+    // Build a case-insensitive set of valid player names from real props
+    const validPlayerSet = new Set(filteredProps.map((p) => p.player.toLowerCase()));
+
     // Normalize legs: fix `bet` → `pick`, fill missing fields from game map
     function normalizeLegs(legs: any[]): AIPickLeg[] {
       return (legs ?? [])
@@ -700,6 +707,21 @@ IMPORTANT: propParlayOfTheDay legs MUST use real player names and player_prop be
           if (!pick) return null;
           const game = leg.gameId ? gameMap.get(leg.gameId) : null;
           const betType = leg.betType ?? inferBetType(pick);
+
+          // Strip hallucinated player_prop legs — if we have real props and the
+          // player isn't in the whitelist, reject this leg entirely
+          if (betType === "player_prop" && validPlayerSet.size > 0) {
+            const playerName = (leg.player ?? "").toLowerCase();
+            // Also check if player name appears anywhere in the pick string
+            const pickLower = pick.toLowerCase();
+            const foundInWhitelist = validPlayerSet.has(playerName)
+              || [...validPlayerSet].some((name) => pickLower.includes(name));
+            if (!foundInWhitelist) {
+              req.log.warn({ player: leg.player, pick }, "Stripped hallucinated player_prop leg");
+              return null;
+            }
+          }
+
           return {
             gameId: leg.gameId ?? "",
             sport: leg.sport ?? game?.sport ?? "",
