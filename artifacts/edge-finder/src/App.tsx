@@ -13,6 +13,7 @@ import GameDetail from "@/pages/game-detail";
 import Tracker from "@/pages/tracker";
 import Settings from "@/pages/settings";
 import Arb from "@/pages/arb";
+import Props from "@/pages/props";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,6 +36,7 @@ function Router() {
             <Route path="/games/:gameId" component={GameDetail} />
             <Route path="/tracker" component={Tracker} />
             <Route path="/arb" component={Arb} />
+            <Route path="/props" component={Props} />
             <Route path="/settings" component={Settings} />
             <Route component={NotFound} />
           </Switch>

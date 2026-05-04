@@ -8,6 +8,7 @@ import {
   BookOpen,
   Settings,
   Zap,
+  Users,
   Menu,
   X,
   LogOut,
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/value-bets", label: "Value Bets", icon: TrendingUp },
+  { href: "/props", label: "Player Props", icon: Users },
   { href: "/arb", label: "Arb Finder", icon: Zap },
   { href: "/games", label: "Games", icon: Activity },
   { href: "/tracker", label: "Bet Tracker", icon: BookOpen },

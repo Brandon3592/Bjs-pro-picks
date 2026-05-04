@@ -400,6 +400,55 @@ export const GetDashboardSummaryResponse = zod.object({
 });
 
 /**
+ * @summary List upcoming games available for player props, filtered by sport
+ */
+export const getPropsGamesQuerySportDefault = `NBA`;
+
+export const GetPropsGamesQueryParams = zod.object({
+  sport: zod
+    .enum(["NBA", "MLB", "NHL", "NFL"])
+    .default(getPropsGamesQuerySportDefault),
+});
+
+export const GetPropsGamesResponseItem = zod.object({
+  id: zod.string(),
+  sport: zod.string(),
+  homeTeam: zod.string(),
+  awayTeam: zod.string(),
+  startTime: zod.coerce.date(),
+  status: zod.enum(["live", "upcoming"]),
+});
+export const GetPropsGamesResponse = zod.array(GetPropsGamesResponseItem);
+
+/**
+ * @summary Get player prop edges for a specific game
+ */
+export const getPropsQuerySportDefault = `NBA`;
+
+export const GetPropsQueryParams = zod.object({
+  gameId: zod.coerce.string(),
+  sport: zod
+    .enum(["NBA", "MLB", "NHL", "NFL"])
+    .default(getPropsQuerySportDefault),
+  markets: zod.coerce.string().optional(),
+});
+
+export const GetPropsResponseItem = zod.object({
+  player: zod.string(),
+  market: zod.string(),
+  marketLabel: zod.string(),
+  line: zod.number(),
+  bookmaker: zod.string(),
+  side: zod.enum(["Over", "Under"]),
+  odds: zod.number(),
+  impliedProb: zod.number(),
+  consensusProb: zod.number(),
+  edge: zod.number(),
+  kellyStake: zod.number(),
+});
+export const GetPropsResponse = zod.array(GetPropsResponseItem);
+
+/**
  * @summary Scan all current games for arbitrage and near-arbitrage opportunities
  */
 export const GetArbOpportunitiesResponseItem = zod.object({

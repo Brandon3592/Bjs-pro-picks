@@ -75,6 +75,25 @@ Snapshot job in `artifacts/api-server/src/lib/snapshot-job.ts`:
 - Game Detail shows "Moneyline History" chart (Recharts LineChart, implied win %)
 - Snapshots older than 48h are automatically pruned
 
+## Player Props
+
+Route `GET /api/props/games?sport=NBA` — lists upcoming games for a sport (reuses cached game odds, no extra quota).
+Route `GET /api/props?gameId=...&sport=NBA&markets=player_points,player_assists` — fetches player prop edges:
+- Calls The Odds API event-specific endpoint (`/sports/{key}/events/{id}/odds`) with prop markets
+- Cached 15 minutes (props move slowly vs game lines)
+- De-vigs each book's over/under, averages across books for consensus probability
+- Reports edge = consensus_prob − implied_prob per book per side
+
+Markets per sport:
+- NBA: `player_points`, `player_rebounds`, `player_assists`, `player_threes`
+- MLB: `batter_hits`, `pitcher_strikeouts`, `batter_home_runs`
+- NHL: `player_goals`, `player_shots_on_goal`, `player_points`
+- NFL: `player_pass_yds`, `player_rush_yds`, `player_receiving_yds`, `player_receptions`
+
+API response format: `name="Over"|"Under"`, `description=playerName`, `price=American`, `point=line`
+
+Frontend at `/props`: sport tabs → game selector dropdown → market filter chips → edge table (player, market, line, book, odds, implied%, edge%)
+
 ## Arbitrage Finder
 
 Route `GET /api/arb` — scans all current games for cross-book arbitrage:

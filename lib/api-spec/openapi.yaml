@@ -349,6 +349,60 @@ paths:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
 
+  /props/games:
+    get:
+      operationId: getPropsGames
+      tags: [predictions]
+      summary: List upcoming games available for player props, filtered by sport
+      parameters:
+        - name: sport
+          in: query
+          schema:
+            type: string
+            enum: [NBA, MLB, NHL, NFL]
+            default: NBA
+      responses:
+        "200":
+          description: Upcoming games for this sport
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PropGame"
+
+  /props:
+    get:
+      operationId: getProps
+      tags: [predictions]
+      summary: Get player prop edges for a specific game
+      parameters:
+        - name: gameId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: sport
+          in: query
+          schema:
+            type: string
+            enum: [NBA, MLB, NHL, NFL]
+            default: NBA
+        - name: markets
+          in: query
+          schema:
+            type: string
+            description: Comma-separated list of market keys to fetch
+      responses:
+        "200":
+          description: Player prop edges sorted by edge %
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PropEdge"
+
   /arb:
     get:
       operationId: getArbOpportunities
@@ -934,6 +988,53 @@ components:
         hasHistory:
           type: boolean
       required: [gameId, series, hasHistory]
+
+    PropGame:
+      type: object
+      properties:
+        id:
+          type: string
+        sport:
+          type: string
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [live, upcoming]
+      required: [id, sport, homeTeam, awayTeam, startTime, status]
+
+    PropEdge:
+      type: object
+      properties:
+        player:
+          type: string
+        market:
+          type: string
+        marketLabel:
+          type: string
+        line:
+          type: number
+        bookmaker:
+          type: string
+        side:
+          type: string
+          enum: [Over, Under]
+        odds:
+          type: integer
+        impliedProb:
+          type: number
+        consensusProb:
+          type: number
+        edge:
+          type: number
+        kellyStake:
+          type: number
+      required: [player, market, marketLabel, line, bookmaker, side, odds, impliedProb, consensusProb, edge, kellyStake]
 
     ArbLeg:
       type: object

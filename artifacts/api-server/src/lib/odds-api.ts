@@ -163,6 +163,98 @@ export async function fetchAllSportOdds(): Promise<{ sport: string; events: Odds
   return results;
 }
 
+// ─── Player props ─────────────────────────────────────────────────────────────
+
+export interface PropOutcome {
+  name: "Over" | "Under";
+  description: string; // player name
+  price: number;       // American odds
+  point: number;       // line value (e.g. 25.5)
+}
+
+export interface PropMarket {
+  key: string;
+  last_update: string;
+  outcomes: PropOutcome[];
+}
+
+export interface PropEvent {
+  id: string;
+  sport_key: string;
+  home_team: string;
+  away_team: string;
+  commence_time: string;
+  bookmakers: Array<{
+    key: string;
+    title: string;
+    last_update: string;
+    markets: PropMarket[];
+  }>;
+}
+
+export const PROP_MARKETS: Record<string, { key: string; label: string }[]> = {
+  NBA: [
+    { key: "player_points", label: "Points" },
+    { key: "player_rebounds", label: "Rebounds" },
+    { key: "player_assists", label: "Assists" },
+    { key: "player_threes", label: "3-Pointers" },
+  ],
+  MLB: [
+    { key: "batter_hits", label: "Hits" },
+    { key: "pitcher_strikeouts", label: "Strikeouts" },
+    { key: "batter_home_runs", label: "Home Runs" },
+  ],
+  NHL: [
+    { key: "player_goals", label: "Goals" },
+    { key: "player_shots_on_goal", label: "Shots on Goal" },
+    { key: "player_points", label: "Points" },
+  ],
+  NFL: [
+    { key: "player_pass_yds", label: "Pass Yards" },
+    { key: "player_rush_yds", label: "Rush Yards" },
+    { key: "player_receiving_yds", label: "Rec Yards" },
+    { key: "player_receptions", label: "Receptions" },
+  ],
+};
+
+const PROPS_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes — props move slowly
+
+export async function fetchPlayerPropsForEvent(
+  sportKey: string,
+  eventId: string,
+  marketKeys: string[],
+): Promise<PropEvent | null> {
+  const apiKey = getApiKey();
+  if (!apiKey) return null;
+
+  const url = new URL(`${BASE_URL}/sports/${sportKey}/events/${eventId}/odds`);
+  url.searchParams.set("apiKey", apiKey);
+  url.searchParams.set("regions", "us");
+  url.searchParams.set("markets", marketKeys.join(","));
+  url.searchParams.set("oddsFormat", "american");
+
+  const cacheKey = `props::${url.pathname}::${marketKeys.sort().join(",")}`;
+  const cached = getCached<PropEvent>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      logger.warn({ status: res.status, eventId }, "Props API request failed");
+      return null;
+    }
+    const data = (await res.json()) as PropEvent;
+    // Use longer TTL for props
+    cache.set(cacheKey, { data, expiresAt: Date.now() + PROPS_CACHE_TTL_MS });
+    const remaining = res.headers.get("x-requests-remaining");
+    if (remaining) logger.info({ remaining }, "Odds API quota remaining");
+    return data;
+  } catch (err) {
+    logger.error({ err, eventId }, "Props API fetch error");
+    return null;
+  }
+}
+
 export async function fetchAllSportScores(): Promise<{ sport: string; scores: ScoreEvent[] }[]> {
   const results = await Promise.all(
     Object.entries(SPORT_KEYS).map(async ([sport, key]) => {

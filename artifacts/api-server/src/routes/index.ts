@@ -9,6 +9,7 @@ import dashboardRouter from "./dashboard";
 import alertsRouter from "./alerts";
 import lineMovementsRouter from "./line-movements";
 import arbRouter from "./arb";
+import propsRouter from "./props";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(dashboardRouter);
 router.use(alertsRouter);
 router.use(lineMovementsRouter);
 router.use(arbRouter);
+router.use(propsRouter);
 
 export default router;

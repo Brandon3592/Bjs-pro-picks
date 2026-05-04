@@ -353,6 +353,44 @@ export interface GameLineHistory {
   hasHistory: boolean;
 }
 
+export type PropGameStatus =
+  (typeof PropGameStatus)[keyof typeof PropGameStatus];
+
+export const PropGameStatus = {
+  live: "live",
+  upcoming: "upcoming",
+} as const;
+
+export interface PropGame {
+  id: string;
+  sport: string;
+  homeTeam: string;
+  awayTeam: string;
+  startTime: string;
+  status: PropGameStatus;
+}
+
+export type PropEdgeSide = (typeof PropEdgeSide)[keyof typeof PropEdgeSide];
+
+export const PropEdgeSide = {
+  Over: "Over",
+  Under: "Under",
+} as const;
+
+export interface PropEdge {
+  player: string;
+  market: string;
+  marketLabel: string;
+  line: number;
+  bookmaker: string;
+  side: PropEdgeSide;
+  odds: number;
+  impliedProb: number;
+  consensusProb: number;
+  edge: number;
+  kellyStake: number;
+}
+
 export interface ArbLeg {
   outcome: string;
   bookmaker: string;
@@ -529,6 +567,38 @@ export const GetBetsResult = {
   loss: "loss",
   pending: "pending",
   all: "all",
+} as const;
+
+export type GetPropsGamesParams = {
+  sport?: GetPropsGamesSport;
+};
+
+export type GetPropsGamesSport =
+  (typeof GetPropsGamesSport)[keyof typeof GetPropsGamesSport];
+
+export const GetPropsGamesSport = {
+  NBA: "NBA",
+  MLB: "MLB",
+  NHL: "NHL",
+  NFL: "NFL",
+} as const;
+
+export type GetPropsParams = {
+  gameId: string;
+  sport?: GetPropsSport;
+  /**
+   * Comma-separated list of market keys to fetch
+   */
+  markets?: string;
+};
+
+export type GetPropsSport = (typeof GetPropsSport)[keyof typeof GetPropsSport];
+
+export const GetPropsSport = {
+  NBA: "NBA",
+  MLB: "MLB",
+  NHL: "NHL",
+  NFL: "NFL",
 } as const;
 
 export type GetLineMovementsParams = {

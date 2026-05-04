@@ -35,11 +35,15 @@ import type {
   GetLineMovementsParams,
   GetOddsParams,
   GetPredictionsParams,
+  GetPropsGamesParams,
+  GetPropsParams,
   GetValueBetsParams,
   HealthStatus,
   LineMovement,
   OddsEntry,
   Prediction,
+  PropEdge,
+  PropGame,
   TrackedBet,
   UpdateBetBody,
   ValueBet,
@@ -1206,6 +1210,194 @@ export function useGetDashboardSummary<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetDashboardSummaryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List upcoming games available for player props, filtered by sport
+ */
+export const getGetPropsGamesUrl = (params?: GetPropsGamesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/props/games?${stringifiedParams}`
+    : `/api/props/games`;
+};
+
+export const getPropsGames = async (
+  params?: GetPropsGamesParams,
+  options?: RequestInit,
+): Promise<PropGame[]> => {
+  return customFetch<PropGame[]>(getGetPropsGamesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPropsGamesQueryKey = (params?: GetPropsGamesParams) => {
+  return [`/api/props/games`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetPropsGamesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPropsGames>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetPropsGamesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPropsGames>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPropsGamesQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPropsGames>>> = ({
+    signal,
+  }) => getPropsGames(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPropsGames>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPropsGamesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPropsGames>>
+>;
+export type GetPropsGamesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List upcoming games available for player props, filtered by sport
+ */
+
+export function useGetPropsGames<
+  TData = Awaited<ReturnType<typeof getPropsGames>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetPropsGamesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPropsGames>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPropsGamesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get player prop edges for a specific game
+ */
+export const getGetPropsUrl = (params: GetPropsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/props?${stringifiedParams}`
+    : `/api/props`;
+};
+
+export const getProps = async (
+  params: GetPropsParams,
+  options?: RequestInit,
+): Promise<PropEdge[]> => {
+  return customFetch<PropEdge[]>(getGetPropsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPropsQueryKey = (params?: GetPropsParams) => {
+  return [`/api/props`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetPropsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProps>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetPropsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProps>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPropsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getProps>>> = ({
+    signal,
+  }) => getProps(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProps>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPropsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProps>>
+>;
+export type GetPropsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get player prop edges for a specific game
+ */
+
+export function useGetProps<
+  TData = Awaited<ReturnType<typeof getProps>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetPropsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProps>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPropsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
