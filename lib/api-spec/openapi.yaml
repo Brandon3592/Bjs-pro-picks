@@ -349,6 +349,48 @@ paths:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
 
+  /all-markets/catalog:
+    get:
+      operationId: getAllMarketsCatalog
+      tags: [predictions]
+      summary: Static sport catalog organized by group — no API calls
+      responses:
+        "200":
+          description: Sport groups with available sport keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SportCatalogGroup"
+
+  /all-markets:
+    get:
+      operationId: getAllMarkets
+      tags: [predictions]
+      summary: All edge opportunities across every market type for a given sport
+      parameters:
+        - name: sport
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Odds API sport key (e.g. basketball_nba, soccer_epl)
+        - name: minEdge
+          in: query
+          schema:
+            type: number
+            default: 0.5
+      responses:
+        "200":
+          description: All market edges sorted by edge %, cached 10 min
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AllMarketBet"
+
   /props/games:
     get:
       operationId: getPropsGames
@@ -988,6 +1030,64 @@ components:
         hasHistory:
           type: boolean
       required: [gameId, series, hasHistory]
+
+    SportCatalogGroup:
+      type: object
+      properties:
+        group:
+          type: string
+        sports:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              title:
+                type: string
+              markets:
+                type: string
+            required: [key, title, markets]
+      required: [group, sports]
+
+    AllMarketBet:
+      type: object
+      properties:
+        id:
+          type: string
+        gameId:
+          type: string
+        sport:
+          type: string
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [live, upcoming]
+        marketKey:
+          type: string
+        marketLabel:
+          type: string
+        selection:
+          type: string
+        bookmaker:
+          type: string
+        odds:
+          type: integer
+        impliedProb:
+          type: number
+        consensusProb:
+          type: number
+        edge:
+          type: number
+        kellyStake:
+          type: number
+      required: [id, gameId, sport, homeTeam, awayTeam, startTime, status, marketKey, marketLabel, selection, bookmaker, odds, impliedProb, consensusProb, edge, kellyStake]
 
     PropGame:
       type: object

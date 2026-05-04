@@ -47,6 +47,7 @@ Full-stack sports betting value finder. React+Vite frontend, Express 5 API backe
 | Route | Page | Description |
 |---|---|---|
 | `/` | Dashboard | Stats, top value bets, Line Movements widget, sport/bookmaker breakdown |
+| `/all-markets` | All Markets | Browse 37 sports (soccer, MMA, combat, US sports), every market type per game |
 | `/value-bets` | Value Bets | Filterable/sortable table of live-market edge bets (≥0.5% edge) |
 | `/arb` | Arb Finder | Arbitrage + near-arb scanner across all books; stake-split calculator |
 | `/games` | Games | Game cards (live/upcoming/final) across all sports |

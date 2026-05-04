@@ -400,6 +400,53 @@ export const GetDashboardSummaryResponse = zod.object({
 });
 
 /**
+ * @summary Static sport catalog organized by group — no API calls
+ */
+export const GetAllMarketsCatalogResponseItem = zod.object({
+  group: zod.string(),
+  sports: zod.array(
+    zod.object({
+      key: zod.string(),
+      title: zod.string(),
+      markets: zod.string(),
+    }),
+  ),
+});
+export const GetAllMarketsCatalogResponse = zod.array(
+  GetAllMarketsCatalogResponseItem,
+);
+
+/**
+ * @summary All edge opportunities across every market type for a given sport
+ */
+export const getAllMarketsQueryMinEdgeDefault = 0.5;
+
+export const GetAllMarketsQueryParams = zod.object({
+  sport: zod.coerce.string(),
+  minEdge: zod.coerce.number().default(getAllMarketsQueryMinEdgeDefault),
+});
+
+export const GetAllMarketsResponseItem = zod.object({
+  id: zod.string(),
+  gameId: zod.string(),
+  sport: zod.string(),
+  homeTeam: zod.string(),
+  awayTeam: zod.string(),
+  startTime: zod.coerce.date(),
+  status: zod.enum(["live", "upcoming"]),
+  marketKey: zod.string(),
+  marketLabel: zod.string(),
+  selection: zod.string(),
+  bookmaker: zod.string(),
+  odds: zod.number(),
+  impliedProb: zod.number(),
+  consensusProb: zod.number(),
+  edge: zod.number(),
+  kellyStake: zod.number(),
+});
+export const GetAllMarketsResponse = zod.array(GetAllMarketsResponseItem);
+
+/**
  * @summary List upcoming games available for player props, filtered by sport
  */
 export const getPropsGamesQuerySportDefault = `NBA`;

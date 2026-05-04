@@ -10,6 +10,7 @@ import alertsRouter from "./alerts";
 import lineMovementsRouter from "./line-movements";
 import arbRouter from "./arb";
 import propsRouter from "./props";
+import allMarketsRouter from "./all-markets";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(alertsRouter);
 router.use(lineMovementsRouter);
 router.use(arbRouter);
 router.use(propsRouter);
+router.use(allMarketsRouter);
 
 export default router;

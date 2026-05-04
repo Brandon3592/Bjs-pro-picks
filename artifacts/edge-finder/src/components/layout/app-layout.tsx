@@ -9,6 +9,7 @@ import {
   Settings,
   Zap,
   Users,
+  Globe,
   Menu,
   X,
   LogOut,
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/all-markets", label: "All Markets", icon: Globe },
   { href: "/value-bets", label: "Value Bets", icon: TrendingUp },
   { href: "/props", label: "Player Props", icon: Users },
   { href: "/arb", label: "Arb Finder", icon: Zap },

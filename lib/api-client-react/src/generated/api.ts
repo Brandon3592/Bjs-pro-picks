@@ -19,6 +19,7 @@ import type {
 import type {
   AlertSubscribeBody,
   AlertSubscription,
+  AllMarketBet,
   ArbOpportunity,
   AuthUser,
   BankrollDataPoint,
@@ -29,6 +30,7 @@ import type {
   Game,
   GameDetail,
   GameLineHistory,
+  GetAllMarketsParams,
   GetBetsParams,
   GetGameLineHistoryParams,
   GetGamesParams,
@@ -44,6 +46,7 @@ import type {
   Prediction,
   PropEdge,
   PropGame,
+  SportCatalogGroup,
   TrackedBet,
   UpdateBetBody,
   ValueBet,
@@ -1210,6 +1213,175 @@ export function useGetDashboardSummary<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetDashboardSummaryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Static sport catalog organized by group — no API calls
+ */
+export const getGetAllMarketsCatalogUrl = () => {
+  return `/api/all-markets/catalog`;
+};
+
+export const getAllMarketsCatalog = async (
+  options?: RequestInit,
+): Promise<SportCatalogGroup[]> => {
+  return customFetch<SportCatalogGroup[]>(getGetAllMarketsCatalogUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAllMarketsCatalogQueryKey = () => {
+  return [`/api/all-markets/catalog`] as const;
+};
+
+export const getGetAllMarketsCatalogQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAllMarketsCatalog>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAllMarketsCatalog>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAllMarketsCatalogQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAllMarketsCatalog>>
+  > = ({ signal }) => getAllMarketsCatalog({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAllMarketsCatalog>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAllMarketsCatalogQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAllMarketsCatalog>>
+>;
+export type GetAllMarketsCatalogQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Static sport catalog organized by group — no API calls
+ */
+
+export function useGetAllMarketsCatalog<
+  TData = Awaited<ReturnType<typeof getAllMarketsCatalog>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAllMarketsCatalog>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAllMarketsCatalogQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary All edge opportunities across every market type for a given sport
+ */
+export const getGetAllMarketsUrl = (params: GetAllMarketsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/all-markets?${stringifiedParams}`
+    : `/api/all-markets`;
+};
+
+export const getAllMarkets = async (
+  params: GetAllMarketsParams,
+  options?: RequestInit,
+): Promise<AllMarketBet[]> => {
+  return customFetch<AllMarketBet[]>(getGetAllMarketsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAllMarketsQueryKey = (params?: GetAllMarketsParams) => {
+  return [`/api/all-markets`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetAllMarketsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAllMarkets>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetAllMarketsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAllMarkets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAllMarketsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAllMarkets>>> = ({
+    signal,
+  }) => getAllMarkets(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAllMarkets>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAllMarketsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAllMarkets>>
+>;
+export type GetAllMarketsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary All edge opportunities across every market type for a given sport
+ */
+
+export function useGetAllMarkets<
+  TData = Awaited<ReturnType<typeof getAllMarkets>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetAllMarketsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAllMarkets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAllMarketsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

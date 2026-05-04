@@ -353,6 +353,44 @@ export interface GameLineHistory {
   hasHistory: boolean;
 }
 
+export type SportCatalogGroupSportsItem = {
+  key: string;
+  title: string;
+  markets: string;
+};
+
+export interface SportCatalogGroup {
+  group: string;
+  sports: SportCatalogGroupSportsItem[];
+}
+
+export type AllMarketBetStatus =
+  (typeof AllMarketBetStatus)[keyof typeof AllMarketBetStatus];
+
+export const AllMarketBetStatus = {
+  live: "live",
+  upcoming: "upcoming",
+} as const;
+
+export interface AllMarketBet {
+  id: string;
+  gameId: string;
+  sport: string;
+  homeTeam: string;
+  awayTeam: string;
+  startTime: string;
+  status: AllMarketBetStatus;
+  marketKey: string;
+  marketLabel: string;
+  selection: string;
+  bookmaker: string;
+  odds: number;
+  impliedProb: number;
+  consensusProb: number;
+  edge: number;
+  kellyStake: number;
+}
+
 export type PropGameStatus =
   (typeof PropGameStatus)[keyof typeof PropGameStatus];
 
@@ -568,6 +606,14 @@ export const GetBetsResult = {
   pending: "pending",
   all: "all",
 } as const;
+
+export type GetAllMarketsParams = {
+  /**
+   * Odds API sport key (e.g. basketball_nba, soccer_epl)
+   */
+  sport: string;
+  minEdge?: number;
+};
 
 export type GetPropsGamesParams = {
   sport?: GetPropsGamesSport;
