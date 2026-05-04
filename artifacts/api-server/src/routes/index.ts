@@ -11,9 +11,11 @@ import lineMovementsRouter from "./line-movements";
 import arbRouter from "./arb";
 import propsRouter from "./props";
 import allMarketsRouter from "./all-markets";
+import aiPicksRouter from "./ai-picks";
 
 const router: IRouter = Router();
 
+router.use(aiPicksRouter);
 router.use(healthRouter);
 router.use(authRouter);
 router.use(gamesRouter);

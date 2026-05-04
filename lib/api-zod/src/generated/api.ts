@@ -8,6 +8,67 @@
 import * as zod from "zod";
 
 /**
+ * @summary AI-powered picks and parlays for today's games
+ */
+export const GetAiPicksResponse = zod.object({
+  picks: zod.array(
+    zod
+      .object({
+        gameId: zod.string(),
+        sport: zod.string(),
+        homeTeam: zod.string(),
+        awayTeam: zod.string(),
+        startTime: zod.coerce.date(),
+        pick: zod.string(),
+        betType: zod.string(),
+        bookmaker: zod.string(),
+        odds: zod.number(),
+      })
+      .and(
+        zod.object({
+          id: zod.string(),
+          confidence: zod.number(),
+          edge: zod.number(),
+          reasoning: zod.string(),
+          tags: zod.array(zod.string()),
+        }),
+      ),
+  ),
+  parlays: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      legs: zod.array(
+        zod.object({
+          gameId: zod.string(),
+          sport: zod.string(),
+          homeTeam: zod.string(),
+          awayTeam: zod.string(),
+          startTime: zod.coerce.date(),
+          pick: zod.string(),
+          betType: zod.string(),
+          bookmaker: zod.string(),
+          odds: zod.number(),
+        }),
+      ),
+      combinedOdds: zod.number(),
+      confidence: zod.number(),
+      reasoning: zod.string(),
+    }),
+  ),
+  summary: zod.string(),
+  generatedAt: zod.coerce.date(),
+  isAI: zod.boolean(),
+});
+
+/**
+ * @summary Force-refresh AI picks cache
+ */
+export const RefreshAiPicksResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({

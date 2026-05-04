@@ -490,6 +490,47 @@ export interface AlertSubscription {
   message?: string;
 }
 
+export interface AIPickLeg {
+  gameId: string;
+  sport: string;
+  homeTeam: string;
+  awayTeam: string;
+  startTime: string;
+  pick: string;
+  betType: string;
+  bookmaker: string;
+  odds: number;
+}
+
+export type AIPick = AIPickLeg & {
+  id: string;
+  confidence: number;
+  edge: number;
+  reasoning: string;
+  tags: string[];
+};
+
+export interface AIParlay {
+  id: string;
+  name: string;
+  legs: AIPickLeg[];
+  combinedOdds: number;
+  confidence: number;
+  reasoning: string;
+}
+
+export interface AIPicksResponse {
+  picks: AIPick[];
+  parlays: AIParlay[];
+  summary: string;
+  generatedAt: string;
+  isAI: boolean;
+}
+
+export type RefreshAiPicks200 = {
+  ok: boolean;
+};
+
 export type GetGamesParams = {
   sport?: GetGamesSport;
   status?: GetGamesStatus;

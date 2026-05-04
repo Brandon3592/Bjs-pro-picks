@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AIPicksResponse,
   AlertSubscribeBody,
   AlertSubscription,
   AllMarketBet,
@@ -46,6 +47,7 @@ import type {
   Prediction,
   PropEdge,
   PropGame,
+  RefreshAiPicks200,
   SportCatalogGroup,
   TrackedBet,
   UpdateBetBody,
@@ -61,6 +63,162 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * @summary AI-powered picks and parlays for today's games
+ */
+export const getGetAiPicksUrl = () => {
+  return `/api/ai-picks`;
+};
+
+export const getAiPicks = async (
+  options?: RequestInit,
+): Promise<AIPicksResponse> => {
+  return customFetch<AIPicksResponse>(getGetAiPicksUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAiPicksQueryKey = () => {
+  return [`/api/ai-picks`] as const;
+};
+
+export const getGetAiPicksQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAiPicks>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAiPicks>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAiPicksQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAiPicks>>> = ({
+    signal,
+  }) => getAiPicks({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAiPicks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAiPicksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAiPicks>>
+>;
+export type GetAiPicksQueryError = ErrorType<unknown>;
+
+/**
+ * @summary AI-powered picks and parlays for today's games
+ */
+
+export function useGetAiPicks<
+  TData = Awaited<ReturnType<typeof getAiPicks>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAiPicks>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAiPicksQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Force-refresh AI picks cache
+ */
+export const getRefreshAiPicksUrl = () => {
+  return `/api/ai-picks/refresh`;
+};
+
+export const refreshAiPicks = async (
+  options?: RequestInit,
+): Promise<RefreshAiPicks200> => {
+  return customFetch<RefreshAiPicks200>(getRefreshAiPicksUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRefreshAiPicksMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof refreshAiPicks>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof refreshAiPicks>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["refreshAiPicks"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof refreshAiPicks>>,
+    void
+  > = () => {
+    return refreshAiPicks(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RefreshAiPicksMutationResult = NonNullable<
+  Awaited<ReturnType<typeof refreshAiPicks>>
+>;
+
+export type RefreshAiPicksMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Force-refresh AI picks cache
+ */
+export const useRefreshAiPicks = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof refreshAiPicks>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof refreshAiPicks>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getRefreshAiPicksMutationOptions(options));
+};
 
 /**
  * @summary Health check

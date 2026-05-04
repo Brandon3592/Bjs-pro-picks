@@ -71,9 +71,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="value-bets"
         options={{
-          title: "Value Bets",
+          title: "AI Picks",
           tabBarIcon: ({ color }) => (
-            <TabIcon name="trending-up" color={color} />
+            <TabIcon name="cpu" color={color} />
           ),
         }}
       />

@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: auth
     description: Authentication
+  - name: ai-picks
+    description: AI-powered picks and parlays
   - name: games
     description: Live and upcoming games
   - name: odds
@@ -26,6 +28,36 @@ tags:
     description: Push alert subscriptions
 
 paths:
+  /ai-picks:
+    get:
+      operationId: getAiPicks
+      tags: [ai-picks]
+      summary: AI-powered picks and parlays for today's games
+      responses:
+        "200":
+          description: AI picks and parlays
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIPicksResponse"
+
+  /ai-picks/refresh:
+    post:
+      operationId: refreshAiPicks
+      tags: [ai-picks]
+      summary: Force-refresh AI picks cache
+      responses:
+        "200":
+          description: Cache cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+
   /healthz:
     get:
       operationId: healthCheck
@@ -1224,3 +1256,85 @@ components:
         message:
           type: string
       required: [id, status]
+
+    AIPickLeg:
+      type: object
+      properties:
+        gameId:
+          type: string
+        sport:
+          type: string
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        pick:
+          type: string
+        betType:
+          type: string
+        bookmaker:
+          type: string
+        odds:
+          type: integer
+      required: [gameId, sport, homeTeam, awayTeam, startTime, pick, betType, bookmaker, odds]
+
+    AIPick:
+      allOf:
+        - $ref: "#/components/schemas/AIPickLeg"
+        - type: object
+          properties:
+            id:
+              type: string
+            confidence:
+              type: integer
+            edge:
+              type: number
+            reasoning:
+              type: string
+            tags:
+              type: array
+              items:
+                type: string
+          required: [id, confidence, edge, reasoning, tags]
+
+    AIParlay:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        legs:
+          type: array
+          items:
+            $ref: "#/components/schemas/AIPickLeg"
+        combinedOdds:
+          type: integer
+        confidence:
+          type: integer
+        reasoning:
+          type: string
+      required: [id, name, legs, combinedOdds, confidence, reasoning]
+
+    AIPicksResponse:
+      type: object
+      properties:
+        picks:
+          type: array
+          items:
+            $ref: "#/components/schemas/AIPick"
+        parlays:
+          type: array
+          items:
+            $ref: "#/components/schemas/AIParlay"
+        summary:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        isAI:
+          type: boolean
+      required: [picks, parlays, summary, generatedAt, isAI]
