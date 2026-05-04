@@ -16,16 +16,18 @@ export function EmptyState({ icon, title, subtitle, actionLabel, onAction }: Emp
   const colors = useColors();
   return (
     <View style={styles.container}>
-      <View style={[styles.iconWrap, { backgroundColor: colors.muted }]}>
-        <Feather name={icon} size={32} color={colors.mutedForeground} />
+      <View style={[styles.iconWrap, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+        <Feather name={icon} size={28} color={colors.mutedForeground} />
       </View>
       <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
-      {subtitle && <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>}
+      {subtitle && (
+        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
+      )}
       {actionLabel && onAction && (
         <TouchableOpacity
           style={[styles.btn, { backgroundColor: colors.primary }]}
           onPress={onAction}
-          activeOpacity={0.8}
+          activeOpacity={0.82}
         >
           <Text style={[styles.btnText, { color: colors.primaryForeground }]}>{actionLabel}</Text>
         </TouchableOpacity>
@@ -40,32 +42,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 40,
-    gap: 12,
+    gap: 10,
   },
   iconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 4,
+    marginBottom: 6,
   },
   title: {
-    fontSize: 17,
+    fontSize: 16,
     fontFamily: "Inter_600SemiBold",
     textAlign: "center",
+    letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
-    lineHeight: 20,
+    lineHeight: 19,
   },
   btn: {
-    marginTop: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
+    marginTop: 10,
+    paddingHorizontal: 22,
+    paddingVertical: 11,
+    borderRadius: 12,
   },
   btnText: {
     fontSize: 14,

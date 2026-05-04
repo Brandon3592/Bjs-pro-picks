@@ -39,6 +39,24 @@ function directionIcon(dir: string) {
   return "minus";
 }
 
+function SectionTitle({ icon, label }: { icon: React.ComponentProps<typeof Feather>["name"]; label: string }) {
+  const colors = useColors();
+  return (
+    <View style={secStyles.row}>
+      <View style={[secStyles.iconWrap, { backgroundColor: colors.primary + "18" }]}>
+        <Feather name={icon} size={14} color={colors.primary} />
+      </View>
+      <Text style={[secStyles.label, { color: colors.foreground }]}>{label}</Text>
+    </View>
+  );
+}
+
+const secStyles = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "center", gap: 8, padding: 16, paddingBottom: 10 },
+  iconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  label: { fontSize: 15, fontFamily: "Inter_600SemiBold", letterSpacing: -0.2 },
+});
+
 function TopBetRow({ bet, onTrack }: { bet: ValueBet; onTrack: () => void }) {
   const colors = useColors();
   return (
@@ -47,6 +65,7 @@ function TopBetRow({ bet, onTrack }: { bet: ValueBet; onTrack: () => void }) {
       onPress={onTrack}
       activeOpacity={0.75}
     >
+      <View style={[styles.topBetAccent, { backgroundColor: colors.primary + "60" }]} />
       <View style={styles.topBetLeft}>
         <Text style={[styles.topBetMatchup, { color: colors.foreground }]} numberOfLines={1}>
           {bet.team} {bet.betType}
@@ -59,8 +78,11 @@ function TopBetRow({ bet, onTrack }: { bet: ValueBet; onTrack: () => void }) {
         <Text style={[styles.topBetOdds, { color: colors.primary }]}>
           {formatOdds(bet.odds)}
         </Text>
+        <View style={[styles.trackPill, { borderColor: colors.border }]}>
+          <Feather name="plus" size={10} color={colors.mutedForeground} />
+          <Text style={[styles.trackPillText, { color: colors.mutedForeground }]}>Track</Text>
+        </View>
       </View>
-      <Feather name="plus-circle" size={16} color={colors.primary} style={styles.trackIcon} />
     </TouchableOpacity>
   );
 }
@@ -69,19 +91,11 @@ function MovementRow({ m }: { m: LineMovement }) {
   const colors = useColors();
   const moved = m.newPrice - m.oldPrice;
   const isUp = moved > 0;
+  const accentColor = isUp ? colors.positive : colors.negative;
   return (
     <View style={[styles.moveRow, { borderBottomColor: colors.border }]}>
-      <View
-        style={[
-          styles.moveIconWrap,
-          { backgroundColor: isUp ? colors.positive + "20" : colors.negative + "20" },
-        ]}
-      >
-        <Feather
-          name={directionIcon(m.direction)}
-          size={14}
-          color={isUp ? colors.positive : colors.negative}
-        />
+      <View style={[styles.moveIconWrap, { backgroundColor: accentColor + "18" }]}>
+        <Feather name={directionIcon(m.direction)} size={13} color={accentColor} />
       </View>
       <View style={styles.moveBody}>
         <Text style={[styles.moveGame, { color: colors.foreground }]} numberOfLines={1}>
@@ -122,12 +136,9 @@ export default function DashboardScreen() {
       style={[styles.root, { backgroundColor: colors.background }]}
       contentContainerStyle={[styles.content, isWeb && styles.webContent]}
       refreshControl={
-        <RefreshControl
-          refreshing={isRefreshing}
-          onRefresh={onRefresh}
-          tintColor={colors.primary}
-        />
+        <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />
       }
+      showsVerticalScrollIndicator={false}
     >
       {/* Stats row */}
       <View style={styles.statsRow}>
@@ -138,11 +149,10 @@ export default function DashboardScreen() {
 
       {/* Top Value Bets */}
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={styles.sectionHeader}>
-          <Feather name="zap" size={16} color={colors.primary} />
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Top Value Bets</Text>
+        <View style={styles.sectionHeaderRow}>
+          <SectionTitle icon="zap" label="Top Value Bets" />
           {summaryQ.isLoading && (
-            <ActivityIndicator size="small" color={colors.mutedForeground} style={styles.inlineLoader} />
+            <ActivityIndicator size="small" color={colors.mutedForeground} style={{ marginRight: 16 }} />
           )}
         </View>
         {summaryQ.isLoading ? (
@@ -150,7 +160,7 @@ export default function DashboardScreen() {
             {[1, 2, 3].map((i) => (
               <View key={i} style={[styles.skeletonRow, { borderBottomColor: colors.border }]}>
                 <View style={[styles.skeletonLine, { backgroundColor: colors.muted, width: "60%" }]} />
-                <View style={[styles.skeletonLine, { backgroundColor: colors.muted, width: "30%" }]} />
+                <View style={[styles.skeletonLine, { backgroundColor: colors.muted, width: "20%" }]} />
               </View>
             ))}
           </View>
@@ -178,19 +188,18 @@ export default function DashboardScreen() {
 
       {/* Line Movements */}
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={styles.sectionHeader}>
-          <Feather name="activity" size={16} color={colors.primary} />
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Line Movements</Text>
+        <View style={styles.sectionHeaderRow}>
+          <SectionTitle icon="activity" label="Line Movements" />
           {movementsQ.isLoading && (
-            <ActivityIndicator size="small" color={colors.mutedForeground} style={styles.inlineLoader} />
+            <ActivityIndicator size="small" color={colors.mutedForeground} style={{ marginRight: 16 }} />
           )}
         </View>
         {movementsQ.isLoading ? (
           <View style={styles.skeletonWrap}>
-            {[1, 2, 3, 4, 5].map((i) => (
+            {[1, 2, 3, 4].map((i) => (
               <View key={i} style={[styles.skeletonRow, { borderBottomColor: colors.border }]}>
                 <View style={[styles.skeletonLine, { backgroundColor: colors.muted, width: "70%" }]} />
-                <View style={[styles.skeletonLine, { backgroundColor: colors.muted, width: "40%" }]} />
+                <View style={[styles.skeletonLine, { backgroundColor: colors.muted, width: "25%" }]} />
               </View>
             ))}
           </View>
@@ -206,10 +215,7 @@ export default function DashboardScreen() {
       {/* Sport Breakdown */}
       {(summaryQ.isLoading || !!summary?.sportBreakdown?.length) && (
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.sectionHeader}>
-            <Feather name="bar-chart-2" size={16} color={colors.primary} />
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>By Sport</Text>
-          </View>
+          <SectionTitle icon="bar-chart-2" label="By Sport" />
           {summaryQ.isLoading ? (
             <View style={styles.skeletonWrap}>
               {[1, 2, 3].map((i) => (
@@ -227,9 +233,11 @@ export default function DashboardScreen() {
                   <Text style={[styles.sportStat, { color: colors.mutedForeground }]}>
                     {s.games} games
                   </Text>
-                  <Text style={[styles.sportStat, { color: colors.mutedForeground }]}>
-                    {s.valueBets} value bet{s.valueBets !== 1 ? "s" : ""}
-                  </Text>
+                  <View style={[styles.sportBadge, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "40" }]}>
+                    <Text style={[styles.sportBadgeText, { color: colors.primary }]}>
+                      {s.valueBets} value bet{s.valueBets !== 1 ? "s" : ""}
+                    </Text>
+                  </View>
                 </View>
               </View>
             ))
@@ -249,79 +257,87 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { padding: 16, gap: 14 },
-  webContent: { paddingTop: 83 },
-  statsRow: { flexDirection: "row", gap: 8 },
-  section: { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    padding: 14,
-    paddingBottom: 10,
-  },
-  sectionTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", flex: 1 },
-  inlineLoader: { marginLeft: "auto" },
+  content: { padding: 16, gap: 12, paddingBottom: 110 },
+  webContent: { paddingTop: 24 },
+  statsRow: { flexDirection: "row", gap: 10 },
+  sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  section: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
   emptyText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: "Inter_400Regular",
-    padding: 14,
-    paddingTop: 0,
-    paddingBottom: 14,
+    padding: 16,
+    paddingTop: 4,
+    paddingBottom: 16,
   },
-  skeletonWrap: { paddingBottom: 4 },
+  skeletonWrap: { paddingBottom: 6 },
   skeletonRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 8,
   },
-  skeletonLine: { height: 12, borderRadius: 6 },
+  skeletonLine: { height: 11, borderRadius: 6 },
   topBetRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingRight: 16,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 8,
+    gap: 10,
   },
+  topBetAccent: { width: 3, height: 36, borderRadius: 2, marginLeft: 1 },
   topBetLeft: { flex: 1 },
-  topBetMatchup: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  topBetSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
-  topBetRight: { alignItems: "flex-end", gap: 3 },
-  topBetOdds: { fontSize: 13, fontFamily: "Inter_700Bold" },
-  trackIcon: { marginLeft: 4 },
+  topBetMatchup: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  topBetSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
+  topBetRight: { alignItems: "flex-end", gap: 4 },
+  topBetOdds: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  trackPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  trackPillText: { fontSize: 10, fontFamily: "Inter_500Medium" },
   moveRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 10,
   },
   moveIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
   },
   moveBody: { flex: 1 },
   moveGame: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  moveSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  moveSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
   moveTime: { fontSize: 11, fontFamily: "Inter_400Regular" },
   sportRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  sportName: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  sportName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   sportStats: { flexDirection: "row", gap: 10, alignItems: "center" },
   sportStat: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  sportEdge: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  sportBadge: {
+    borderRadius: 6,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  sportBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
 });

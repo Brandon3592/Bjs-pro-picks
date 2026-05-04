@@ -14,7 +14,10 @@ export function StatPill({ label, value, accent }: StatPillProps) {
   return (
     <View style={[
       styles.pill,
-      { backgroundColor: accent ? colors.primary + "1a" : colors.card, borderColor: accent ? colors.primary + "40" : colors.border }
+      {
+        backgroundColor: accent ? colors.primary + "18" : colors.card,
+        borderColor: accent ? colors.primary + "50" : colors.border,
+      }
     ]}>
       <Text style={[styles.value, { color: accent ? colors.primary : colors.foreground }]}>
         {value}
@@ -27,20 +30,22 @@ export function StatPill({ label, value, accent }: StatPillProps) {
 const styles = StyleSheet.create({
   pill: {
     flex: 1,
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
     alignItems: "center",
-    gap: 2,
+    gap: 3,
   },
   value: {
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: "Inter_700Bold",
+    letterSpacing: -0.5,
   },
   label: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
+    fontSize: 10,
+    fontFamily: "Inter_500Medium",
     textAlign: "center",
+    letterSpacing: 0.2,
   },
 });

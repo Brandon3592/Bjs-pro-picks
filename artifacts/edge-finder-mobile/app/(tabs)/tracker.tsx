@@ -42,17 +42,51 @@ function formatOdds(odds: number) {
   return odds > 0 ? `+${odds}` : `${odds}`;
 }
 
-function StatBox({ label, value, accent, negative }: { label: string; value: string; accent?: boolean; negative?: boolean }) {
+function StatCard({
+  label,
+  value,
+  color,
+  icon,
+}: {
+  label: string;
+  value: string;
+  color?: string;
+  icon: React.ComponentProps<typeof Feather>["name"];
+}) {
   const colors = useColors();
+  const fg = color ?? colors.foreground;
   return (
-    <View style={[styles.statBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <Text style={[styles.statValue, { color: negative ? colors.negative : accent ? colors.positive : colors.foreground }]}>
-        {value}
-      </Text>
-      <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{label}</Text>
+    <View style={[statStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[statStyles.iconWrap, { backgroundColor: fg + "18" }]}>
+        <Feather name={icon} size={14} color={fg} />
+      </View>
+      <Text style={[statStyles.value, { color: fg }]}>{value}</Text>
+      <Text style={[statStyles.label, { color: colors.mutedForeground }]}>{label}</Text>
     </View>
   );
 }
+
+const statStyles = StyleSheet.create({
+  card: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    gap: 4,
+  },
+  iconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 2,
+  },
+  value: { fontSize: 18, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  label: { fontSize: 10, fontFamily: "Inter_500Medium", textAlign: "center" },
+});
 
 export default function TrackerScreen() {
   const colors = useColors();
@@ -127,23 +161,40 @@ export default function TrackerScreen() {
   const winRate = settled > 0 ? ((wins / settled) * 100).toFixed(0) : "—";
   const roi = totalStaked > 0 ? ((totalProfit / totalStaked) * 100).toFixed(1) : "0.0";
 
+  const isFormValid = !!(form.matchup && form.pick && form.odds && form.stake);
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }, isWeb && styles.webRoot]}>
       {loading ? (
         <View style={styles.loader}><ActivityIndicator color={colors.primary} size="large" /></View>
       ) : (
         <>
-          {/* Stats */}
-          <View style={styles.statsRow}>
-            <StatBox label="Bets" value={`${bets.length}`} />
-            <StatBox label="Win Rate" value={`${winRate}%`} accent={wins > losses} />
-            <StatBox label="ROI" value={`${totalProfit >= 0 ? "+" : ""}${roi}%`} accent={totalProfit > 0} negative={totalProfit < 0} />
-            <StatBox label="P&L" value={`${totalProfit >= 0 ? "+$" : "-$"}${Math.abs(totalProfit).toFixed(0)}`} accent={totalProfit > 0} negative={totalProfit < 0} />
+          {/* Stats grid */}
+          <View style={styles.statsGrid}>
+            <StatCard label="Total Bets" value={`${bets.length}`} icon="list" />
+            <StatCard
+              label="Win Rate"
+              value={`${winRate}%`}
+              icon="percent"
+              color={wins >= losses && settled > 0 ? colors.positive : undefined}
+            />
+            <StatCard
+              label="ROI"
+              value={`${totalProfit >= 0 ? "+" : ""}${roi}%`}
+              icon="trending-up"
+              color={totalProfit > 0 ? colors.positive : totalProfit < 0 ? colors.negative : undefined}
+            />
+            <StatCard
+              label="P&L"
+              value={`${totalProfit >= 0 ? "+$" : "-$"}${Math.abs(totalProfit).toFixed(0)}`}
+              icon="dollar-sign"
+              color={totalProfit > 0 ? colors.positive : totalProfit < 0 ? colors.negative : undefined}
+            />
           </View>
 
           {!bets.length ? (
             <EmptyState
-              icon="clipboard"
+              icon="trending-up"
               title="No bets logged yet"
               subtitle="Track your bets to measure performance and ROI over time."
               actionLabel="Log a Bet"
@@ -154,64 +205,77 @@ export default function TrackerScreen() {
               data={bets}
               keyExtractor={(b) => b.id}
               contentContainerStyle={styles.list}
-              scrollEnabled={!!bets.length}
+              scrollEnabled
               renderItem={({ item }) => {
                 const profit = calcProfit(item);
+                const resultColor =
+                  item.result === "win" ? colors.positive :
+                  item.result === "loss" ? colors.negative :
+                  colors.mutedForeground;
                 return (
-                  <View style={[styles.betCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <View style={styles.betHeader}>
-                      <View style={styles.betLeft}>
-                        <Text style={[styles.betMatchup, { color: colors.foreground }]}>{item.matchup}</Text>
-                        <Text style={[styles.betPick, { color: colors.mutedForeground }]}>
-                          {item.pick} · {item.bookmaker} · {formatOdds(item.odds)}
-                        </Text>
-                      </View>
-                      <View style={styles.betRight}>
-                        <Text style={[styles.betStake, { color: colors.foreground }]}>${item.stake.toFixed(0)}</Text>
-                        {profit !== null && (
-                          <Text style={[styles.betProfit, { color: profit >= 0 ? colors.positive : colors.negative }]}>
-                            {profit >= 0 ? "+$" : "-$"}{Math.abs(profit).toFixed(2)}
+                  <View style={[styles.betCard, {
+                    backgroundColor: colors.card,
+                    borderColor: item.result === "win" ? colors.positive + "40" :
+                      item.result === "loss" ? colors.negative + "30" : colors.border,
+                  }]}>
+                    <View style={[styles.betAccent, {
+                      backgroundColor: item.result === "win" ? colors.positive :
+                        item.result === "loss" ? colors.negative : colors.border,
+                    }]} />
+                    <View style={styles.betInner}>
+                      <View style={styles.betHeader}>
+                        <View style={styles.betLeft}>
+                          <Text style={[styles.betMatchup, { color: colors.foreground }]}>{item.matchup}</Text>
+                          <Text style={[styles.betPick, { color: colors.mutedForeground }]}>
+                            {item.pick}
                           </Text>
-                        )}
+                          <Text style={[styles.betMeta, { color: colors.mutedForeground }]}>
+                            {item.bookmaker} · {formatOdds(item.odds)}
+                          </Text>
+                        </View>
+                        <View style={styles.betRight}>
+                          <Text style={[styles.betStake, { color: colors.foreground }]}>
+                            ${item.stake.toFixed(0)}
+                          </Text>
+                          {profit !== null && (
+                            <Text style={[styles.betProfit, { color: profit >= 0 ? colors.positive : colors.negative }]}>
+                              {profit >= 0 ? "+$" : "-$"}{Math.abs(profit).toFixed(2)}
+                            </Text>
+                          )}
+                        </View>
                       </View>
-                    </View>
-                    <View style={[styles.betActions, { borderTopColor: colors.border }]}>
-                      {(["win", "loss", "pending"] as const).map((r) => (
+
+                      <View style={[styles.betActions, { borderTopColor: colors.border }]}>
+                        {(["win", "loss", "pending"] as const).map((r) => {
+                          const active = item.result === r;
+                          const rColor = r === "win" ? colors.positive : r === "loss" ? colors.negative : colors.mutedForeground;
+                          return (
+                            <TouchableOpacity
+                              key={r}
+                              style={[
+                                styles.resultBtn,
+                                {
+                                  backgroundColor: active ? rColor + "20" : "transparent",
+                                  borderColor: active ? rColor + "60" : colors.border,
+                                },
+                              ]}
+                              onPress={() => setResult(item.id, r)}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={[styles.resultText, { color: active ? rColor : colors.mutedForeground }]}>
+                                {r.charAt(0).toUpperCase() + r.slice(1)}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
                         <TouchableOpacity
-                          key={r}
-                          style={[
-                            styles.resultBtn,
-                            item.result === r && {
-                              backgroundColor:
-                                r === "win" ? colors.positive + "20"
-                                  : r === "loss" ? colors.negative + "20"
-                                    : colors.muted,
-                              borderColor:
-                                r === "win" ? colors.positive
-                                  : r === "loss" ? colors.negative
-                                    : colors.border,
-                            },
-                            item.result !== r && { borderColor: colors.border },
-                          ]}
-                          onPress={() => setResult(item.id, r)}
+                          style={styles.deleteBtn}
+                          onPress={() => deleteBet(item.id)}
                           activeOpacity={0.7}
                         >
-                          <Text style={[
-                            styles.resultText,
-                            { color: item.result === r
-                                ? r === "win" ? colors.positive
-                                  : r === "loss" ? colors.negative
-                                    : colors.foreground
-                                : colors.mutedForeground
-                            },
-                          ]}>
-                            {r.charAt(0).toUpperCase() + r.slice(1)}
-                          </Text>
+                          <Feather name="trash-2" size={13} color={colors.negative + "90"} />
                         </TouchableOpacity>
-                      ))}
-                      <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteBet(item.id)} activeOpacity={0.7}>
-                        <Feather name="trash-2" size={14} color={colors.negative} />
-                      </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
                 );
@@ -219,54 +283,66 @@ export default function TrackerScreen() {
             />
           )}
 
-          {/* FAB */}
           {bets.length > 0 && (
             <TouchableOpacity
               style={[styles.fab, { backgroundColor: colors.primary }]}
               onPress={() => setShowModal(true)}
               activeOpacity={0.85}
             >
-              <Feather name="plus" size={24} color={colors.primaryForeground} />
+              <Feather name="plus" size={22} color={colors.primaryForeground} />
             </TouchableOpacity>
           )}
         </>
       )}
 
       {/* Add Bet Modal */}
-      <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowModal(false)}>
+      <Modal
+        visible={showModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowModal(false)}
+      >
         <View style={[styles.modal, { backgroundColor: colors.background }]}>
+          <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
           <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>Log a Bet</Text>
-            <TouchableOpacity onPress={() => setShowModal(false)}>
-              <Feather name="x" size={22} color={colors.foreground} />
+            <TouchableOpacity
+              onPress={() => setShowModal(false)}
+              hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+            >
+              <Feather name="x" size={22} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={styles.modalBody}>
+          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
             {[
-              { key: "matchup", label: "Matchup", placeholder: "e.g. Lakers vs Celtics" },
-              { key: "pick", label: "Your Pick", placeholder: "e.g. Lakers ML" },
-              { key: "bookmaker", label: "Bookmaker", placeholder: "e.g. DraftKings" },
-              { key: "odds", label: "American Odds", placeholder: "e.g. -110 or +150", numeric: true },
-              { key: "stake", label: "Stake ($)", placeholder: "e.g. 100", numeric: true },
-            ].map(({ key, label, placeholder, numeric }) => (
+              { key: "matchup", label: "Matchup", placeholder: "e.g. Lakers vs Celtics", icon: "users" },
+              { key: "pick", label: "Your Pick", placeholder: "e.g. Lakers ML", icon: "check-square" },
+              { key: "bookmaker", label: "Bookmaker", placeholder: "e.g. DraftKings", icon: "book" },
+              { key: "odds", label: "American Odds", placeholder: "e.g. -110 or +150", icon: "hash", numeric: true },
+              { key: "stake", label: "Stake ($)", placeholder: "e.g. 100", icon: "dollar-sign", numeric: true },
+            ].map(({ key, label, placeholder, numeric, icon }) => (
               <View key={key} style={styles.field}>
                 <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{label}</Text>
-                <TextInput
-                  style={[styles.fieldInput, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
-                  value={form[key as keyof typeof form]}
-                  onChangeText={(v) => setForm((f) => ({ ...f, [key]: v }))}
-                  placeholder={placeholder}
-                  placeholderTextColor={colors.mutedForeground}
-                  keyboardType={numeric ? "numbers-and-punctuation" : "default"}
-                />
+                <View style={[styles.fieldRow, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                  <Feather name={icon as any} size={15} color={colors.mutedForeground} style={{ marginLeft: 12 }} />
+                  <TextInput
+                    style={[styles.fieldInput, { color: colors.foreground }]}
+                    value={form[key as keyof typeof form]}
+                    onChangeText={(v) => setForm((f) => ({ ...f, [key]: v }))}
+                    placeholder={placeholder}
+                    placeholderTextColor={colors.mutedForeground}
+                    keyboardType={numeric ? "numbers-and-punctuation" : "default"}
+                  />
+                </View>
               </View>
             ))}
             <TouchableOpacity
-              style={[styles.submitBtn, { backgroundColor: colors.primary, opacity: (!form.matchup || !form.pick || !form.odds || !form.stake) ? 0.5 : 1 }]}
+              style={[styles.submitBtn, { backgroundColor: colors.primary, opacity: isFormValid ? 1 : 0.45 }]}
               onPress={addBet}
-              disabled={!form.matchup || !form.pick || !form.odds || !form.stake}
-              activeOpacity={0.8}
+              disabled={!isFormValid}
+              activeOpacity={0.82}
             >
+              <Feather name="plus" size={16} color={colors.primaryForeground} />
               <Text style={[styles.submitText, { color: colors.primaryForeground }]}>Add Bet</Text>
             </TouchableOpacity>
           </ScrollView>
@@ -280,60 +356,59 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   webRoot: { paddingTop: 67 },
   loader: { flex: 1, alignItems: "center", justifyContent: "center" },
-  statsRow: { flexDirection: "row", gap: 8, padding: 16 },
-  statBox: {
-    flex: 1,
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingVertical: 12,
-    alignItems: "center",
-    gap: 2,
+  statsGrid: {
+    flexDirection: "row",
+    gap: 10,
+    padding: 16,
+    paddingBottom: 8,
   },
-  statValue: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  statLabel: { fontSize: 10, fontFamily: "Inter_400Regular" },
-  list: { paddingBottom: 100 },
+  list: { paddingHorizontal: 16, paddingBottom: 120, gap: 10 },
   betCard: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     overflow: "hidden",
+    flexDirection: "row",
   },
+  betAccent: { width: 3 },
+  betInner: { flex: 1 },
   betHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     padding: 14,
     paddingBottom: 10,
+    gap: 8,
   },
-  betLeft: { flex: 1 },
-  betMatchup: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  betPick: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  betRight: { alignItems: "flex-end" },
-  betStake: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  betProfit: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginTop: 2 },
+  betLeft: { flex: 1, gap: 3 },
+  betMatchup: { fontSize: 14, fontFamily: "Inter_600SemiBold", letterSpacing: -0.2 },
+  betPick: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  betMeta: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  betRight: { alignItems: "flex-end", gap: 2 },
+  betStake: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  betProfit: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   betActions: {
     flexDirection: "row",
     borderTopWidth: StyleSheet.hairlineWidth,
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     gap: 6,
   },
   resultBtn: {
     flex: 1,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingVertical: 7,
+    borderRadius: 8,
     borderWidth: 1,
     alignItems: "center",
   },
-  resultText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  resultText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   deleteBtn: {
-    width: 32,
+    width: 34,
     alignItems: "center",
     justifyContent: "center",
   },
   fab: {
     position: "absolute",
-    bottom: 100,
+    bottom: 110,
     right: 20,
     width: 52,
     height: 52,
@@ -341,37 +416,53 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 10,
   },
-  modal: { flex: 1 },
+  modal: { flex: 1, paddingTop: 12 },
+  modalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 12,
+  },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
-    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  modalTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
-  modalBody: { padding: 20, gap: 16, paddingBottom: 60 },
+  modalTitle: { fontSize: 18, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
+  modalBody: { padding: 20, gap: 14, paddingBottom: 60 },
   field: { gap: 6 },
-  fieldLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  fieldInput: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 8,
+  fieldLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", letterSpacing: 0.3, textTransform: "uppercase" },
+  fieldRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 12,
     borderWidth: 1,
+    gap: 8,
+  },
+  fieldInput: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 13,
     fontSize: 15,
     fontFamily: "Inter_400Regular",
   },
   submitBtn: {
-    paddingVertical: 14,
-    borderRadius: 10,
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 8,
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 15,
+    borderRadius: 14,
+    marginTop: 6,
   },
   submitText: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
 });

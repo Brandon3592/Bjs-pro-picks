@@ -31,10 +31,9 @@ export function FilterChips({ options, selected, onSelect }: FilterChipsProps) {
             key={opt.value}
             style={[
               styles.chip,
-              {
-                backgroundColor: active ? colors.primary : colors.muted,
-                borderColor: active ? colors.primary : colors.border,
-              },
+              active
+                ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                : { backgroundColor: colors.muted, borderColor: colors.border },
             ]}
             onPress={() => handleSelect(opt.value)}
             activeOpacity={0.75}
@@ -42,7 +41,8 @@ export function FilterChips({ options, selected, onSelect }: FilterChipsProps) {
             <Text
               style={[
                 styles.chipText,
-                { color: active ? colors.primaryForeground : colors.foreground },
+                { color: active ? colors.primaryForeground : colors.mutedForeground },
+                active && styles.chipTextActive,
               ]}
             >
               {opt.label}
@@ -58,17 +58,20 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    gap: 8,
+    gap: 7,
     flexDirection: "row",
   },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 7,
-    borderRadius: 20,
+    borderRadius: 10,
     borderWidth: 1,
   },
   chipText: {
     fontSize: 13,
     fontFamily: "Inter_500Medium",
+  },
+  chipTextActive: {
+    fontFamily: "Inter_600SemiBold",
   },
 });

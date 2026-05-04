@@ -27,50 +27,66 @@ function ArbCard({ item, stake }: { item: ArbOpportunity; stake: number }) {
   const colors = useColors();
   const isTrue = item.isArb;
   const profit = ((item.profitPct / 100) * stake).toFixed(2);
+  const accentColor = isTrue ? colors.positive : colors.warning;
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.card, borderColor: isTrue ? colors.positive + "60" : colors.border }]}>
-      {isTrue && (
-        <View style={[styles.arbBanner, { backgroundColor: colors.positive }]}>
-          <Feather name="check-circle" size={12} color="#fff" />
-          <Text style={styles.arbBannerText}>TRUE ARB</Text>
-        </View>
-      )}
-      <View style={styles.cardHeader}>
-        <View style={styles.headerLeft}>
-          <Text style={[styles.matchup, { color: colors.foreground }]}>
-            {item.awayTeam} @ {item.homeTeam}
-          </Text>
-          <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-            {item.sport} · {item.market.toUpperCase()}
-          </Text>
-        </View>
-        <View style={styles.headerRight}>
-          <Text style={[styles.profit, { color: isTrue ? colors.positive : colors.warning }]}>
-            +{item.profitPct.toFixed(2)}%
-          </Text>
-          <Text style={[styles.profitDollar, { color: colors.mutedForeground }]}>
-            ${profit} on ${stake}
-          </Text>
-        </View>
-      </View>
+    <View style={[styles.card, {
+      backgroundColor: colors.card,
+      borderColor: isTrue ? colors.positive + "50" : colors.border,
+    }]}>
+      {/* Top accent line */}
+      <View style={[styles.cardAccentBar, { backgroundColor: accentColor }]} />
 
-      <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-      {item.legs.map((leg, i) => (
-        <View key={i} style={[styles.leg, { borderBottomColor: colors.border }]}>
-          <View style={styles.legLeft}>
-            <Text style={[styles.legOutcome, { color: colors.foreground }]}>{leg.outcome}</Text>
-            <Text style={[styles.legBook, { color: colors.mutedForeground }]}>{leg.bookmaker}</Text>
+      <View style={styles.cardContent}>
+        {/* Header */}
+        <View style={styles.cardHeader}>
+          <View style={styles.headerLeft}>
+            {isTrue && (
+              <View style={[styles.arbTag, { backgroundColor: colors.positive + "20", borderColor: colors.positive + "50" }]}>
+                <Feather name="check-circle" size={11} color={colors.positive} />
+                <Text style={[styles.arbTagText, { color: colors.positive }]}>TRUE ARB</Text>
+              </View>
+            )}
+            <Text style={[styles.matchup, { color: colors.foreground }]}>
+              {item.awayTeam} @ {item.homeTeam}
+            </Text>
+            <Text style={[styles.sub, { color: colors.mutedForeground }]}>
+              {item.sport} · {item.market.toUpperCase()}
+            </Text>
           </View>
-          <View style={styles.legRight}>
-            <Text style={[styles.legOdds, { color: colors.primary }]}>{formatOdds(leg.odds)}</Text>
-            <Text style={[styles.legStake, { color: colors.mutedForeground }]}>
-              ${calcStake(leg.stakeRatio, stake)}
+          <View style={styles.headerRight}>
+            <Text style={[styles.profitPct, { color: accentColor }]}>
+              +{item.profitPct.toFixed(2)}%
+            </Text>
+            <Text style={[styles.profitDollar, { color: colors.mutedForeground }]}>
+              ${profit} profit
             </Text>
           </View>
         </View>
-      ))}
+
+        {/* Divider */}
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        {/* Legs */}
+        {item.legs.map((leg, i) => (
+          <View key={i} style={[styles.leg, { borderBottomColor: colors.border }]}>
+            <View style={[styles.legBook, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+              <Text style={[styles.legBookText, { color: colors.mutedForeground }]} numberOfLines={1}>
+                {leg.bookmaker}
+              </Text>
+            </View>
+            <Text style={[styles.legOutcome, { color: colors.foreground }]} numberOfLines={1}>
+              {leg.outcome}
+            </Text>
+            <View style={styles.legRight}>
+              <Text style={[styles.legOdds, { color: accentColor }]}>{formatOdds(leg.odds)}</Text>
+              <Text style={[styles.legStake, { color: colors.mutedForeground }]}>
+                ${calcStake(leg.stakeRatio, stake)}
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -86,9 +102,11 @@ export default function ArbScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }, isWeb && styles.webRoot]}>
-      {/* Stake input */}
+      {/* Stake bar */}
       <View style={[styles.stakeBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <Feather name="dollar-sign" size={16} color={colors.mutedForeground} />
+        <View style={[styles.stakeIconWrap, { backgroundColor: colors.primary + "18" }]}>
+          <Feather name="dollar-sign" size={15} color={colors.primary} />
+        </View>
         <TextInput
           style={[styles.stakeInput, { color: colors.foreground }]}
           value={stakeText}
@@ -106,7 +124,7 @@ export default function ArbScreen() {
         </View>
       ) : !opps.length ? (
         <EmptyState
-          icon="refresh-cw"
+          icon="shuffle"
           title="No opportunities right now"
           subtitle="The arb scanner checks live odds across all books. Check back soon."
         />
@@ -121,8 +139,14 @@ export default function ArbScreen() {
           }
           ListHeaderComponent={
             <View style={styles.listHeader}>
-              <Text style={[styles.count, { color: colors.mutedForeground }]}>
-                {opps.filter((o) => o.isArb).length} true arbs · {opps.length} low-vig
+              <View style={[styles.countPill, { backgroundColor: colors.positive + "18", borderColor: colors.positive + "40" }]}>
+                <Feather name="check-circle" size={11} color={colors.positive} />
+                <Text style={[styles.countText, { color: colors.positive }]}>
+                  {opps.filter((o) => o.isArb).length} true arbs
+                </Text>
+              </View>
+              <Text style={[styles.countSub, { color: colors.mutedForeground }]}>
+                · {opps.length} total opportunities
               </Text>
             </View>
           }
@@ -141,65 +165,98 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    gap: 8,
+    gap: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  stakeIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
   },
   stakeInput: {
     flex: 1,
     fontSize: 16,
     fontFamily: "Inter_600SemiBold",
   },
-  stakeLabel: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  stakeLabel: { fontSize: 12, fontFamily: "Inter_400Regular" },
   loader: { flex: 1, alignItems: "center", justifyContent: "center" },
-  list: { paddingTop: 8, paddingBottom: 100 },
-  listHeader: { paddingHorizontal: 16, paddingVertical: 8 },
-  count: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  list: { paddingTop: 10, paddingBottom: 110 },
+  listHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    gap: 6,
+    marginBottom: 4,
+  },
+  countPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  countText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  countSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
   card: {
     marginHorizontal: 16,
-    marginBottom: 10,
-    borderRadius: 12,
+    marginBottom: 12,
+    borderRadius: 16,
     borderWidth: 1,
     overflow: "hidden",
   },
-  arbBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-  },
-  arbBannerText: {
-    fontSize: 11,
-    fontFamily: "Inter_700Bold",
-    color: "#fff",
-    letterSpacing: 0.5,
-  },
+  cardAccentBar: { height: 3, width: "100%" },
+  cardContent: { padding: 0 },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     padding: 14,
     paddingBottom: 10,
+    gap: 10,
   },
-  headerLeft: { flex: 1 },
-  headerRight: { alignItems: "flex-end" },
-  matchup: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  sub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  profit: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  profitDollar: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
-  divider: { height: 1, marginHorizontal: 14 },
+  headerLeft: { flex: 1, gap: 4 },
+  headerRight: { alignItems: "flex-end", gap: 2 },
+  arbTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginBottom: 2,
+  },
+  arbTagText: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
+  matchup: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  sub: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  profitPct: { fontSize: 20, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  profitDollar: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 14 },
   leg: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 10,
   },
-  legLeft: { flex: 1 },
-  legOutcome: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  legBook: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
-  legRight: { alignItems: "flex-end" },
+  legBook: {
+    borderRadius: 6,
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    minWidth: 72,
+    alignItems: "center",
+  },
+  legBookText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  legOutcome: { flex: 1, fontSize: 13, fontFamily: "Inter_500Medium" },
+  legRight: { alignItems: "flex-end", gap: 1 },
   legOdds: { fontSize: 14, fontFamily: "Inter_700Bold" },
-  legStake: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  legStake: { fontSize: 11, fontFamily: "Inter_400Regular" },
 });
