@@ -1279,6 +1279,9 @@ components:
           type: string
         odds:
           type: integer
+        player:
+          type: string
+          nullable: true
       required: [gameId, sport, homeTeam, awayTeam, startTime, pick, betType, bookmaker, odds]
 
     AIPick:
@@ -1322,14 +1325,15 @@ components:
     AIPicksResponse:
       type: object
       properties:
-        picks:
-          type: array
-          items:
-            $ref: "#/components/schemas/AIPick"
-        parlays:
-          type: array
-          items:
-            $ref: "#/components/schemas/AIParlay"
+        lockOfTheDay:
+          $ref: "#/components/schemas/AIPick"
+          nullable: true
+        safeParlay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
+        lottoParlay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
         summary:
           type: string
         generatedAt:
@@ -1337,4 +1341,4 @@ components:
           format: date-time
         isAI:
           type: boolean
-      required: [picks, parlays, summary, generatedAt, isAI]
+      required: [summary, generatedAt, isAI]

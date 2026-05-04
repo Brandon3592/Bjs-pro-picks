@@ -500,6 +500,7 @@ export interface AIPickLeg {
   betType: string;
   bookmaker: string;
   odds: number;
+  player?: string | null;
 }
 
 export type AIPick = AIPickLeg & {
@@ -520,8 +521,9 @@ export interface AIParlay {
 }
 
 export interface AIPicksResponse {
-  picks: AIPick[];
-  parlays: AIParlay[];
+  lockOfTheDay?: AIPick | null;
+  safeParlay?: AIParlay | null;
+  lottoParlay?: AIParlay | null;
   summary: string;
   generatedAt: string;
   isAI: boolean;

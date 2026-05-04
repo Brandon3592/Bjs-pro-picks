@@ -5,7 +5,6 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Platform,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -26,16 +25,10 @@ function fmtOdds(o: number) {
   return o > 0 ? `+${o}` : `${o}`;
 }
 
-function confidenceColor(c: number, colors: ReturnType<typeof useColors>) {
-  if (c >= 70) return "#22c55e";
-  if (c >= 58) return "#f59e0b";
-  return "#ef4444";
-}
-
 function combinedOddsPayoutStr(odds: number): string {
   const decimal = odds > 0 ? odds / 100 + 1 : 100 / Math.abs(odds) + 1;
   const payout = ((decimal - 1) * 100).toFixed(0);
-  return `$${payout} profit per $100`;
+  return `$${payout} profit per $100 wagered`;
 }
 
 function sportBadgeColor(sport: string): string {
@@ -60,9 +53,49 @@ function formatTime(iso: string) {
   return `${h}:${m} ${ampm}`;
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+function confidenceColor(c: number) {
+  if (c >= 70) return "#22c55e";
+  if (c >= 55) return "#f59e0b";
+  return "#ef4444";
+}
 
-function AIPickCard({
+// ─── Section header ───────────────────────────────────────────────────────────
+
+function SectionHeader({ icon, label, sublabel, accent }: {
+  icon: string;
+  label: string;
+  sublabel: string;
+  accent: string;
+}) {
+  return (
+    <View style={[sectionStyles.row, { borderLeftColor: accent }]}>
+      <Text style={sectionStyles.icon}>{icon}</Text>
+      <View style={sectionStyles.text}>
+        <Text style={[sectionStyles.label, { color: accent }]}>{label}</Text>
+        <Text style={sectionStyles.sub}>{sublabel}</Text>
+      </View>
+    </View>
+  );
+}
+
+const sectionStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderLeftWidth: 3,
+    paddingLeft: 10,
+    marginBottom: 8,
+  },
+  icon: { fontSize: 22 },
+  text: { flex: 1, gap: 1 },
+  label: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  sub: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#9ca3af" },
+});
+
+// ─── Lock of the Day card ─────────────────────────────────────────────────────
+
+function LockCard({
   pick,
   onTrack,
   onBet,
@@ -72,50 +105,44 @@ function AIPickCard({
   onBet: () => void;
 }) {
   const colors = useColors();
-  const [expanded, setExpanded] = useState(false);
-  const confColor = confidenceColor(pick.confidence, colors);
-  const edgePositive = pick.edge > 0;
+  const [expanded, setExpanded] = useState(true);
+  const GOLD = "#f59e0b";
+  const confColor = confidenceColor(pick.confidence);
+  const isPositive = pick.odds > 0;
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
-      onPress={() => {
-        Haptics.selectionAsync();
-        setExpanded((e) => !e);
-      }}
-      activeOpacity={0.85}
+      style={[styles.lockCard, { backgroundColor: colors.card, borderColor: GOLD + "55" }]}
+      onPress={() => { Haptics.selectionAsync(); setExpanded((e) => !e); }}
+      activeOpacity={0.88}
     >
-      {/* Header row */}
-      <View style={styles.cardHeader}>
-        <View style={[styles.sportBadge, { backgroundColor: sportBadgeColor(pick.sport) }]}>
-          <Text style={styles.sportBadgeText}>{pick.sport}</Text>
+      {/* Gold header strip */}
+      <View style={[styles.lockStrip, { backgroundColor: GOLD + "18" }]}>
+        <View style={styles.lockStripLeft}>
+          <View style={[styles.sportBadge, { backgroundColor: sportBadgeColor(pick.sport) }]}>
+            <Text style={styles.sportBadgeText}>{pick.sport}</Text>
+          </View>
+          <Text style={[styles.lockMatchup, { color: colors.foreground }]} numberOfLines={1}>
+            {pick.awayTeam} @ {pick.homeTeam}
+          </Text>
         </View>
-        <Text style={[styles.matchup, { color: colors.foreground }]} numberOfLines={1}>
-          {pick.awayTeam} @ {pick.homeTeam}
-        </Text>
-        <Text style={[styles.gameTime, { color: colors.mutedForeground }]}>
-          {formatTime(pick.startTime)}
-        </Text>
+        <Text style={[styles.gameTime, { color: colors.mutedForeground }]}>{formatTime(pick.startTime)}</Text>
       </View>
 
-      {/* Pick row */}
-      <View style={styles.pickRow}>
-        <View style={styles.pickLeft}>
-          <View style={[styles.aiBadge, { backgroundColor: colors.primary + "22", borderColor: colors.primary + "44" }]}>
-            <Feather name="cpu" size={11} color={colors.primary} />
-            <Text style={[styles.aiBadgeText, { color: colors.primary }]}>AI Pick</Text>
-          </View>
-          <Text style={[styles.pickText, { color: colors.foreground }]}>{pick.pick}</Text>
+      {/* Main pick */}
+      <View style={styles.lockBody}>
+        <View style={styles.lockPickLeft}>
+          {pick.player ? (
+            <Text style={[styles.lockPlayer, { color: GOLD }]}>{pick.player}</Text>
+          ) : null}
+          <Text style={[styles.lockPick, { color: colors.foreground }]}>{pick.pick}</Text>
           <Text style={[styles.bookmakerText, { color: colors.mutedForeground }]}>
-            via {pick.bookmaker}
+            via {pick.bookmaker} · {pick.edge.toFixed(1)}% edge
           </Text>
         </View>
-        <View style={styles.pickRight}>
-          <Text style={[styles.oddsText, { color: edgePositive ? "#22c55e" : colors.foreground }]}>
+        <View style={styles.lockOddsBlock}>
+          <Text style={[styles.lockOdds, { color: isPositive ? "#22c55e" : colors.foreground }]}>
             {fmtOdds(pick.odds)}
-          </Text>
-          <Text style={[styles.edgeText, { color: colors.mutedForeground }]}>
-            {pick.edge.toFixed(1)}% edge
           </Text>
         </View>
       </View>
@@ -123,35 +150,24 @@ function AIPickCard({
       {/* Confidence bar */}
       <View style={styles.confRow}>
         <View style={[styles.confBar, { backgroundColor: colors.border }]}>
-          <View
-            style={[
-              styles.confFill,
-              { backgroundColor: confColor, width: `${pick.confidence}%` as any },
-            ]}
-          />
+          <View style={[styles.confFill, { backgroundColor: confColor, width: `${pick.confidence}%` as any }]} />
         </View>
-        <Text style={[styles.confLabel, { color: confColor }]}>
-          {pick.confidence}% confidence
-        </Text>
+        <Text style={[styles.confLabel, { color: confColor }]}>{pick.confidence}% confidence</Text>
       </View>
 
-      {/* Reasoning (expanded) */}
+      {/* AI Reasoning */}
       {expanded && (
         <View style={[styles.reasoning, { borderTopColor: colors.border }]}>
           <View style={styles.reasoningHeader}>
-            <Feather name="activity" size={13} color={colors.mutedForeground} />
-            <Text style={[styles.reasoningLabel, { color: colors.mutedForeground }]}>AI Analysis</Text>
+            <Feather name="activity" size={13} color={GOLD} />
+            <Text style={[styles.reasoningLabel, { color: GOLD }]}>AI Analysis</Text>
           </View>
-          <Text style={[styles.reasoningText, { color: colors.foreground }]}>
-            {pick.reasoning}
-          </Text>
+          <Text style={[styles.reasoningText, { color: colors.foreground }]}>{pick.reasoning}</Text>
           {pick.tags?.length > 0 && (
             <View style={styles.tagsRow}>
               {pick.tags.map((tag) => (
-                <View key={tag} style={[styles.tag, { backgroundColor: colors.border }]}>
-                  <Text style={[styles.tagText, { color: colors.mutedForeground }]}>
-                    {tag.replace(/_/g, " ")}
-                  </Text>
+                <View key={tag} style={[styles.tag, { backgroundColor: GOLD + "22" }]}>
+                  <Text style={[styles.tagText, { color: GOLD }]}>{tag.replace(/_/g, " ")}</Text>
                 </View>
               ))}
             </View>
@@ -159,7 +175,7 @@ function AIPickCard({
         </View>
       )}
 
-      {/* Action buttons */}
+      {/* Actions */}
       <View style={styles.actions}>
         <TouchableOpacity
           style={[styles.actionBtn, styles.trackBtn, { borderColor: colors.border }]}
@@ -169,43 +185,46 @@ function AIPickCard({
           <Text style={[styles.actionBtnText, { color: colors.foreground }]}>Track</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.actionBtn, styles.betBtn, { backgroundColor: colors.primary }]}
+          style={[styles.actionBtn, { backgroundColor: GOLD }]}
           onPress={(e) => { e.stopPropagation?.(); onBet(); }}
         >
-          <Feather name="external-link" size={14} color="#fff" />
-          <Text style={[styles.betBtnText]}>Place Bet</Text>
+          <Feather name="external-link" size={14} color="#000" />
+          <Text style={[styles.actionBtnText, { color: "#000" }]}>Place Bet</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 }
 
+// ─── Parlay card ──────────────────────────────────────────────────────────────
+
 function ParlayCard({
   parlay,
+  accent,
   onBet,
 }: {
   parlay: AIParlay;
+  accent: string;
   onBet: (leg: AIPickLeg) => void;
 }) {
   const colors = useColors();
   const [expanded, setExpanded] = useState(false);
-  const confColor = confidenceColor(parlay.confidence, colors);
+  const confColor = confidenceColor(parlay.confidence);
 
   return (
     <TouchableOpacity
-      style={[styles.card, styles.parlayCard, { backgroundColor: colors.card, borderColor: colors.primary + "55" }]}
-      onPress={() => {
-        Haptics.selectionAsync();
-        setExpanded((e) => !e);
-      }}
-      activeOpacity={0.85}
+      style={[styles.parlayCard, { backgroundColor: colors.card, borderColor: accent + "55" }]}
+      onPress={() => { Haptics.selectionAsync(); setExpanded((e) => !e); }}
+      activeOpacity={0.88}
     >
       {/* Header */}
       <View style={styles.parlayHeader}>
-        <View style={[styles.parlayBadge, { backgroundColor: colors.primary }]}>
-          <Text style={styles.parlayBadgeText}>🔗 {parlay.legs.length}-Leg Parlay</Text>
+        <View style={[styles.parlayBadge, { backgroundColor: accent + "22", borderColor: accent + "55", borderWidth: 1 }]}>
+          <Text style={[styles.parlayBadgeText, { color: accent }]}>
+            {parlay.legs.length}-Leg Parlay
+          </Text>
         </View>
-        <Text style={[styles.parlayOdds, { color: "#22c55e" }]}>{fmtOdds(parlay.combinedOdds)}</Text>
+        <Text style={[styles.parlayOdds, { color: accent }]}>{fmtOdds(parlay.combinedOdds)}</Text>
       </View>
 
       <Text style={[styles.parlayName, { color: colors.foreground }]}>{parlay.name}</Text>
@@ -216,15 +235,23 @@ function ParlayCard({
       {/* Legs */}
       <View style={[styles.legList, { borderTopColor: colors.border }]}>
         {parlay.legs.map((leg, i) => (
-          <View key={i} style={[styles.legRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}>
+          <View
+            key={i}
+            style={[
+              styles.legRow,
+              i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+            ]}
+          >
             <View style={[styles.legDot, { backgroundColor: sportBadgeColor(leg.sport) }]} />
             <View style={styles.legInfo}>
               <Text style={[styles.legMatchup, { color: colors.mutedForeground }]} numberOfLines={1}>
-                {formatMatchup(leg)}
+                {leg.awayTeam} @ {leg.homeTeam}
               </Text>
-              <Text style={[styles.legPick, { color: colors.foreground }]}>{leg.pick}</Text>
+              <Text style={[styles.legPick, { color: colors.foreground }]}>
+                {(leg as any).player ? `${(leg as any).player} — ` : ""}{leg.pick}
+              </Text>
             </View>
-            <Text style={[styles.legOdds, { color: colors.primary }]}>{fmtOdds(leg.odds)}</Text>
+            <Text style={[styles.legOdds, { color: accent }]}>{fmtOdds(leg.odds)}</Text>
           </View>
         ))}
       </View>
@@ -237,12 +264,12 @@ function ParlayCard({
         <Text style={[styles.confLabel, { color: confColor }]}>{parlay.confidence}% confidence</Text>
       </View>
 
-      {/* Reasoning expanded */}
+      {/* Reasoning (expanded) */}
       {expanded && (
         <View style={[styles.reasoning, { borderTopColor: colors.border }]}>
           <View style={styles.reasoningHeader}>
-            <Feather name="activity" size={13} color={colors.mutedForeground} />
-            <Text style={[styles.reasoningLabel, { color: colors.mutedForeground }]}>Why this parlay?</Text>
+            <Feather name="activity" size={13} color={accent} />
+            <Text style={[styles.reasoningLabel, { color: accent }]}>Why this parlay?</Text>
           </View>
           <Text style={[styles.reasoningText, { color: colors.foreground }]}>{parlay.reasoning}</Text>
         </View>
@@ -250,11 +277,8 @@ function ParlayCard({
 
       {/* Bet button */}
       <TouchableOpacity
-        style={[styles.actionBtn, styles.betBtnFull, { backgroundColor: colors.primary }]}
-        onPress={(e) => {
-          e.stopPropagation?.();
-          onBet(parlay.legs[0]);
-        }}
+        style={[styles.actionBtnFull, { backgroundColor: accent }]}
+        onPress={(e) => { e.stopPropagation?.(); onBet(parlay.legs[0]); }}
       >
         <Feather name="external-link" size={14} color="#fff" />
         <Text style={styles.betBtnText}>Place Parlay Bet</Text>
@@ -263,13 +287,15 @@ function ParlayCard({
   );
 }
 
-function SkeletonCard() {
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function SkeletonCard({ height = 160 }: { height?: number }) {
   const colors = useColors();
   return (
-    <View style={[styles.card, styles.skeleton, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.skelLine, styles.skelShort, { backgroundColor: colors.border }]} />
-      <View style={[styles.skelLine, styles.skelFull, { backgroundColor: colors.border }]} />
-      <View style={[styles.skelLine, styles.skelMid, { backgroundColor: colors.border }]} />
+    <View style={[styles.lockCard, { backgroundColor: colors.card, borderColor: colors.border, height }]}>
+      <View style={[styles.skelLine, { width: "40%", backgroundColor: colors.border }]} />
+      <View style={[styles.skelLine, { width: "75%", marginTop: 10, backgroundColor: colors.border }]} />
+      <View style={[styles.skelLine, { width: "55%", marginTop: 8, backgroundColor: colors.border }]} />
     </View>
   );
 }
@@ -280,7 +306,6 @@ export default function AiPicksScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const [activeTab, setActiveTab] = useState<"picks" | "parlays">("picks");
   const [quickAdd, setQuickAdd] = useState<QuickAddBet | null>(null);
   const [bookmakerBet, setBookmakerBet] = useState<{
     matchup: string;
@@ -295,8 +320,10 @@ export default function AiPicksScreen() {
   });
   const { mutate: doRefresh, isPending: isRefreshing } = useRefreshAiPicks();
 
-  const picks = data?.picks ?? [];
-  const parlays = data?.parlays ?? [];
+  const lock = data?.lockOfTheDay ?? null;
+  const safeParlay = data?.safeParlay ?? null;
+  const lottoParlay = data?.lottoParlay ?? null;
+  const isAI = data?.isAI ?? false;
 
   function openTrack(pick: AIPick) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -324,8 +351,6 @@ export default function AiPicksScreen() {
     doRefresh(undefined, { onSettled: () => refetch() });
   }
 
-  const isAI = data?.isAI ?? false;
-
   return (
     <View style={[styles.root, { backgroundColor: colors.background }, isWeb && styles.webRoot]}>
       <ScrollView
@@ -347,7 +372,10 @@ export default function AiPicksScreen() {
         {data?.summary ? (
           <View style={[styles.summaryBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.summaryLeft}>
-              <View style={[styles.aiBadge, { backgroundColor: isAI ? colors.primary + "22" : colors.border, borderColor: isAI ? colors.primary + "44" : colors.border }]}>
+              <View style={[styles.aiBadge, {
+                backgroundColor: isAI ? colors.primary + "22" : colors.border,
+                borderColor: isAI ? colors.primary + "44" : colors.border,
+              }]}>
                 <Feather name="cpu" size={11} color={isAI ? colors.primary : colors.mutedForeground} />
                 <Text style={[styles.aiBadgeText, { color: isAI ? colors.primary : colors.mutedForeground }]}>
                   {isAI ? "AI Generated" : "Model Picks"}
@@ -357,7 +385,11 @@ export default function AiPicksScreen() {
                 {data.summary}
               </Text>
             </View>
-            <TouchableOpacity onPress={handleRefresh} disabled={isRefreshing} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+            <TouchableOpacity
+              onPress={handleRefresh}
+              disabled={isRefreshing}
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+            >
               <Feather
                 name="refresh-cw"
                 size={18}
@@ -368,68 +400,83 @@ export default function AiPicksScreen() {
           </View>
         ) : null}
 
-        {/* Tab selector */}
-        <View style={[styles.tabSelector, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === "picks" && { backgroundColor: colors.primary }]}
-            onPress={() => setActiveTab("picks")}
-          >
-            <Text style={[styles.tabBtnText, { color: activeTab === "picks" ? "#fff" : colors.mutedForeground }]}>
-              Single Picks ({picks.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === "parlays" && { backgroundColor: colors.primary }]}
-            onPress={() => setActiveTab("parlays")}
-          >
-            <Text style={[styles.tabBtnText, { color: activeTab === "parlays" ? "#fff" : colors.mutedForeground }]}>
-              Parlays ({parlays.length})
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Content */}
         {isLoading ? (
-          <View style={styles.cards}>
-            {[0, 1, 2, 3].map((i) => <SkeletonCard key={i} />)}
-          </View>
-        ) : activeTab === "picks" ? (
-          picks.length === 0 ? (
-            <View style={styles.empty}>
-              <Feather name="cpu" size={40} color={colors.mutedForeground} />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No picks yet</Text>
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Pull down to refresh or tap the refresh icon above.</Text>
-            </View>
-          ) : (
-            <View style={styles.cards}>
-              {picks.map((pick) => (
-                <AIPickCard
-                  key={pick.id}
-                  pick={pick}
-                  onTrack={() => openTrack(pick)}
-                  onBet={() => openBet({ ...pick, sport: pick.sport })}
-                />
-              ))}
-            </View>
-          )
+          <>
+            <SkeletonCard height={200} />
+            <SkeletonCard height={240} />
+            <SkeletonCard height={290} />
+          </>
         ) : (
-          parlays.length === 0 ? (
-            <View style={styles.empty}>
-              <Feather name="link" size={40} color={colors.mutedForeground} />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No parlays yet</Text>
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Parlays will appear once picks are generated.</Text>
-            </View>
-          ) : (
-            <View style={styles.cards}>
-              {parlays.map((parlay) => (
-                <ParlayCard
-                  key={parlay.id}
-                  parlay={parlay}
-                  onBet={(leg) => openBet({ ...leg, pick: `${parlay.name} (parlay)`, odds: parlay.combinedOdds })}
+          <>
+            {/* ── Lock of the Day ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="🔒"
+                label="Lock of the Day"
+                sublabel="Highest confidence single pick"
+                accent="#f59e0b"
+              />
+              {lock ? (
+                <LockCard
+                  pick={lock}
+                  onTrack={() => openTrack(lock)}
+                  onBet={() => openBet({ ...lock, sport: lock.sport })}
                 />
-              ))}
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>
+                    No lock available — pull to refresh.
+                  </Text>
+                </View>
+              )}
             </View>
-          )
+
+            {/* ── Safe Parlay ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="⚡"
+                label="Safe Parlay of the Day"
+                sublabel="2–3 legs, solid value (+175 to +500)"
+                accent="#22c55e"
+              />
+              {safeParlay ? (
+                <ParlayCard
+                  parlay={safeParlay}
+                  accent="#22c55e"
+                  onBet={(leg) => openBet({ ...leg, pick: `${safeParlay.name} (safe parlay)`, odds: safeParlay.combinedOdds })}
+                />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>
+                    No safe parlay — pull to refresh.
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* ── Lotto Parlay ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="🎰"
+                label="Lotto Parlay of the Day"
+                sublabel="4–6 legs, big payout (+800 to +3000)"
+                accent="#a855f7"
+              />
+              {lottoParlay ? (
+                <ParlayCard
+                  parlay={lottoParlay}
+                  accent="#a855f7"
+                  onBet={(leg) => openBet({ ...leg, pick: `${lottoParlay.name} (lotto parlay)`, odds: lottoParlay.combinedOdds })}
+                />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>
+                    No lotto parlay — pull to refresh.
+                  </Text>
+                </View>
+              )}
+            </View>
+          </>
         )}
       </ScrollView>
 
@@ -448,11 +495,14 @@ export default function AiPicksScreen() {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   webRoot: { maxWidth: 800, alignSelf: "center", width: "100%" },
-  scroll: { padding: 16, gap: 12 },
+  scroll: { padding: 16, gap: 0 },
   webScroll: { paddingTop: 24 },
+
   summaryBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -460,56 +510,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     gap: 12,
-    marginBottom: 4,
+    marginBottom: 20,
   },
   summaryLeft: { flex: 1, gap: 6 },
   summaryText: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
-  tabSelector: {
-    flexDirection: "row",
-    padding: 4,
-    borderRadius: 10,
-    borderWidth: 1,
-    gap: 4,
-    marginBottom: 4,
-  },
-  tabBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: "center" },
-  tabBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  cards: { gap: 12 },
-  card: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 14,
-    gap: 10,
-  },
-  parlayCard: { borderWidth: 1.5 },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  sportBadge: {
-    borderRadius: 5,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  sportBadgeText: {
-    fontSize: 10,
-    fontFamily: "Inter_700Bold",
-    color: "#fff",
-  },
-  matchup: {
-    flex: 1,
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-  },
-  gameTime: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  pickRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  pickLeft: { flex: 1, gap: 4 },
-  pickRight: { alignItems: "flex-end", gap: 2 },
   aiBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -521,17 +525,68 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   aiBadgeText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
-  pickText: { fontSize: 18, fontFamily: "Inter_700Bold" },
+
+  section: { marginBottom: 24 },
+
+  lockCard: {
+    borderRadius: 14,
+    borderWidth: 1.5,
+    overflow: "hidden",
+    gap: 0,
+  },
+  lockStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  lockStripLeft: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1 },
+  lockMatchup: { fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 },
+  lockBody: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    gap: 8,
+  },
+  lockPickLeft: { flex: 1, gap: 4 },
+  lockPlayer: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  lockPick: { fontSize: 20, fontFamily: "Inter_700Bold", lineHeight: 26 },
+  lockOddsBlock: { alignItems: "flex-end" },
+  lockOdds: { fontSize: 28, fontFamily: "Inter_700Bold" },
+
+  sportBadge: {
+    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  sportBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
+  },
+  gameTime: { fontSize: 12, fontFamily: "Inter_400Regular" },
   bookmakerText: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  oddsText: { fontSize: 22, fontFamily: "Inter_700Bold" },
-  edgeText: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  confRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+
+  confRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
   confBar: { flex: 1, height: 5, borderRadius: 3, overflow: "hidden" },
   confFill: { height: "100%", borderRadius: 3 },
-  confLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", minWidth: 100, textAlign: "right" },
+  confLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", minWidth: 110, textAlign: "right" },
+
   reasoning: {
     borderTopWidth: StyleSheet.hairlineWidth,
+    marginHorizontal: 14,
     paddingTop: 10,
+    paddingBottom: 4,
     gap: 8,
   },
   reasoningHeader: { flexDirection: "row", alignItems: "center", gap: 5 },
@@ -540,7 +595,13 @@ const styles = StyleSheet.create({
   tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tag: { borderRadius: 5, paddingHorizontal: 7, paddingVertical: 3 },
   tagText: { fontSize: 10, fontFamily: "Inter_400Regular" },
-  actions: { flexDirection: "row", gap: 8 },
+
+  actions: {
+    flexDirection: "row",
+    gap: 8,
+    padding: 14,
+    paddingTop: 10,
+  },
   actionBtn: {
     flex: 1,
     flexDirection: "row",
@@ -550,30 +611,48 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     gap: 5,
   },
+  actionBtnFull: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 11,
+    borderRadius: 9,
+    gap: 5,
+    margin: 14,
+    marginTop: 4,
+  },
   trackBtn: { borderWidth: 1 },
   actionBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  betBtn: {},
-  betBtnFull: { flex: 1 },
   betBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff" },
+
+  parlayCard: {
+    borderRadius: 14,
+    borderWidth: 1.5,
+    padding: 14,
+    gap: 8,
+  },
   parlayHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   parlayBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
-  parlayBadgeText: { fontSize: 12, fontFamily: "Inter_700Bold", color: "#fff" },
-  parlayOdds: { fontSize: 24, fontFamily: "Inter_700Bold" },
+  parlayBadgeText: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  parlayOdds: { fontSize: 26, fontFamily: "Inter_700Bold" },
   parlayName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   parlayPayout: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  legList: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10, gap: 0 },
+
+  legList: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8, gap: 0 },
   legRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8, gap: 10 },
-  legDot: { width: 8, height: 8, borderRadius: 4 },
+  legDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   legInfo: { flex: 1, gap: 2 },
   legMatchup: { fontSize: 11, fontFamily: "Inter_400Regular" },
   legPick: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   legOdds: { fontSize: 14, fontFamily: "Inter_700Bold" },
-  skeleton: { height: 130 },
+
+  emptyCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 20,
+    alignItems: "center",
+  },
+  emptyCardText: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
+
   skelLine: { height: 12, borderRadius: 6, opacity: 0.4 },
-  skelShort: { width: "35%" },
-  skelFull: { width: "90%", marginTop: 8 },
-  skelMid: { width: "60%", marginTop: 8 },
-  empty: { alignItems: "center", paddingTop: 60, gap: 12 },
-  emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
-  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", maxWidth: 260, lineHeight: 20 },
 });

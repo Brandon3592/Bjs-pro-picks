@@ -9,8 +9,9 @@ import type { AIParlay } from "./aIParlay";
 import type { AIPick } from "./aIPick";
 
 export interface AIPicksResponse {
-  picks: AIPick[];
-  parlays: AIParlay[];
+  lockOfTheDay?: AIPick | null;
+  safeParlay?: AIParlay | null;
+  lottoParlay?: AIParlay | null;
   summary: string;
   generatedAt: Date;
   isAI: boolean;

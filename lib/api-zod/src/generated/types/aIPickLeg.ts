@@ -16,4 +16,5 @@ export interface AIPickLeg {
   betType: string;
   bookmaker: string;
   odds: number;
+  player?: string | null;
 }
