@@ -334,7 +334,7 @@ export default function AiPicksScreen() {
   const sportParam = selectedSport === "all" ? undefined : selectedSport;
   const { data, isLoading, isFetching, refetch } = useGetAiPicks(
     sportParam ? { sport: sportParam } : undefined,
-    { query: { staleTime: 5 * 60_000, refetchOnWindowFocus: false } as any },
+    { query: { staleTime: 0, gcTime: 0, refetchOnMount: true, refetchOnWindowFocus: false } as any },
   );
   const { mutate: doRefresh, isPending: isRefreshing } = useRefreshAiPicks();
 
