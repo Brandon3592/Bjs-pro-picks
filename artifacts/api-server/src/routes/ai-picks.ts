@@ -86,13 +86,14 @@ async function fetchRealPropsForAI(
   const cutoff = now + 36 * 3600_000;
   const targets: { sport: string; sportLabel: string; event: OddsEvent }[] = [];
   for (const { sport, events } of allOdds) {
-    if (!SPORT_MARKETS[sport]) continue;
-    const sportLabel = SPORT_KEYS[sport] ?? sport; // e.g. "NBA"
+    // allOdds.sport is now the label key ("NBA", "MLB") — translate to API key for props fetch
+    const sportApiKey = SPORT_KEYS[sport] ?? sport; // "MLB" → "baseball_mlb"
+    if (!SPORT_MARKETS[sportApiKey]) continue;
     const todaySlate = events.filter((e) => {
       const t = new Date(e.commence_time).getTime();
       return t > now && t < cutoff;
     });
-    for (const ev of todaySlate) targets.push({ sport, sportLabel, event: ev });
+    for (const ev of todaySlate) targets.push({ sport: sportApiKey, sportLabel: sport, event: ev });
   }
 
   const results = await Promise.allSettled(
