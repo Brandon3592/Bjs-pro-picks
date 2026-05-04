@@ -27,12 +27,16 @@ import type {
   ErrorResponse,
   Game,
   GameDetail,
+  GameLineHistory,
   GetBetsParams,
+  GetGameLineHistoryParams,
   GetGamesParams,
+  GetLineMovementsParams,
   GetOddsParams,
   GetPredictionsParams,
   GetValueBetsParams,
   HealthStatus,
+  LineMovement,
   OddsEntry,
   Prediction,
   TrackedBet,
@@ -1200,6 +1204,223 @@ export function useGetDashboardSummary<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetDashboardSummaryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get recent significant line movements across all games
+ */
+export const getGetLineMovementsUrl = (params?: GetLineMovementsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/line-movements?${stringifiedParams}`
+    : `/api/line-movements`;
+};
+
+export const getLineMovements = async (
+  params?: GetLineMovementsParams,
+  options?: RequestInit,
+): Promise<LineMovement[]> => {
+  return customFetch<LineMovement[]>(getGetLineMovementsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetLineMovementsQueryKey = (
+  params?: GetLineMovementsParams,
+) => {
+  return [`/api/line-movements`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetLineMovementsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getLineMovements>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetLineMovementsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLineMovements>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetLineMovementsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getLineMovements>>
+  > = ({ signal }) => getLineMovements(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getLineMovements>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetLineMovementsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getLineMovements>>
+>;
+export type GetLineMovementsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get recent significant line movements across all games
+ */
+
+export function useGetLineMovements<
+  TData = Awaited<ReturnType<typeof getLineMovements>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetLineMovementsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLineMovements>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetLineMovementsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get price history for a specific game
+ */
+export const getGetGameLineHistoryUrl = (
+  gameId: string,
+  params?: GetGameLineHistoryParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/line-movements/${gameId}?${stringifiedParams}`
+    : `/api/line-movements/${gameId}`;
+};
+
+export const getGameLineHistory = async (
+  gameId: string,
+  params?: GetGameLineHistoryParams,
+  options?: RequestInit,
+): Promise<GameLineHistory> => {
+  return customFetch<GameLineHistory>(
+    getGetGameLineHistoryUrl(gameId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetGameLineHistoryQueryKey = (
+  gameId: string,
+  params?: GetGameLineHistoryParams,
+) => {
+  return [
+    `/api/line-movements/${gameId}`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetGameLineHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getGameLineHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  gameId: string,
+  params?: GetGameLineHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getGameLineHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetGameLineHistoryQueryKey(gameId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getGameLineHistory>>
+  > = ({ signal }) =>
+    getGameLineHistory(gameId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!gameId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getGameLineHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetGameLineHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getGameLineHistory>>
+>;
+export type GetGameLineHistoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get price history for a specific game
+ */
+
+export function useGetGameLineHistory<
+  TData = Awaited<ReturnType<typeof getGameLineHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  gameId: string,
+  params?: GetGameLineHistoryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getGameLineHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetGameLineHistoryQueryOptions(
+    gameId,
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -400,6 +400,64 @@ export const GetDashboardSummaryResponse = zod.object({
 });
 
 /**
+ * @summary Get recent significant line movements across all games
+ */
+export const getLineMovementsQueryHoursDefault = 3;
+export const getLineMovementsQueryLimitDefault = 10;
+
+export const GetLineMovementsQueryParams = zod.object({
+  hours: zod.coerce.number().default(getLineMovementsQueryHoursDefault),
+  limit: zod.coerce.number().default(getLineMovementsQueryLimitDefault),
+});
+
+export const GetLineMovementsResponseItem = zod.object({
+  gameId: zod.string(),
+  sport: zod.string(),
+  homeTeam: zod.string(),
+  awayTeam: zod.string(),
+  bookmaker: zod.string(),
+  outcomeName: zod.string(),
+  market: zod.string(),
+  oldPrice: zod.number(),
+  newPrice: zod.number(),
+  magnitude: zod.number(),
+  direction: zod.enum(["steam", "reverse", "neutral"]),
+  oldTime: zod.coerce.date(),
+  newTime: zod.coerce.date(),
+});
+export const GetLineMovementsResponse = zod.array(GetLineMovementsResponseItem);
+
+/**
+ * @summary Get price history for a specific game
+ */
+export const GetGameLineHistoryParams = zod.object({
+  gameId: zod.coerce.string(),
+});
+
+export const getGameLineHistoryQueryHoursDefault = 24;
+
+export const GetGameLineHistoryQueryParams = zod.object({
+  hours: zod.coerce.number().default(getGameLineHistoryQueryHoursDefault),
+});
+
+export const GetGameLineHistoryResponse = zod.object({
+  gameId: zod.string(),
+  series: zod.array(
+    zod.object({
+      label: zod.string(),
+      data: zod.array(
+        zod.object({
+          time: zod.coerce.date(),
+          price: zod.number(),
+          implied: zod.number(),
+        }),
+      ),
+    }),
+  ),
+  hasHistory: zod.boolean(),
+});
+
+/**
  * @summary Subscribe to push alerts for edge opportunities and odds shifts
  */
 export const subscribeAlertsBodyMinEdgeDefault = 3;

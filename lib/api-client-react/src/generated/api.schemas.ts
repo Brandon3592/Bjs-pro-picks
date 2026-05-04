@@ -311,6 +311,48 @@ export interface DashboardSummary {
   lastRefreshed: string;
 }
 
+export type LineMovementDirection =
+  (typeof LineMovementDirection)[keyof typeof LineMovementDirection];
+
+export const LineMovementDirection = {
+  steam: "steam",
+  reverse: "reverse",
+  neutral: "neutral",
+} as const;
+
+export interface LineMovement {
+  gameId: string;
+  sport: string;
+  homeTeam: string;
+  awayTeam: string;
+  bookmaker: string;
+  outcomeName: string;
+  market: string;
+  oldPrice: number;
+  newPrice: number;
+  magnitude: number;
+  direction: LineMovementDirection;
+  oldTime: string;
+  newTime: string;
+}
+
+export interface LineDataPoint {
+  time: string;
+  price: number;
+  implied: number;
+}
+
+export interface LineSeries {
+  label: string;
+  data: LineDataPoint[];
+}
+
+export interface GameLineHistory {
+  gameId: string;
+  series: LineSeries[];
+  hasHistory: boolean;
+}
+
 export type AlertSubscribeBodyKeys = {
   p256dh: string;
   auth: string;
@@ -445,3 +487,12 @@ export const GetBetsResult = {
   pending: "pending",
   all: "all",
 } as const;
+
+export type GetLineMovementsParams = {
+  hours?: number;
+  limit?: number;
+};
+
+export type GetGameLineHistoryParams = {
+  hours?: number;
+};

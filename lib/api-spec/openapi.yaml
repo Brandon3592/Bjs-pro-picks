@@ -349,6 +349,56 @@ paths:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
 
+  /line-movements:
+    get:
+      operationId: getLineMovements
+      tags: [predictions]
+      summary: Get recent significant line movements across all games
+      parameters:
+        - name: hours
+          in: query
+          schema:
+            type: integer
+            default: 3
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: List of line movements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LineMovement"
+
+  /line-movements/{gameId}:
+    get:
+      operationId: getGameLineHistory
+      tags: [predictions]
+      summary: Get price history for a specific game
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: hours
+          in: query
+          schema:
+            type: integer
+            default: 24
+      responses:
+        "200":
+          description: Line movement history for the game
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameLineHistory"
+
   /alerts/subscribe:
     post:
       operationId: subscribeAlerts
@@ -784,6 +834,76 @@ components:
         avgEdge:
           type: number
       required: [bookmaker, valueBets, avgEdge]
+
+    LineMovement:
+      type: object
+      properties:
+        gameId:
+          type: string
+        sport:
+          type: string
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        bookmaker:
+          type: string
+        outcomeName:
+          type: string
+        market:
+          type: string
+        oldPrice:
+          type: integer
+        newPrice:
+          type: integer
+        magnitude:
+          type: number
+        direction:
+          type: string
+          enum: [steam, reverse, neutral]
+        oldTime:
+          type: string
+          format: date-time
+        newTime:
+          type: string
+          format: date-time
+      required: [gameId, sport, homeTeam, awayTeam, bookmaker, outcomeName, market, oldPrice, newPrice, magnitude, direction, oldTime, newTime]
+
+    LineDataPoint:
+      type: object
+      properties:
+        time:
+          type: string
+          format: date-time
+        price:
+          type: integer
+        implied:
+          type: number
+      required: [time, price, implied]
+
+    LineSeries:
+      type: object
+      properties:
+        label:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineDataPoint"
+      required: [label, data]
+
+    GameLineHistory:
+      type: object
+      properties:
+        gameId:
+          type: string
+        series:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineSeries"
+        hasHistory:
+          type: boolean
+      required: [gameId, series, hasHistory]
 
     AlertSubscribeBody:
       type: object

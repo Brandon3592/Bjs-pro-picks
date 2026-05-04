@@ -1,9 +1,12 @@
 import { useRoute } from "wouter";
-import { useGetGame, getGetGameQueryKey } from "@workspace/api-client-react";
-import { ArrowLeft, Wind, Thermometer, AlertTriangle } from "lucide-react";
+import { useGetGame, getGetGameQueryKey, useGetGameLineHistory } from "@workspace/api-client-react";
+import { ArrowLeft, Wind, Thermometer, AlertTriangle, TrendingUp } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from "recharts";
 
 function SportBadge({ sport }: { sport: string }) {
   const colors: Record<string, string> = {
@@ -28,6 +31,120 @@ function ProbBar({ label, prob, color }: { label: string; prob: number; color: s
       </div>
       <div className="h-2 bg-muted rounded-full overflow-hidden">
         <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${prob * 100}%` }} />
+      </div>
+    </div>
+  );
+}
+
+const LINE_COLORS = [
+  "#6366f1", "#f97316", "#22c55e", "#ec4899",
+  "#14b8a6", "#eab308", "#8b5cf6", "#06b6d4",
+];
+
+function LineMovementChart({ gameId }: { gameId: string }) {
+  const history = useGetGameLineHistory(gameId, {}, { query: { enabled: !!gameId, refetchInterval: 60000 } });
+  const data = history.data;
+
+  if (history.isLoading) {
+    return (
+      <div className="bg-card border border-card-border rounded-lg p-4">
+        <div className="h-4 w-40 bg-muted rounded animate-pulse mb-3" />
+        <div className="h-48 bg-muted rounded animate-pulse" />
+      </div>
+    );
+  }
+
+  if (!data || data.series.length === 0) return null;
+
+  const hasHistory = data.hasHistory;
+
+  // Build recharts data: array of { time, [label]: implied } objects merged by time
+  const timeSet = new Set<string>();
+  data.series.forEach((s) => s.data.forEach((d) => timeSet.add(d.time)));
+  const times = Array.from(timeSet).sort();
+
+  const chartData = times.map((t) => {
+    const point: Record<string, string | number> = {
+      time: format(new Date(t), times.length === 1 ? "h:mm a" : "h:mm a"),
+    };
+    data.series.forEach((s) => {
+      const dp = s.data.find((d) => d.time === t);
+      if (dp) point[s.label] = dp.implied;
+    });
+    return point;
+  });
+
+  // Limit to top 6 series by uniqueness
+  const seriesKeys = data.series.slice(0, 6).map((s) => s.label);
+
+  return (
+    <div className="bg-card border border-card-border rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-3.5 w-3.5 text-primary" />
+          <h2 className="text-sm font-semibold">Moneyline History</h2>
+          {!hasHistory && (
+            <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded border border-border">
+              Tracking started — accumulating data
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] text-muted-foreground">Implied win %</span>
+      </div>
+      <div className="p-4">
+        {!hasHistory && times.length === 1 ? (
+          <div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+              {data.series.filter((s) => !s.label.includes("(") || s.data.length > 0).slice(0, 8).map((s, i) => (
+                <div key={s.label} className="flex items-center justify-between bg-muted/40 rounded px-2.5 py-2 border border-border">
+                  <span className="text-[11px] text-muted-foreground truncate pr-1">{s.label}</span>
+                  <span className="text-xs font-mono font-bold" style={{ color: LINE_COLORS[i % LINE_COLORS.length] }}>
+                    {s.data[0]?.implied.toFixed(1)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground text-center">
+              Live snapshot — chart will populate as lines are tracked every 5 min
+            </p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 4, left: -10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis
+                dataKey="time"
+                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                tickLine={false}
+                axisLine={{ stroke: "hsl(var(--border))" }}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                tickLine={false}
+                axisLine={false}
+                domain={["auto", "auto"]}
+                tickFormatter={(v) => `${v}%`}
+              />
+              <Tooltip
+                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 11 }}
+                labelStyle={{ color: "hsl(var(--foreground))" }}
+                formatter={(v: number) => [`${v.toFixed(1)}%`, ""]}
+              />
+              <Legend wrapperStyle={{ fontSize: 10 }} />
+              {seriesKeys.map((key, i) => (
+                <Line
+                  key={key}
+                  type="monotone"
+                  dataKey={key}
+                  stroke={LINE_COLORS[i % LINE_COLORS.length]}
+                  strokeWidth={1.5}
+                  dot={false}
+                  connectNulls
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );
@@ -187,6 +304,9 @@ export default function GameDetail() {
           </table>
         </div>
       </div>
+
+      {/* Line Movement Chart */}
+      <LineMovementChart gameId={gameId} />
 
       {/* Injuries */}
       {injuries && injuries.length > 0 && (

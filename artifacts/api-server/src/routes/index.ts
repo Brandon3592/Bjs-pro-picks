@@ -7,6 +7,7 @@ import predictionsRouter from "./predictions";
 import betsRouter from "./bets";
 import dashboardRouter from "./dashboard";
 import alertsRouter from "./alerts";
+import lineMovementsRouter from "./line-movements";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(predictionsRouter);
 router.use(betsRouter);
 router.use(dashboardRouter);
 router.use(alertsRouter);
+router.use(lineMovementsRouter);
 
 export default router;

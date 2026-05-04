@@ -1,10 +1,10 @@
-import { useGetDashboardSummary, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
+import { useGetDashboardSummary, getGetDashboardSummaryQueryKey, useGetLineMovements } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { Link } from "wouter";
-import { Activity, TrendingUp, Zap, RefreshCw, BarChart2, ChevronRight } from "lucide-react";
+import { Activity, TrendingUp, Zap, RefreshCw, BarChart2, ChevronRight, TrendingDown, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, formatDistance } from "date-fns";
 
 function EdgeBadge({ edge }: { edge: number }) {
   return (
@@ -42,6 +42,76 @@ function StatCard({ label, value, sub, icon: Icon, color }: { label: string; val
         <p className="text-xl font-bold font-mono tabular-nums mt-0.5" data-testid={`stat-${label.toLowerCase().replace(/\s/g, "-")}`}>{value}</p>
         {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
       </div>
+    </div>
+  );
+}
+
+const SPORT_COLORS: Record<string, string> = {
+  NFL: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  NBA: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+  MLB: "bg-red-500/10 text-red-400 border-red-500/20",
+  NHL: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+};
+
+function SteamMovesWidget() {
+  const moves = useGetLineMovements({ hours: 3, limit: 8 }, { query: { refetchInterval: 60000 } });
+  const data = moves.data ?? [];
+
+  return (
+    <div className="bg-card border border-card-border rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-3.5 w-3.5 text-primary" />
+          <h2 className="text-sm font-semibold">Line Movements</h2>
+          <span className="text-[10px] text-muted-foreground bg-muted border border-border px-1.5 py-0.5 rounded">last 3h</span>
+        </div>
+        <Link href="/games">
+          <span className="text-xs text-primary hover:underline flex items-center gap-1 cursor-pointer">
+            All games <ChevronRight className="h-3 w-3" />
+          </span>
+        </Link>
+      </div>
+
+      {moves.isLoading ? (
+        <div className="p-4 space-y-2">
+          {[...Array(4)].map((_, i) => <div key={i} className="h-10 bg-muted rounded animate-pulse" />)}
+        </div>
+      ) : data.length === 0 ? (
+        <div className="px-4 py-8 text-center">
+          <p className="text-sm text-muted-foreground">No significant line moves detected yet.</p>
+          <p className="text-xs text-muted-foreground mt-1">Lines are tracked every 5 minutes. Check back soon.</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-border">
+          {data.map((mv, i) => {
+            const isSteam = mv.direction === "steam";
+            const isReverse = mv.direction === "reverse";
+            return (
+              <div key={i} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20 transition-colors" data-testid={`row-move-${i}`}>
+                <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border flex-shrink-0", SPORT_COLORS[mv.sport] ?? "bg-muted text-muted-foreground border-border")}>
+                  {mv.sport}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-medium truncate">{mv.outcomeName}</div>
+                  <div className="text-[10px] text-muted-foreground truncate">{mv.homeTeam} vs {mv.awayTeam} · {mv.bookmaker}</div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-xs font-mono text-muted-foreground">{mv.oldPrice > 0 ? `+${mv.oldPrice}` : mv.oldPrice}</span>
+                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                  <span className={cn("text-xs font-mono font-bold", isSteam ? "text-emerald-400" : isReverse ? "text-amber-400" : "text-muted-foreground")}>
+                    {mv.newPrice > 0 ? `+${mv.newPrice}` : mv.newPrice}
+                  </span>
+                  {isSteam && <TrendingUp className="h-3 w-3 text-emerald-400" />}
+                  {isReverse && <TrendingDown className="h-3 w-3 text-amber-400" />}
+                  <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded border", isSteam ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : isReverse ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-muted text-muted-foreground border-border")}>
+                    {mv.magnitude.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -146,6 +216,9 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Steam Moves */}
+      <SteamMovesWidget />
 
       {/* Sport Breakdown */}
       <div className="grid md:grid-cols-2 gap-4">
