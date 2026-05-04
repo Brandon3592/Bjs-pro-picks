@@ -192,28 +192,42 @@ export interface PropEvent {
   }>;
 }
 
-export const PROP_MARKETS: Record<string, { key: string; label: string }[]> = {
+export const PROP_MARKETS: Record<string, { key: string; label: string; alt?: boolean }[]> = {
   NBA: [
     { key: "player_points", label: "Points" },
     { key: "player_rebounds", label: "Rebounds" },
     { key: "player_assists", label: "Assists" },
     { key: "player_threes", label: "3-Pointers" },
+    { key: "player_points_alternate", label: "Alt Points", alt: true },
+    { key: "player_rebounds_alternate", label: "Alt Rebounds", alt: true },
+    { key: "player_assists_alternate", label: "Alt Assists", alt: true },
+    { key: "player_threes_alternate", label: "Alt 3-Pointers", alt: true },
   ],
   MLB: [
     { key: "batter_hits", label: "Hits" },
     { key: "pitcher_strikeouts", label: "Strikeouts" },
     { key: "batter_home_runs", label: "Home Runs" },
+    { key: "batter_hits_alternate", label: "Alt Hits", alt: true },
+    { key: "pitcher_strikeouts_alternate", label: "Alt Strikeouts", alt: true },
+    { key: "batter_home_runs_alternate", label: "Alt Home Runs", alt: true },
   ],
   NHL: [
     { key: "player_goals", label: "Goals" },
     { key: "player_shots_on_goal", label: "Shots on Goal" },
     { key: "player_points", label: "Points" },
+    { key: "player_goals_alternate", label: "Alt Goals", alt: true },
+    { key: "player_shots_on_goal_alternate", label: "Alt Shots", alt: true },
+    { key: "player_points_alternate", label: "Alt Points", alt: true },
   ],
   NFL: [
     { key: "player_pass_yds", label: "Pass Yards" },
     { key: "player_rush_yds", label: "Rush Yards" },
     { key: "player_receiving_yds", label: "Rec Yards" },
     { key: "player_receptions", label: "Receptions" },
+    { key: "player_pass_yds_alternate", label: "Alt Pass Yds", alt: true },
+    { key: "player_rush_yds_alternate", label: "Alt Rush Yds", alt: true },
+    { key: "player_receiving_yds_alternate", label: "Alt Rec Yds", alt: true },
+    { key: "player_receptions_alternate", label: "Alt Receptions", alt: true },
   ],
 };
 
