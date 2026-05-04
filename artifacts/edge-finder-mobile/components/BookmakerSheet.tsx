@@ -1,9 +1,9 @@
 import { Feather } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
-import * as Linking from "expo-linking";
-import React from "react";
+import React, { useState } from "react";
 import {
-  Linking as RNLinking,
+  Linking,
   Modal,
   Platform,
   StyleSheet,
@@ -16,22 +16,97 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 
-const SPORTSBOOKS: { name: string; url: string; color: string }[] = [
-  { name: "DraftKings", url: "https://sportsbook.draftkings.com/", color: "#53D16A" },
-  { name: "FanDuel", url: "https://sportsbook.fanduel.com/", color: "#1493FF" },
-  { name: "BetMGM", url: "https://sports.betmgm.com/en/sports", color: "#C9A84C" },
-  { name: "Caesars", url: "https://www.caesars.com/sportsbook-and-casino", color: "#003087" },
-  { name: "BetRivers", url: "https://www.betrivers.com/", color: "#E4002B" },
-  { name: "Bovada", url: "https://www.bovada.lv/sports", color: "#FF6900" },
-  { name: "BetOnline", url: "https://www.betonline.ag/sportsbook", color: "#4CAF50" },
-  { name: "PointsBet", url: "https://www.pointsbet.com/", color: "#E63946" },
+type SportKey = "NBA" | "NFL" | "MLB" | "NHL" | string;
+
+interface Sportsbook {
+  name: string;
+  color: string;
+  getUrl: (sport?: SportKey) => string;
+}
+
+const SPORTSBOOKS: Sportsbook[] = [
+  {
+    name: "DraftKings",
+    color: "#53D16A",
+    getUrl: (sport) => {
+      const paths: Record<string, string> = {
+        NBA: "https://sportsbook.draftkings.com/leagues/basketball/nba",
+        NFL: "https://sportsbook.draftkings.com/leagues/football/nfl",
+        MLB: "https://sportsbook.draftkings.com/leagues/baseball/mlb",
+        NHL: "https://sportsbook.draftkings.com/leagues/hockey/nhl",
+      };
+      return paths[sport ?? ""] ?? "https://sportsbook.draftkings.com/";
+    },
+  },
+  {
+    name: "FanDuel",
+    color: "#1493FF",
+    getUrl: (sport) => {
+      const paths: Record<string, string> = {
+        NBA: "https://sportsbook.fanduel.com/basketball/nba",
+        NFL: "https://sportsbook.fanduel.com/football/nfl",
+        MLB: "https://sportsbook.fanduel.com/baseball/mlb",
+        NHL: "https://sportsbook.fanduel.com/hockey/nhl",
+      };
+      return paths[sport ?? ""] ?? "https://sportsbook.fanduel.com/";
+    },
+  },
+  {
+    name: "BetMGM",
+    color: "#C9A84C",
+    getUrl: (sport) => {
+      const paths: Record<string, string> = {
+        NBA: "https://sports.betmgm.com/en/sports/basketball-7/betting/usa-9/nba-6004",
+        NFL: "https://sports.betmgm.com/en/sports/football-11/betting/usa-9/nfl-35",
+        MLB: "https://sports.betmgm.com/en/sports/baseball-23/betting/usa-9/mlb-75",
+        NHL: "https://sports.betmgm.com/en/sports/hockey-12/betting/usa-9/nhl-41",
+      };
+      return paths[sport ?? ""] ?? "https://sports.betmgm.com/en/sports";
+    },
+  },
+  {
+    name: "Caesars",
+    color: "#003087",
+    getUrl: (sport) => {
+      const paths: Record<string, string> = {
+        NBA: "https://www.caesars.com/sportsbook-and-casino/sport/basketball",
+        NFL: "https://www.caesars.com/sportsbook-and-casino/sport/football",
+        MLB: "https://www.caesars.com/sportsbook-and-casino/sport/baseball",
+        NHL: "https://www.caesars.com/sportsbook-and-casino/sport/hockey",
+      };
+      return paths[sport ?? ""] ?? "https://www.caesars.com/sportsbook-and-casino";
+    },
+  },
+  {
+    name: "BetRivers",
+    color: "#E4002B",
+    getUrl: () => "https://www.betrivers.com/",
+  },
+  {
+    name: "Bovada",
+    color: "#FF6900",
+    getUrl: (sport) => {
+      const paths: Record<string, string> = {
+        NBA: "https://www.bovada.lv/sports/basketball/nba",
+        NFL: "https://www.bovada.lv/sports/football/nfl",
+        MLB: "https://www.bovada.lv/sports/baseball/mlb",
+        NHL: "https://www.bovada.lv/sports/hockey/nhl",
+      };
+      return paths[sport ?? ""] ?? "https://www.bovada.lv/sports";
+    },
+  },
+  {
+    name: "BetOnline",
+    color: "#4CAF50",
+    getUrl: () => "https://www.betonline.ag/sportsbook",
+  },
 ];
 
-export function getSportsbookUrl(bookmaker: string): string {
+export function getSportsbookUrl(bookmaker: string, sport?: SportKey): string {
   const found = SPORTSBOOKS.find(
     (s) => s.name.toLowerCase() === bookmaker.toLowerCase()
   );
-  return found?.url ?? "https://sportsbook.draftkings.com/";
+  return found ? found.getUrl(sport) : "https://sportsbook.draftkings.com/";
 }
 
 interface BookmakerSheetProps {
@@ -41,6 +116,7 @@ interface BookmakerSheetProps {
     matchup: string;
     pick: string;
     odds: number;
+    sport?: SportKey;
     preferredBookmaker?: string;
   } | null;
 }
@@ -48,15 +124,27 @@ interface BookmakerSheetProps {
 export function BookmakerSheet({ visible, onClose, bet }: BookmakerSheetProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const [copied, setCopied] = useState(false);
 
-  const openSportsbook = async (url: string) => {
+  const openSportsbook = async (sb: Sportsbook) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const url = sb.getUrl(bet?.sport);
     try {
-      await RNLinking.openURL(url);
+      await Linking.openURL(url);
     } catch {
-      // Silently fail
+      // no-op
     }
     onClose();
+  };
+
+  const copyPick = async () => {
+    if (!bet) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const oddsStr = bet.odds > 0 ? `+${bet.odds}` : `${bet.odds}`;
+    const text = `${bet.matchup} — ${bet.pick} (${oddsStr})`;
+    await Clipboard.setStringAsync(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const oddsStr = bet ? (bet.odds > 0 ? `+${bet.odds}` : `${bet.odds}`) : "";
@@ -89,7 +177,7 @@ export function BookmakerSheet({ visible, onClose, bet }: BookmakerSheetProps) {
             <View style={styles.headerLeft}>
               <Text style={[styles.title, { color: colors.foreground }]}>Place Your Bet</Text>
               <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                Choose a sportsbook to open
+                Opens the sportsbook — search for this bet inside the app
               </Text>
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}>
@@ -103,14 +191,31 @@ export function BookmakerSheet({ visible, onClose, bet }: BookmakerSheetProps) {
                 {bet.matchup}
               </Text>
               <View style={styles.betMeta}>
-                <Text style={[styles.betPick, { color: colors.mutedForeground }]}>{bet.pick}</Text>
+                <Text style={[styles.betPick, { color: colors.foreground, flex: 1 }]} numberOfLines={1}>
+                  {bet.pick}
+                </Text>
                 <Text style={[styles.betOdds, { color: colors.primary }]}>{oddsStr}</Text>
               </View>
+
+              <TouchableOpacity
+                style={[styles.copyBtn, { borderColor: colors.border, backgroundColor: copied ? colors.primary + "15" : colors.muted }]}
+                onPress={copyPick}
+                activeOpacity={0.75}
+              >
+                <Feather
+                  name={copied ? "check" : "copy"}
+                  size={14}
+                  color={copied ? colors.primary : colors.mutedForeground}
+                />
+                <Text style={[styles.copyBtnText, { color: copied ? colors.primary : colors.mutedForeground }]}>
+                  {copied ? "Copied to clipboard!" : "Copy pick to search in app"}
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
 
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-            Opens in your browser — navigate to the game and place your bet
+            Choose sportsbook — goes to the {bet?.sport ?? "sport"} section
           </Text>
 
           <ScrollView contentContainerStyle={styles.bookList} showsVerticalScrollIndicator={false}>
@@ -128,7 +233,7 @@ export function BookmakerSheet({ visible, onClose, bet }: BookmakerSheetProps) {
                       borderColor: isPreferred ? colors.primary : colors.border,
                     },
                   ]}
-                  onPress={() => openSportsbook(sb.url)}
+                  onPress={() => openSportsbook(sb)}
                   activeOpacity={0.75}
                 >
                   <View style={[styles.bookDot, { backgroundColor: sb.color }]} />
@@ -151,25 +256,36 @@ export function BookmakerSheet({ visible, onClose, bet }: BookmakerSheetProps) {
 
 const styles = StyleSheet.create({
   wrapper: { flex: 1, justifyContent: "flex-end" },
-  sheet: { width: "100%", paddingTop: 12, paddingHorizontal: 20, maxHeight: "85%" },
+  sheet: { width: "100%", paddingTop: 12, paddingHorizontal: 20, maxHeight: "90%" },
   sheetRounded: { borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   handle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 16 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 },
   headerLeft: { flex: 1, gap: 2 },
   title: { fontSize: 20, fontFamily: "Inter_600SemiBold" },
-  subtitle: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  subtitle: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
   betSummary: {
     borderRadius: 10,
     borderWidth: 1,
     padding: 12,
     marginBottom: 12,
-    gap: 4,
+    gap: 6,
   },
-  betMatchup: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  betMeta: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  betMatchup: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  betMeta: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
   betPick: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  betOdds: { fontSize: 15, fontFamily: "Inter_700Bold" },
-  sectionLabel: { fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 12, lineHeight: 16 },
+  betOdds: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  copyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginTop: 2,
+  },
+  copyBtnText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  sectionLabel: { fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 10 },
   bookList: { gap: 8, paddingBottom: 8 },
   bookRow: {
     flexDirection: "row",

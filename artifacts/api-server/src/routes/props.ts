@@ -65,7 +65,7 @@ router.get("/props", async (req, res) => {
     const event = await fetchPlayerPropsForEvent(sportKey, gameId, marketKeys);
     if (!event) return res.json([]);
 
-    const edges = findPropEdges(event, sport);
+    const edges = findPropEdges(event, sport, 0.1);
     return res.json(edges);
   } catch (err) {
     req.log.error({ err }, "Error fetching props");

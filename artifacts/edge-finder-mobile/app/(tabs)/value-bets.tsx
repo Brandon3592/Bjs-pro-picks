@@ -286,11 +286,12 @@ export default function AiPicksScreen() {
     matchup: string;
     pick: string;
     odds: number;
+    sport?: string;
     preferredBookmaker?: string;
   } | null>(null);
 
   const { data, isLoading, isFetching, refetch } = useGetAiPicks({
-    query: { staleTime: 5 * 60_000, refetchOnWindowFocus: false },
+    query: { staleTime: 5 * 60_000, refetchOnWindowFocus: false } as any,
   });
   const { mutate: doRefresh, isPending: isRefreshing } = useRefreshAiPicks();
 
@@ -307,12 +308,13 @@ export default function AiPicksScreen() {
     });
   }
 
-  function openBet(pick: { awayTeam: string; homeTeam: string; pick: string; odds: number; bookmaker: string }) {
+  function openBet(pick: { awayTeam: string; homeTeam: string; pick: string; odds: number; bookmaker: string; sport?: string }) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setBookmakerBet({
       matchup: `${pick.awayTeam} @ ${pick.homeTeam}`,
       pick: pick.pick,
       odds: pick.odds,
+      sport: pick.sport,
       preferredBookmaker: pick.bookmaker,
     });
   }
@@ -405,7 +407,7 @@ export default function AiPicksScreen() {
                   key={pick.id}
                   pick={pick}
                   onTrack={() => openTrack(pick)}
-                  onBet={() => openBet(pick)}
+                  onBet={() => openBet({ ...pick, sport: pick.sport })}
                 />
               ))}
             </View>

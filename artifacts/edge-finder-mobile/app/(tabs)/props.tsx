@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useGetProps, useGetPropsGames } from "@workspace/api-client-react";
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -27,6 +27,7 @@ const SPORTS = [
 ];
 
 const NBA_MARKETS = [
+  { label: "All", value: "all" },
   { label: "Points", value: "player_points" },
   { label: "Rebounds", value: "player_rebounds" },
   { label: "Assists", value: "player_assists" },
@@ -35,18 +36,21 @@ const NBA_MARKETS = [
   { label: "Steals", value: "player_steals" },
 ];
 const NFL_MARKETS = [
+  { label: "All", value: "all" },
   { label: "Pass Yds", value: "player_pass_yds" },
   { label: "Rush Yds", value: "player_rush_yds" },
   { label: "Rec Yds", value: "player_reception_yds" },
   { label: "TDs", value: "player_anytime_td" },
 ];
 const MLB_MARKETS = [
+  { label: "All", value: "all" },
   { label: "Strikeouts", value: "batter_strikeouts" },
   { label: "Hits", value: "batter_hits" },
   { label: "Total Bases", value: "batter_total_bases" },
   { label: "RBIs", value: "batter_rbis" },
 ];
 const NHL_MARKETS = [
+  { label: "All", value: "all" },
   { label: "Goals", value: "player_goals" },
   { label: "Assists", value: "player_assists" },
   { label: "Points", value: "player_points" },
@@ -60,6 +64,13 @@ const SPORT_MARKETS: Record<string, { label: string; value: string }[]> = {
   NHL: NHL_MARKETS,
 };
 
+const ALL_MARKET_KEYS: Record<string, string> = {
+  NBA: "player_points,player_rebounds,player_assists,player_threes,player_blocks,player_steals",
+  NFL: "player_pass_yds,player_rush_yds,player_reception_yds,player_anytime_td",
+  MLB: "batter_strikeouts,batter_hits,batter_total_bases,batter_rbis",
+  NHL: "player_goals,player_assists,player_points,player_shots_on_goal",
+};
+
 function formatOdds(odds: number) {
   return odds > 0 ? `+${odds}` : `${odds}`;
 }
@@ -70,7 +81,7 @@ export default function PropsScreen() {
   const [sport, setSport] = useState<"NBA" | "NFL" | "MLB" | "NHL">("NBA");
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const markets = SPORT_MARKETS[sport];
-  const [selectedMarket, setSelectedMarket] = useState(markets[0].value);
+  const [selectedMarket, setSelectedMarket] = useState("all");
   const [quickAdd, setQuickAdd] = useState<QuickAddBet | null>(null);
 
   const gamesQ = useGetPropsGames({ sport });
@@ -78,18 +89,21 @@ export default function PropsScreen() {
   const activeGame = selectedGame ?? games[0]?.id ?? null;
   const activeGameData = games.find((g) => g.id === activeGame);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const propsQ = useGetProps(
-    { gameId: activeGame ?? "", sport, markets: selectedMarket },
+    { gameId: activeGame ?? "", sport, markets: ALL_MARKET_KEYS[sport] },
     { query: { enabled: !!activeGame } } as any
   );
-  const props = propsQ.data ?? [];
+  const allProps = propsQ.data ?? [];
+
+  const filteredProps = useMemo(() => {
+    if (selectedMarket === "all") return allProps;
+    return allProps.filter((p) => p.market === selectedMarket);
+  }, [allProps, selectedMarket]);
 
   const handleSportChange = (s: string) => {
     setSport(s as "NBA" | "NFL" | "MLB" | "NHL");
     setSelectedGame(null);
-    const mkt = SPORT_MARKETS[s];
-    setSelectedMarket(mkt[0].value);
+    setSelectedMarket("all");
   };
 
   return (
@@ -107,7 +121,7 @@ export default function PropsScreen() {
       ) : games.length === 0 ? (
         <View style={[styles.noGamesBar, { borderBottomColor: colors.border }]}>
           <Text style={[styles.noGamesText, { color: colors.mutedForeground }]}>
-            No {sport} games scheduled
+            No {sport} games scheduled today
           </Text>
         </View>
       ) : (
@@ -153,7 +167,14 @@ export default function PropsScreen() {
       </View>
 
       {/* Props list */}
-      {!activeGame ? (
+      {gamesQ.isLoading ? (
+        <View style={styles.loader}>
+          <ActivityIndicator color={colors.primary} size="large" />
+          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
+            Loading games…
+          </Text>
+        </View>
+      ) : !activeGame ? (
         <EmptyState
           icon="user"
           title="No games available"
@@ -162,17 +183,24 @@ export default function PropsScreen() {
       ) : propsQ.isLoading ? (
         <View style={styles.loader}>
           <ActivityIndicator color={colors.primary} size="large" />
+          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
+            Loading props…
+          </Text>
         </View>
-      ) : !props.length ? (
+      ) : filteredProps.length === 0 ? (
         <EmptyState
           icon="user"
           title="No props found"
-          subtitle="No edge detected on this market. Try a different stat or game."
+          subtitle={
+            selectedMarket === "all"
+              ? "No edge detected for this game. Try another game."
+              : "No edge on this market. Try 'All' or a different stat."
+          }
         />
       ) : (
         <FlatList
-          data={props}
-          keyExtractor={(item, i) => `${item.player}-${item.market}-${i}`}
+          data={filteredProps}
+          keyExtractor={(item, i) => `${item.player}-${item.market}-${item.line}-${i}`}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[styles.propCard, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -228,10 +256,10 @@ export default function PropsScreen() {
           }
           ListHeaderComponent={
             <Text style={[styles.count, { color: colors.mutedForeground }]}>
-              {props.length} prop{props.length !== 1 ? "s" : ""} · tap to track
+              {filteredProps.length} prop{filteredProps.length !== 1 ? "s" : ""} with edge · tap to track
             </Text>
           }
-          scrollEnabled={props.length > 0}
+          scrollEnabled
         />
       )}
 
@@ -272,7 +300,8 @@ const styles = StyleSheet.create({
   },
   gameChipText: { fontSize: 12, fontFamily: "Inter_500Medium" },
   marketRow: { borderBottomWidth: StyleSheet.hairlineWidth },
-  loader: { flex: 1, alignItems: "center", justifyContent: "center" },
+  loader: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  loadingText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   list: { paddingTop: 8, paddingBottom: 100 },
   count: {
     fontSize: 12,
