@@ -1,10 +1,9 @@
 import { Router } from "express";
-import { jsonrepair } from "jsonrepair";
-import { openai } from "@workspace/integrations-openai-ai-server";
 import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, hasApiKey } from "../lib/odds-api";
 import { getRealValueBets } from "./predictions";
-import { consensusProb, americanToDecimal, decimalToAmerican } from "../lib/model";
+import { americanToDecimal, decimalToAmerican } from "../lib/model";
 import type { OddsEvent, PropEvent } from "../lib/odds-api";
+import type { ValueBet } from "../lib/model";
 
 const router = Router();
 
@@ -187,143 +186,10 @@ const SPORT_LABEL: Record<string, string> = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function getBestOdds(event: OddsEvent, marketKey: string, outcomeName: string): { bookmaker: string; odds: number } | null {
-  let best: { bookmaker: string; odds: number } | null = null;
-  for (const bk of event.bookmakers) {
-    const market = bk.markets.find((m) => m.key === marketKey);
-    if (!market) continue;
-    const outcome = market.outcomes.find((o) =>
-      marketKey === "totals"
-        ? o.name.toLowerCase() === outcomeName.toLowerCase()
-        : o.name === outcomeName
-    );
-    if (!outcome) continue;
-    if (!best || outcome.price > best.odds) {
-      best = { bookmaker: bk.title, odds: outcome.price };
-    }
-  }
-  return best;
-}
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  const h = d.getHours() % 12 || 12;
-  const m = d.getMinutes().toString().padStart(2, "0");
-  const ampm = d.getHours() >= 12 ? "PM" : "AM";
-  return `${h}:${m} ${ampm} ET`;
-}
-
 function calcCombinedOdds(legs: AIPickLeg[]): number {
   const combined = legs.reduce((acc, leg) => acc * americanToDecimal(leg.odds), 1);
   return decimalToAmerican(combined);
 }
-
-function buildCompactGameData(events: { sport: string; events: OddsEvent[] }[]): object[] {
-  const now = Date.now();
-  const cutoff = now + 72 * 3600_000; // up to 3 days so AI has enough games for multi-leg parlays
-  const games: object[] = [];
-
-  for (const { sport, events: evs } of events) {
-    const upcoming = evs
-      .filter((e) => {
-        const t = new Date(e.commence_time).getTime();
-        return t > now - 4 * 3600_000 && t < cutoff;
-      });
-
-    for (const ev of upcoming) {
-      const mlHome = getBestOdds(ev, "h2h", ev.home_team);
-      const mlAway = getBestOdds(ev, "h2h", ev.away_team);
-      const over = getBestOdds(ev, "totals", "Over");
-      const under = getBestOdds(ev, "totals", "Under");
-
-      // Gather spreads
-      let spreadHome: { odds: number; points: number } | null = null;
-      let spreadAway: { odds: number; points: number } | null = null;
-      for (const bk of ev.bookmakers) {
-        const mkt = bk.markets.find((m) => m.key === "spreads");
-        if (!mkt) continue;
-        const ho = mkt.outcomes.find((o) => o.name === ev.home_team);
-        const ao = mkt.outcomes.find((o) => o.name === ev.away_team);
-        if (ho && ao && (!spreadHome || ho.price > (spreadHome?.odds ?? -999))) {
-          spreadHome = { odds: ho.price, points: ho.point ?? 0 };
-          spreadAway = { odds: ao.price, points: ao.point ?? 0 };
-        }
-      }
-
-      const cp = consensusProb(ev, "h2h");
-      games.push({
-        id: ev.id,
-        sport,
-        home: ev.home_team,
-        away: ev.away_team,
-        time: formatTime(ev.commence_time),
-        homeWinProb: cp ? Math.round(cp[0] * 100) : null,
-        awayWinProb: cp ? Math.round(cp[1] * 100) : null,
-        ml: mlHome && mlAway ? { home: { odds: mlHome.odds, book: mlHome.bookmaker }, away: { odds: mlAway.odds, book: mlAway.bookmaker } } : null,
-        spread: spreadHome && spreadAway ? { home: spreadHome, away: spreadAway } : null,
-        total: over && under ? { line: null, over: over.odds, under: under.odds, book: over.bookmaker } : null,
-      });
-    }
-  }
-  return games;
-}
-
-const SYSTEM_PROMPT = `You are an elite sports betting analyst. Given today's games with consensus win probabilities, best odds, and detected value bets, generate SIX distinct betting recommendations.
-
-Return a JSON object (no markdown, no code blocks) with EXACTLY this structure:
-{
-  "lockOfTheDay": {
-    "id": "lock-1",
-    "gameId": "...", "sport": "NBA", "homeTeam": "...", "awayTeam": "...", "startTime": "ISO",
-    "pick": "e.g. LeBron James Over 25.5 Points", "betType": "player_prop", "player": "LeBron James",
-    "bookmaker": "FanDuel", "odds": -115, "confidence": 78, "edge": 4.2,
-    "reasoning": "2-3 sentence deep analysis.", "tags": ["home_advantage"]
-  },
-  "safeParlay": {
-    "id": "safe-1", "name": "Safe 2-Leg Parlay",
-    "legs": [2-3 legs, NO player props, only moneyline/spread/over/under, all from DIFFERENT games],
-    "combinedOdds": 220, "confidence": 62,
-    "reasoning": "Why these legs work together."
-  },
-  "lottoParlay": {
-    "id": "lotto-1", "name": "Lotto 5-Leg Parlay",
-    "legs": [4-6 legs, mix of any bet type, all from DIFFERENT games],
-    "combinedOdds": 1800, "confidence": 28,
-    "reasoning": "Upside and why each leg has merit."
-  },
-  "gameParlayOfTheDay": {
-    "id": "game-1", "name": "Game Picks 3-Leg Parlay",
-    "legs": [3-4 legs, ONLY moneyline/spread/over/under — NO player props, all from DIFFERENT games],
-    "combinedOdds": 450, "confidence": 48,
-    "reasoning": "Why these game-line legs complement each other."
-  },
-  "propParlayOfTheDay": {
-    "id": "prop-1", "name": "Player Props 3-Leg Parlay",
-    "legs": [3-4 legs, ALL must be player_prop betType, include player name in leg, legs can be from same or different games],
-    "combinedOdds": 600, "confidence": 42,
-    "reasoning": "Why these player performance props make sense together."
-  },
-  "mixParlayOfTheDay": {
-    "id": "mix-1", "name": "Mixed 4-Leg Parlay",
-    "legs": [4-5 legs, at least 2 game bets AND at least 2 player props, all from DIFFERENT games],
-    "combinedOdds": 900, "confidence": 38,
-    "reasoning": "How the game bets and props complement each other."
-  },
-  "summary": "1 sentence overview of today's slate."
-}
-
-Rules:
-- Lock of the Day: SINGLE best pick — can be any bet type including player_prop.
-- safeParlay: 2-3 legs, ONLY moneyline/spread/over/under, target +175 to +500 combined.
-- lottoParlay: 4-6 legs, any bet type, target +800 to +3000.
-- gameParlayOfTheDay: 3-4 legs, STRICTLY no player props. Only moneyline, spread, over, under.
-- propParlayOfTheDay: 3-4 legs, ALL must be player_prop. Include "player" field on each leg.
-- mixParlayOfTheDay: 4-5 legs, at least 2 game bets + at least 2 player props mixed.
-- betType options: moneyline, spread, over, under, player_prop
-- For player_prop legs include "player" field with player name.
-- Confidence range: 25-90. Edge range: 0.5-9.0.
-- ALL legs in a parlay must use DIFFERENT games (no two legs from the same gameId) EXCEPT propParlayOfTheDay which can share games.
-- Use real team/player names from the game data provided.`;
 
 // ─── Fallback mock ────────────────────────────────────────────────────────────
 
@@ -647,337 +513,222 @@ router.get("/ai-picks", async (req, res) => {
       ? realProps.filter((p) => p.sport === sportApiKey)
       : realProps;
 
-    const gameData = buildCompactGameData(allOdds);
-    const valueBetData = valueBets.slice(0, 8).map((vb) => ({
-      gameId: vb.gameId, sport: vb.sport, away: vb.awayTeam, home: vb.homeTeam,
-      pick: vb.team, betType: vb.betType, book: vb.bookmaker, odds: vb.odds, edge: vb.edge,
-    }));
+    // ─── Deterministic pick builder — no AI, 100% real data ──────────────────
 
-    const sportLabel = cacheKey === "all" ? "all sports" : cacheKey;
-    const propsSection = filteredProps.length > 0
-      ? `\nReal player props available (use these for propParlayOfTheDay, mixParlayOfTheDay, lockOfTheDay):\n${JSON.stringify(filteredProps)}`
-      : "\nNo live player prop data available — use your knowledge of today's players for prop picks.";
-
-    // Build a whitelist of real player names from the props data for the prompt
-    const realPlayerNames = [...new Set(filteredProps.map((p) => p.player))];
-    const playerWhitelistNote = realPlayerNames.length > 0
-      ? `\nALLOWED player names for player_prop legs (ONLY use names from this list): ${realPlayerNames.join(", ")}`
-      : "";
-
-    // Build explicit allowed-games list for the prompt so the AI cannot hallucinate teams
-    const allowedGames = gameData.map((g: any) => ({
-      gameId: g.gameId, sport: g.sport,
-      away: g.awayTeam, home: g.homeTeam, time: g.startTime,
-    }));
-
-    const userPrompt = `Date: ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
-Sport filter: ${sportLabel}
-ALLOWED GAMES — you MUST use only these gameIds, homeTeam and awayTeam values. Do NOT invent teams or games not on this list:
-${JSON.stringify(allowedGames)}
-
-Full game details with odds:
-${JSON.stringify(gameData)}
-Value bets detected by model: ${JSON.stringify(valueBetData)}${propsSection}${playerWhitelistNote}
-Generate all six picks (${sportLabel} only): lockOfTheDay, safeParlay, lottoParlay, gameParlayOfTheDay, propParlayOfTheDay, mixParlayOfTheDay.
-CRITICAL RULES:
-1. Every leg's gameId, homeTeam, and awayTeam MUST exactly match an entry from ALLOWED GAMES above. No exceptions.
-2. For ALL player_prop legs you MUST only use player names and lines from the "Real player props" list above. DO NOT invent players.
-3. Do NOT put two legs from the same game in safeParlay, lottoParlay, gameParlayOfTheDay, or mixParlayOfTheDay.
-4. Do NOT put both Over and Under for the same game total in any parlay.${cacheKey !== "all" ? `\n5. All picks MUST be from ${cacheKey} games only.` : ""}`;
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
-      ],
-    });
-
-    const raw = response.choices[0]?.message?.content;
-    req.log.info({ finish: response.choices[0]?.finish_reason, len: raw?.length }, "AI picks raw response");
-    if (!raw) throw new Error("Empty AI response");
-
-    // Strip code fences, then use jsonrepair to handle all AI JSON quirks
-    // (single quotes, unquoted keys, trailing commas, +300 odds, control chars, etc.)
-    const rawStripped = raw
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```\s*$/, "")
-      .trim()
-      // eslint-disable-next-line no-control-regex
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-    const jsonStr = jsonrepair(rawStripped);
-    const parsed = JSON.parse(jsonStr) as {
-      lockOfTheDay: AIPick;
-      safeParlay: AIParlay;
-      lottoParlay: AIParlay;
-      gameParlayOfTheDay: AIParlay;
-      propParlayOfTheDay: AIParlay;
-      mixParlayOfTheDay: AIParlay;
-      summary: string;
-    };
-
-    // Build gameId → event lookup for leg normalization
-    const gameMap = new Map<string, OddsEvent & { sport: string }>();
-    // Also build a team-name → game lookup for fuzzy matching when AI omits gameId
-    const teamGameMap = new Map<string, OddsEvent & { sport: string }>();
-    for (const { sport, events } of allOdds) {
-      for (const ev of events) {
-        gameMap.set(ev.id, { ...ev, sport });
-        teamGameMap.set(ev.home_team.toLowerCase(), { ...ev, sport });
-        teamGameMap.set(ev.away_team.toLowerCase(), { ...ev, sport });
-      }
-    }
-
-    // Build a case-insensitive set of valid player names from real props
-    const validPlayerSet = new Set(filteredProps.map((p) => p.player.toLowerCase()));
-
-    // Build player → props lookup map for real odds resolution
-    const propsByPlayer = new Map<string, typeof filteredProps>();
-    for (const prop of filteredProps) {
-      const key = prop.player.toLowerCase();
-      if (!propsByPlayer.has(key)) propsByPlayer.set(key, []);
-      propsByPlayer.get(key)!.push(prop);
-    }
-
-    // Resolve a player_prop leg fully from real props data.
-    // Returns real odds + the authoritative game info from the Odds API so we
-    // never trust the AI's hallucinated homeTeam/awayTeam/gameId for props.
-    function resolvePlayerProp(playerName: string, pick: string): {
-      odds: number; bookmaker: string;
-      homeTeam: string; awayTeam: string; gameId: string; startTime: string;
-    } | null {
-      // Exact player name lookup first; fall back to pick-text scan
-      const playerKey = playerName.toLowerCase();
-      let matchedProps = propsByPlayer.get(playerKey);
-      if (!matchedProps || matchedProps.length === 0) {
-        const pickLower = pick.toLowerCase();
-        for (const [name, list] of propsByPlayer) {
-          if (pickLower.includes(name)) { matchedProps = list; break; }
-        }
-      }
-      if (!matchedProps || matchedProps.length === 0) return null;
-
-      // Determine direction (over/under) and line from pick text
-      const direction = /\bunder\b/i.test(pick) ? "under" : "over";
-      const lineMatch = pick.match(/(\d+\.?\d*)/);
-      const line = lineMatch ? parseFloat(lineMatch[1]) : null;
-
-      let best: typeof matchedProps[0];
-      if (line !== null) {
-        const exact = matchedProps.find((p) => p.line === line);
-        best = exact ?? matchedProps.reduce((a, b) =>
-          Math.abs(a.line - line) <= Math.abs(b.line - line) ? a : b
-        );
-      } else {
-        best = matchedProps[0];
-      }
-
+    // Convert a value bet into a pick leg
+    function vbToLeg(vb: ValueBet): AIPickLeg {
       return {
-        odds: direction === "over" ? best.overOdds : best.underOdds,
-        bookmaker: best.bestBook,
-        // ↓ authoritative game data from Odds API — never trust AI for these
-        homeTeam: best.homeTeam,
-        awayTeam: best.awayTeam,
-        gameId: best.gameId,
-        startTime: best.startTime,
+        gameId: vb.gameId,
+        sport: vb.sport,
+        homeTeam: vb.homeTeam,
+        awayTeam: vb.awayTeam,
+        startTime: vb.startTime,
+        pick: vb.team,
+        betType: vb.betType,
+        bookmaker: vb.bookmaker,
+        odds: vb.odds,
+        player: null,
       };
     }
 
-    // Find game by scanning pick text for any team name
-    function findGameByPickText(pick: string): (OddsEvent & { sport: string }) | null {
-      const p = pick.toLowerCase();
-      for (const [teamName, ev] of teamGameMap) {
-        if (p.includes(teamName)) return ev;
+    // Convert a real prop into a pick leg (pick the better-priced direction)
+    function propToLeg(prop: CompactProp): AIPickLeg {
+      const direction = prop.overOdds >= prop.underOdds ? "Over" : "Under";
+      const odds = direction === "Over" ? prop.overOdds : prop.underOdds;
+      const rawMarket = prop.market
+        .replace(/^(player_|batter_|pitcher_)/, "")
+        .replace(/_/g, " ");
+      const marketLabel = rawMarket.replace(/\b\w/g, (c) => c.toUpperCase());
+      return {
+        gameId: prop.gameId,
+        sport: prop.sport,
+        homeTeam: prop.homeTeam,
+        awayTeam: prop.awayTeam,
+        startTime: prop.startTime,
+        pick: `${prop.player} ${direction} ${prop.line} ${marketLabel}`,
+        betType: "player_prop",
+        bookmaker: prop.bestBook,
+        odds,
+        player: prop.player,
+      };
+    }
+
+    // Pick up to N legs from a pool, no two from the same game
+    function pickUnique(
+      pool: AIPickLeg[],
+      n: number,
+      excludeGameIds: Set<string> = new Set(),
+    ): AIPickLeg[] {
+      const seen = new Set(excludeGameIds);
+      const result: AIPickLeg[] = [];
+      for (const leg of pool) {
+        if (result.length >= n) break;
+        if (seen.has(leg.gameId)) continue;
+        result.push(leg);
+        seen.add(leg.gameId);
       }
-      return null;
+      return result;
     }
 
-    // Normalize legs: fix `bet` → `pick`, fill missing fields from game map
-    function normalizeLegs(legs: any[]): AIPickLeg[] {
-      return (legs ?? [])
-        .map((leg: any): AIPickLeg | null => {
-          const pick = leg.pick ?? leg.bet ?? null;
-          if (!pick) return null;
+    // Sort value bets by edge descending; drop games already started > 4 h ago
+    const nowMs = Date.now();
+    const gameBets = valueBets
+      .filter((vb) => new Date(vb.startTime).getTime() > nowMs - 4 * 3600_000)
+      .sort((a, b) => b.edge - a.edge);
 
-          // Try gameId lookup first, then fall back to fuzzy team-name match
-          const game = (leg.gameId ? gameMap.get(leg.gameId) : null)
-            ?? findGameByPickText(pick)
-            ?? (leg.homeTeam ? teamGameMap.get(leg.homeTeam.toLowerCase()) : null);
-
-          const betType = leg.betType ?? inferBetType(pick);
-
-          // Strip hallucinated player_prop legs — if we have real props and the
-          // player isn't in the whitelist, reject this leg entirely
-          if (betType === "player_prop" && validPlayerSet.size > 0) {
-            const playerName = (leg.player ?? "").toLowerCase();
-            const pickLower = pick.toLowerCase();
-            const foundInWhitelist = validPlayerSet.has(playerName)
-              || [...validPlayerSet].some((name) => pickLower.includes(name));
-            if (!foundInWhitelist) {
-              req.log.warn({ player: leg.player, pick }, "Stripped hallucinated player_prop leg");
-              return null;
-            }
-          }
-
-          // For player_prop legs: resolve ALL fields (teams, game, odds) from
-          // the real Odds API data — never trust the AI's game assignment.
-          const playerName = leg.player ?? "";
-          if (betType === "player_prop") {
-            const resolved = resolvePlayerProp(playerName, pick);
-            if (!resolved) {
-              // Player not found in real props — strip this leg
-              req.log.warn({ player: playerName, pick }, "Stripped prop leg: no real market found");
-              return null;
-            }
-            // Ensure player name is always in the pick text
-            const normalizedPick = playerName && !pick.toLowerCase().includes(playerName.toLowerCase())
-              ? `${playerName} ${pick}`
-              : pick;
-            return {
-              gameId: resolved.gameId,
-              sport: leg.sport || game?.sport || "",
-              homeTeam: resolved.homeTeam,
-              awayTeam: resolved.awayTeam,
-              startTime: resolved.startTime,
-              pick: normalizedPick,
-              betType,
-              bookmaker: resolved.bookmaker,
-              odds: resolved.odds,
-              player: playerName || null,
-            };
-          }
-
-          // For game legs (non-prop): require the game to be in our verified game data.
-          // If the AI hallucinated a team/game not in the allowed list, strip it.
-          if (!game) {
-            req.log.warn({ pick, homeTeam: leg.homeTeam, gameId: leg.gameId },
-              "Stripped game leg: not found in allowed games list");
-            return null;
-          }
-
-          return {
-            gameId: game.id,
-            sport: game.sport,
-            homeTeam: game.home_team,
-            awayTeam: game.away_team,
-            startTime: game.commence_time,
-            pick,
-            betType,
-            bookmaker: leg.bookmaker ?? "DraftKings",
-            odds: typeof leg.odds === "number" ? leg.odds : -110,
-            player: playerName || null,
-          };
-        })
-        .filter((l): l is AIPickLeg => l !== null);
-    }
-
-    // Deduplicate parlay legs: for non-prop parlays enforce one leg per game,
-    // and remove contradictory Over+Under from the same game total
-    function dedupeLegs(legs: AIPickLeg[], allowSameGame = false): AIPickLeg[] {
-      const seenGame = new Set<string>();
-      const seenTotals = new Map<string, string>(); // gameId → "over"|"under"
-      return legs.filter((leg) => {
-        const gid = leg.gameId || leg.homeTeam || leg.pick;
-        // Block contradictory totals (Over + Under same game)
-        if ((leg.betType === "over" || leg.betType === "under") && gid) {
-          const existing = seenTotals.get(gid);
-          if (existing && existing !== leg.betType) {
-            req.log.warn({ gid, betType: leg.betType }, "Stripped contradictory total leg");
-            return false;
-          }
-          seenTotals.set(gid, leg.betType);
-        }
-        if (allowSameGame) return true;
-        // Block duplicate games
-        if (gid && seenGame.has(gid)) {
-          req.log.warn({ gid }, "Stripped duplicate game leg");
-          return false;
-        }
-        if (gid) seenGame.add(gid);
+    // Build one prop leg per player — deduplicate by player name
+    const seenPropPlayers = new Set<string>();
+    const propPool: AIPickLeg[] = filteredProps
+      .filter((p) => Math.max(p.overOdds, p.underOdds) >= -160)
+      .sort((a, b) => Math.max(b.overOdds, b.underOdds) - Math.max(a.overOdds, a.underOdds))
+      .map(propToLeg)
+      .filter((l) => {
+        if (!l.player || seenPropPlayers.has(l.player)) return false;
+        seenPropPlayers.add(l.player!);
         return true;
       });
+
+    const gameLegPool = gameBets.map(vbToLeg);
+
+    // If there are no real bets at all, fall back to mock data
+    if (gameBets.length === 0 && propPool.length === 0) {
+      const fallback = buildFallbackPicks();
+      picksCacheMap.set(cacheKey, { data: fallback, expiresAt: Date.now() + 5 * 60_000 });
+      return res.json(fallback);
     }
 
-    function inferBetType(pick: string): string {
-      const p = pick.toLowerCase();
-      if (p.includes("over") || p.includes("under")) {
-        if (p.match(/\b(points|rebounds|assists|strikeouts|hits|goals|shots|yards|receptions|tds|bases)\b/))
-          return "player_prop";
-        return p.includes("over") ? "over" : "under";
-      }
-      if (p.includes(" ml") || p.includes(" moneyline")) return "moneyline";
-      if (p.match(/[+-]\d+\.?\d*\s*$/)) return "spread";
-      return "moneyline";
+    // ── LOCK OF THE DAY: highest-edge bet ─────────────────────────────────────
+    const lockVb = gameBets[0] ?? null;
+    const lockLeg: AIPickLeg = lockVb ? vbToLeg(lockVb) : propPool[0];
+    const lockEdge = parseFloat((lockVb?.edge ?? 2.0).toFixed(1));
+    const lockModelPct = lockVb ? Math.round(lockVb.modelProb * 100) : 55;
+    const lockImpliedPct = lockVb ? Math.round(lockVb.impliedProb * 100) : 48;
+
+    const lockOfTheDay: AIPick = {
+      id: "lock-1",
+      gameId: lockLeg.gameId,
+      sport: lockLeg.sport,
+      homeTeam: lockLeg.homeTeam,
+      awayTeam: lockLeg.awayTeam,
+      startTime: lockLeg.startTime,
+      pick: lockLeg.pick,
+      betType: lockLeg.betType,
+      player: lockLeg.player ?? null,
+      bookmaker: lockLeg.bookmaker,
+      odds: lockLeg.odds,
+      confidence: Math.min(90, Math.round(50 + lockEdge * 4)),
+      edge: lockEdge,
+      reasoning: lockVb
+        ? `Our de-vig consensus model gives this a ${lockModelPct}% true probability vs the market's implied ${lockImpliedPct}% — a ${lockEdge}% edge. Best line at ${lockVb.bookmaker}.`
+        : `Best available player prop line identified across bookmakers at ${lockLeg.bookmaker}.`,
+      tags: [lockLeg.betType, "value"],
+    };
+
+    // ── SAFE PARLAY: 2-3 highest-edge game bets, different games ─────────────
+    // Include the lock game in the pool — it's valid to parlay the lock too
+    const safeLegs = pickUnique(gameLegPool, 3);
+    const avgSafeEdge = safeLegs.length > 0
+      ? safeLegs.reduce((s, l) => {
+          const vb = gameBets.find((v) => v.gameId === l.gameId && v.team === l.pick);
+          return s + (vb?.edge ?? 2);
+        }, 0) / safeLegs.length
+      : 2;
+    const safeParlay: AIParlay | null = safeLegs.length >= 2 ? {
+      id: "safe-1",
+      name: `${safeLegs.length}-Leg Value Parlay`,
+      legs: safeLegs,
+      combinedOdds: calcCombinedOdds(safeLegs),
+      confidence: Math.min(72, Math.round(48 + avgSafeEdge * 2)),
+      reasoning: `${safeLegs.length} independent game bets each carrying a positive edge per our model. Combined into a conservative parlay targeting modest upside.`,
+    } : null;
+
+    // ── GAME PARLAY: 3-4 game bets (no props) ────────────────────────────────
+    const gameLegs = pickUnique(gameLegPool, 4);
+    const gameParlayOfTheDay: AIParlay | null = gameLegs.length >= 2 ? {
+      id: "game-1",
+      name: `Game Picks ${gameLegs.length}-Legger`,
+      legs: gameLegs,
+      combinedOdds: calcCombinedOdds(gameLegs),
+      confidence: Math.min(65, Math.round(40 + gameLegs.length * 3)),
+      reasoning: `Pure game-line parlay — moneylines, spreads, and totals only. Each leg selected for the highest edge versus the de-vigged consensus probability across bookmakers.`,
+    } : null;
+
+    // ── LOTTO PARLAY: 5 legs biased toward underdogs / higher odds ───────────
+    const lottoGamePool = [...gameBets]
+      .sort((a, b) => b.odds - a.odds)
+      .map(vbToLeg);
+    const lottoLegs = pickUnique([...lottoGamePool, ...propPool], 5);
+    const lottoParlay: AIParlay | null = lottoLegs.length >= 3 ? {
+      id: "lotto-1",
+      name: `${lottoLegs.length}-Leg Lotto Parlay`,
+      legs: lottoLegs,
+      combinedOdds: calcCombinedOdds(lottoLegs),
+      confidence: Math.max(12, Math.round(38 - lottoLegs.length * 3)),
+      reasoning: `High-upside parlay mixing value underdogs and player props. Each leg has standalone merit — small stake for a big payout potential.`,
+    } : null;
+
+    // ── PROPS PARLAY: 3-4 player props (can share game) ──────────────────────
+    const propParlayLegs = propPool.slice(0, 4);
+    const propParlayOfTheDay: AIParlay | null = propParlayLegs.length >= 2 ? {
+      id: "prop-1",
+      name: `Player Props ${propParlayLegs.length}-Legger`,
+      legs: propParlayLegs,
+      combinedOdds: calcCombinedOdds(propParlayLegs),
+      confidence: Math.max(20, Math.round(44 - propParlayLegs.length * 2)),
+      reasoning: `Real bookmaker lines for these player performance props, sourced directly from the best available odds across major sportsbooks.`,
+    } : null;
+
+    // ── MIX PARLAY: 2 game bets + 2 props from different games ───────────────
+    const mixGameLegs = pickUnique(gameLegPool, 2);
+    const mixGameIds = new Set(mixGameLegs.map((l) => l.gameId));
+    const mixPropLegs = propPool.filter((l) => !mixGameIds.has(l.gameId)).slice(0, 2);
+    const mixLegs = [...mixGameLegs, ...mixPropLegs];
+    const mixParlayOfTheDay: AIParlay | null = mixLegs.length >= 3 ? {
+      id: "mix-1",
+      name: `Mixed ${mixLegs.length}-Legger`,
+      legs: mixLegs,
+      combinedOdds: calcCombinedOdds(mixLegs),
+      confidence: Math.max(18, Math.round(40 - mixLegs.length * 2)),
+      reasoning: `Blends the strongest game-line value bets with real player prop lines. Game legs for structure, props for upside.`,
+    } : null;
+
+    // Normalize sport labels (API keys like "baseball_mlb" → display label "MLB")
+    const SPORT_KEY_TO_LABEL: Record<string, string> = {
+      basketball_nba: "NBA", baseball_mlb: "MLB",
+      icehockey_nhl: "NHL", americanfootball_nfl: "NFL",
+    };
+    function normSport(s: string): string {
+      return SPORT_KEY_TO_LABEL[s] ?? SPORT_FROM_KEY[s] ?? s.toUpperCase();
     }
 
-    // Apply normalization + dedup to all parlays
-    // propParlayOfTheDay may share games (same player, different markets);
-    // everything else must have unique games and no contradictory totals
-    const parlayConfigs: { key: "safeParlay"|"lottoParlay"|"gameParlayOfTheDay"|"propParlayOfTheDay"|"mixParlayOfTheDay"; allowSameGame: boolean }[] = [
-      { key: "safeParlay",           allowSameGame: false },
-      { key: "lottoParlay",          allowSameGame: false },
-      { key: "gameParlayOfTheDay",   allowSameGame: false },
-      { key: "propParlayOfTheDay",   allowSameGame: true  },
-      { key: "mixParlayOfTheDay",    allowSameGame: false },
-    ];
-    for (const { key, allowSameGame } of parlayConfigs) {
-      const p = parsed[key];
-      if (!p) continue;
-      p.legs = dedupeLegs(normalizeLegs(p.legs), allowSameGame);
-      if (p.legs.length >= 2) p.combinedOdds = calcCombinedOdds(p.legs);
-    }
-
-    // Normalize lockOfTheDay through the same pipeline — this validates the
-    // game is real and the player (if prop) is in the whitelist.
-    if (parsed.lockOfTheDay) {
-      const lock = parsed.lockOfTheDay;
-      const normalized = normalizeLegs([{
-        gameId: lock.gameId, sport: lock.sport,
-        homeTeam: lock.homeTeam, awayTeam: lock.awayTeam,
-        startTime: lock.startTime, pick: lock.pick,
-        betType: lock.betType, player: lock.player ?? null,
-        bookmaker: lock.bookmaker, odds: lock.odds,
-      }]);
-      if (normalized.length === 1) {
-        const n = normalized[0];
-        lock.gameId = n.gameId; lock.sport = n.sport;
-        lock.homeTeam = n.homeTeam; lock.awayTeam = n.awayTeam;
-        lock.startTime = n.startTime; lock.pick = n.pick;
-        lock.betType = n.betType; lock.odds = n.odds;
-        lock.bookmaker = n.bookmaker;
-      } else {
-        req.log.warn({ pick: lock.pick }, "lockOfTheDay failed validation — clearing");
-        parsed.lockOfTheDay = null as any;
-      }
-    }
-
-    // Ensure IDs
-    if (parsed.lockOfTheDay && !parsed.lockOfTheDay.id) parsed.lockOfTheDay.id = "lock-1";
-    if (parsed.safeParlay && !parsed.safeParlay.id) parsed.safeParlay.id = "safe-1";
-    if (parsed.lottoParlay && !parsed.lottoParlay.id) parsed.lottoParlay.id = "lotto-1";
-    if (parsed.gameParlayOfTheDay && !parsed.gameParlayOfTheDay.id) parsed.gameParlayOfTheDay.id = "game-1";
-    if (parsed.propParlayOfTheDay && !parsed.propParlayOfTheDay.id) parsed.propParlayOfTheDay.id = "prop-1";
-    if (parsed.mixParlayOfTheDay && !parsed.mixParlayOfTheDay.id) parsed.mixParlayOfTheDay.id = "mix-1";
+    const sportsInPlay = [...new Set([
+      ...gameBets.slice(0, 6).map((v) => normSport(v.sport)),
+      ...propPool.slice(0, 3).map((p) => normSport(p.sport)),
+    ])];
+    const topBet = gameBets[0];
+    const summary = topBet
+      ? `Model detected ${gameBets.length} value bet${gameBets.length !== 1 ? "s" : ""} across ${sportsInPlay.join("/")} today. Top edge: ${topBet.team} at ${topBet.odds > 0 ? "+" : ""}${topBet.odds} (${topBet.edge.toFixed(1)}% edge via ${topBet.bookmaker}).`
+      : `Picks built from real bookmaker odds${filteredProps.length > 0 ? ` — ${filteredProps.length} active prop markets available` : ""}.`;
 
     const result: AIPicksResponse = {
-      lockOfTheDay: parsed.lockOfTheDay ?? null,
-      safeParlay: parsed.safeParlay ?? null,
-      lottoParlay: parsed.lottoParlay ?? null,
-      gameParlayOfTheDay: parsed.gameParlayOfTheDay ?? null,
-      propParlayOfTheDay: parsed.propParlayOfTheDay ?? null,
-      mixParlayOfTheDay: parsed.mixParlayOfTheDay ?? null,
-      summary: parsed.summary ?? "",
+      lockOfTheDay,
+      safeParlay,
+      lottoParlay,
+      gameParlayOfTheDay,
+      propParlayOfTheDay,
+      mixParlayOfTheDay,
+      summary,
       generatedAt: new Date().toISOString(),
-      isAI: true,
+      isAI: false,
     };
 
     picksCacheMap.set(cacheKey, { data: result, expiresAt: Date.now() + CACHE_TTL });
     return res.json(result);
 
   } catch (err) {
-    req.log.error({ err }, "AI picks generation failed, using fallback");
+    req.log.error({ err }, "Picks generation failed, using fallback");
     const fallback = buildFallbackPicks();
-    picksCacheMap.set(cacheKey, { data: fallback, expiresAt: Date.now() + 10 * 60_000 });
+    picksCacheMap.set(cacheKey, { data: fallback, expiresAt: Date.now() + 5 * 60_000 });
     return res.json(fallback);
   }
 });
