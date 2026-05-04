@@ -12,6 +12,9 @@ export interface AIPicksResponse {
   lockOfTheDay?: AIPick | null;
   safeParlay?: AIParlay | null;
   lottoParlay?: AIParlay | null;
+  gameParlayOfTheDay?: AIParlay | null;
+  propParlayOfTheDay?: AIParlay | null;
+  mixParlayOfTheDay?: AIParlay | null;
   summary: string;
   generatedAt: Date;
   isAI: boolean;

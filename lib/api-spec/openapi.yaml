@@ -1334,6 +1334,15 @@ components:
         lottoParlay:
           $ref: "#/components/schemas/AIParlay"
           nullable: true
+        gameParlayOfTheDay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
+        propParlayOfTheDay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
+        mixParlayOfTheDay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
         summary:
           type: string
         generatedAt:

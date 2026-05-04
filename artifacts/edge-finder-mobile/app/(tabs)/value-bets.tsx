@@ -323,6 +323,9 @@ export default function AiPicksScreen() {
   const lock = data?.lockOfTheDay ?? null;
   const safeParlay = data?.safeParlay ?? null;
   const lottoParlay = data?.lottoParlay ?? null;
+  const gameParlay = data?.gameParlayOfTheDay ?? null;
+  const propParlay = data?.propParlayOfTheDay ?? null;
+  const mixParlay = data?.mixParlayOfTheDay ?? null;
   const isAI = data?.isAI ?? false;
 
   function openTrack(pick: AIPick) {
@@ -470,9 +473,70 @@ export default function AiPicksScreen() {
                 />
               ) : (
                 <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>
-                    No lotto parlay — pull to refresh.
-                  </Text>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No lotto parlay — pull to refresh.</Text>
+                </View>
+              )}
+            </View>
+
+            {/* ── Game Picks Parlay ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="🏆"
+                label="Game Picks Parlay"
+                sublabel="Moneyline, spread & O/U only — no props"
+                accent="#3b82f6"
+              />
+              {gameParlay ? (
+                <ParlayCard
+                  parlay={gameParlay}
+                  accent="#3b82f6"
+                  onBet={(leg) => openBet({ ...leg, pick: `${gameParlay.name} (game parlay)`, odds: gameParlay.combinedOdds })}
+                />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No game parlay — pull to refresh.</Text>
+                </View>
+              )}
+            </View>
+
+            {/* ── Player Props Parlay ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="🎯"
+                label="Player Props Parlay"
+                sublabel="All player performance props"
+                accent="#f97316"
+              />
+              {propParlay ? (
+                <ParlayCard
+                  parlay={propParlay}
+                  accent="#f97316"
+                  onBet={(leg) => openBet({ ...leg, pick: `${propParlay.name} (props parlay)`, odds: propParlay.combinedOdds })}
+                />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No props parlay — pull to refresh.</Text>
+                </View>
+              )}
+            </View>
+
+            {/* ── Mix Parlay ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="🔀"
+                label="Mix Parlay"
+                sublabel="Game bets + player props combined"
+                accent="#14b8a6"
+              />
+              {mixParlay ? (
+                <ParlayCard
+                  parlay={mixParlay}
+                  accent="#14b8a6"
+                  onBet={(leg) => openBet({ ...leg, pick: `${mixParlay.name} (mix parlay)`, odds: mixParlay.combinedOdds })}
+                />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No mix parlay — pull to refresh.</Text>
                 </View>
               )}
             </View>

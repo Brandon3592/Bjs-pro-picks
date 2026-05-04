@@ -43,6 +43,9 @@ export interface AIPicksResponse {
   lockOfTheDay: AIPick | null;
   safeParlay: AIParlay | null;
   lottoParlay: AIParlay | null;
+  gameParlayOfTheDay: AIParlay | null;
+  propParlayOfTheDay: AIParlay | null;
+  mixParlayOfTheDay: AIParlay | null;
   summary: string;
   generatedAt: string;
   isAI: boolean;
@@ -133,58 +136,62 @@ function buildCompactGameData(events: { sport: string; events: OddsEvent[] }[]):
   return games;
 }
 
-const SYSTEM_PROMPT = `You are an elite sports betting analyst. Given today's games with consensus win probabilities, best odds, and detected value bets, generate three distinct betting recommendations.
+const SYSTEM_PROMPT = `You are an elite sports betting analyst. Given today's games with consensus win probabilities, best odds, and detected value bets, generate SIX distinct betting recommendations.
 
 Return a JSON object (no markdown, no code blocks) with EXACTLY this structure:
 {
   "lockOfTheDay": {
     "id": "lock-1",
-    "gameId": "...",
-    "sport": "NBA",
-    "homeTeam": "...",
-    "awayTeam": "...",
-    "startTime": "ISO",
-    "pick": "e.g. LeBron James Over 25.5 Points",
-    "betType": "player_prop",
-    "player": "LeBron James",
-    "bookmaker": "FanDuel",
-    "odds": -115,
-    "confidence": 78,
-    "edge": 4.2,
-    "reasoning": "2-3 sentence deep analysis of why this is the single best bet today.",
-    "tags": ["home_advantage", "line_value"]
+    "gameId": "...", "sport": "NBA", "homeTeam": "...", "awayTeam": "...", "startTime": "ISO",
+    "pick": "e.g. LeBron James Over 25.5 Points", "betType": "player_prop", "player": "LeBron James",
+    "bookmaker": "FanDuel", "odds": -115, "confidence": 78, "edge": 4.2,
+    "reasoning": "2-3 sentence deep analysis.", "tags": ["home_advantage"]
   },
   "safeParlay": {
-    "id": "safe-1",
-    "name": "Safe 2-Leg Parlay",
-    "legs": [
-      { "gameId": "...", "sport": "NBA", "homeTeam": "...", "awayTeam": "...", "startTime": "ISO", "pick": "...", "betType": "moneyline", "bookmaker": "DraftKings", "odds": -130 },
-      { "gameId": "...", "sport": "MLB", "homeTeam": "...", "awayTeam": "...", "startTime": "ISO", "pick": "...", "betType": "over", "bookmaker": "BetMGM", "odds": -110 }
-    ],
-    "combinedOdds": 220,
-    "confidence": 62,
-    "reasoning": "2 sentence explanation of why these legs complement each other well."
+    "id": "safe-1", "name": "Safe 2-Leg Parlay",
+    "legs": [2-3 legs, NO player props, only moneyline/spread/over/under, all from DIFFERENT games],
+    "combinedOdds": 220, "confidence": 62,
+    "reasoning": "Why these legs work together."
   },
   "lottoParlay": {
-    "id": "lotto-1",
-    "name": "Lotto 5-Leg Parlay",
-    "legs": [5 legs from different games],
-    "combinedOdds": 1800,
-    "confidence": 28,
-    "reasoning": "1-2 sentences on the upside and why each leg has merit."
+    "id": "lotto-1", "name": "Lotto 5-Leg Parlay",
+    "legs": [4-6 legs, mix of any bet type, all from DIFFERENT games],
+    "combinedOdds": 1800, "confidence": 28,
+    "reasoning": "Upside and why each leg has merit."
   },
-  "summary": "1 sentence overview of today's slate and best opportunities."
+  "gameParlayOfTheDay": {
+    "id": "game-1", "name": "Game Picks 3-Leg Parlay",
+    "legs": [3-4 legs, ONLY moneyline/spread/over/under — NO player props, all from DIFFERENT games],
+    "combinedOdds": 450, "confidence": 48,
+    "reasoning": "Why these game-line legs complement each other."
+  },
+  "propParlayOfTheDay": {
+    "id": "prop-1", "name": "Player Props 3-Leg Parlay",
+    "legs": [3-4 legs, ALL must be player_prop betType, include player name in leg, legs can be from same or different games],
+    "combinedOdds": 600, "confidence": 42,
+    "reasoning": "Why these player performance props make sense together."
+  },
+  "mixParlayOfTheDay": {
+    "id": "mix-1", "name": "Mixed 4-Leg Parlay",
+    "legs": [4-5 legs, at least 2 game bets AND at least 2 player props, all from DIFFERENT games],
+    "combinedOdds": 900, "confidence": 38,
+    "reasoning": "How the game bets and props complement each other."
+  },
+  "summary": "1 sentence overview of today's slate."
 }
 
 Rules:
-- Lock of the Day: Your SINGLE highest-confidence pick. Can be moneyline, spread, total, OR player prop. Pick the absolute best opportunity.
-- Safe Parlay: Exactly 2-3 legs from DIFFERENT games. Target combined odds of +175 to +500. All legs must be solid value.
-- Lotto Parlay: Exactly 4-6 legs from DIFFERENT games. Target combined odds of +800 to +3000. Higher risk, big payout.
-- Player props are welcome — use betType "player_prop" and include player name in "player" field and "pick" text.
+- Lock of the Day: SINGLE best pick — can be any bet type including player_prop.
+- safeParlay: 2-3 legs, ONLY moneyline/spread/over/under, target +175 to +500 combined.
+- lottoParlay: 4-6 legs, any bet type, target +800 to +3000.
+- gameParlayOfTheDay: 3-4 legs, STRICTLY no player props. Only moneyline, spread, over, under.
+- propParlayOfTheDay: 3-4 legs, ALL must be player_prop. Include "player" field on each leg.
+- mixParlayOfTheDay: 4-5 legs, at least 2 game bets + at least 2 player props mixed.
 - betType options: moneyline, spread, over, under, player_prop
+- For player_prop legs include "player" field with player name.
 - Confidence range: 25-90. Edge range: 0.5-9.0.
-- Use real team/player names from the game data provided.
-- ALL legs in a parlay must come from DIFFERENT games (never two legs from same game).`;
+- ALL legs in a parlay must use DIFFERENT games (no two legs from the same gameId) EXCEPT propParlayOfTheDay which can share games.
+- Use real team/player names from the game data provided.`;
 
 // ─── Fallback mock ────────────────────────────────────────────────────────────
 
@@ -309,11 +316,165 @@ function buildFallbackPicks(): AIPicksResponse {
     reasoning: "Five independent legs across NBA, MLB, and NHL with each carrying genuine standalone value. A $10 ticket wins big if all five hit — best for entertainment with upside.",
   };
 
+  const gameParlayLegs: AIPickLeg[] = [
+    {
+      gameId: "nba-mock-1",
+      sport: "NBA",
+      homeTeam: "Oklahoma City Thunder",
+      awayTeam: "Dallas Mavericks",
+      startTime: new Date(now + 5 * 3600_000).toISOString(),
+      pick: "Thunder ML",
+      betType: "moneyline",
+      bookmaker: "DraftKings",
+      odds: -145,
+    },
+    {
+      gameId: "mlb-mock-1",
+      sport: "MLB",
+      homeTeam: "Los Angeles Dodgers",
+      awayTeam: "Atlanta Braves",
+      startTime: new Date(now + 3 * 3600_000).toISOString(),
+      pick: "Under 8.5",
+      betType: "under",
+      bookmaker: "BetMGM",
+      odds: -112,
+    },
+    {
+      gameId: "nhl-mock-1",
+      sport: "NHL",
+      homeTeam: "Florida Panthers",
+      awayTeam: "Toronto Maple Leafs",
+      startTime: new Date(now + 7 * 3600_000).toISOString(),
+      pick: "Panthers -1.5",
+      betType: "spread",
+      bookmaker: "FanDuel",
+      odds: +120,
+    },
+  ];
+
+  const gameParlayOfTheDay: AIParlay = {
+    id: "game-1",
+    name: "Game Picks 3-Legger",
+    legs: gameParlayLegs,
+    combinedOdds: calcCombinedOdds(gameParlayLegs),
+    confidence: 49,
+    reasoning: "Three game-line bets with clear value: OKC's dominant home record, a pitcher-duel under, and Panthers puck-line at plus money. All legs are moneyline/spread/total — no props.",
+  };
+
+  const propParlayLegs: AIPickLeg[] = [
+    {
+      gameId: "nba-mock-1",
+      sport: "NBA",
+      homeTeam: "Oklahoma City Thunder",
+      awayTeam: "Dallas Mavericks",
+      startTime: new Date(now + 5 * 3600_000).toISOString(),
+      pick: "Shai Gilgeous-Alexander Over 29.5 Points",
+      betType: "player_prop",
+      player: "Shai Gilgeous-Alexander",
+      bookmaker: "FanDuel",
+      odds: -115,
+    },
+    {
+      gameId: "nba-mock-2",
+      sport: "NBA",
+      homeTeam: "Cleveland Cavaliers",
+      awayTeam: "Miami Heat",
+      startTime: new Date(now + 6 * 3600_000).toISOString(),
+      pick: "Darius Garland Over 7.5 Assists",
+      betType: "player_prop",
+      player: "Darius Garland",
+      bookmaker: "DraftKings",
+      odds: -118,
+    },
+    {
+      gameId: "mlb-mock-2",
+      sport: "MLB",
+      homeTeam: "New York Mets",
+      awayTeam: "Colorado Rockies",
+      startTime: new Date(now + 2 * 3600_000).toISOString(),
+      pick: "Pete Alonso Over 0.5 RBIs",
+      betType: "player_prop",
+      player: "Pete Alonso",
+      bookmaker: "BetMGM",
+      odds: -130,
+    },
+  ];
+
+  const propParlayOfTheDay: AIParlay = {
+    id: "prop-1",
+    name: "Player Props 3-Legger",
+    legs: propParlayLegs,
+    combinedOdds: calcCombinedOdds(propParlayLegs),
+    confidence: 43,
+    reasoning: "Three player performance props with favorable matchup angles: SGA vs a weak perimeter defense, Garland in a pace-up spot, and Alonso at hitter-friendly Coors.",
+  };
+
+  const mixParlayLegs: AIPickLeg[] = [
+    {
+      gameId: "nba-mock-1",
+      sport: "NBA",
+      homeTeam: "Oklahoma City Thunder",
+      awayTeam: "Dallas Mavericks",
+      startTime: new Date(now + 5 * 3600_000).toISOString(),
+      pick: "Thunder ML",
+      betType: "moneyline",
+      bookmaker: "DraftKings",
+      odds: -145,
+    },
+    {
+      gameId: "nba-mock-1",
+      sport: "NBA",
+      homeTeam: "Oklahoma City Thunder",
+      awayTeam: "Dallas Mavericks",
+      startTime: new Date(now + 5 * 3600_000).toISOString(),
+      pick: "Shai Gilgeous-Alexander Over 29.5 Points",
+      betType: "player_prop",
+      player: "Shai Gilgeous-Alexander",
+      bookmaker: "FanDuel",
+      odds: -115,
+    },
+    {
+      gameId: "mlb-mock-1",
+      sport: "MLB",
+      homeTeam: "Los Angeles Dodgers",
+      awayTeam: "Atlanta Braves",
+      startTime: new Date(now + 3 * 3600_000).toISOString(),
+      pick: "Under 8.5",
+      betType: "under",
+      bookmaker: "BetMGM",
+      odds: -112,
+    },
+    {
+      gameId: "mlb-mock-2",
+      sport: "MLB",
+      homeTeam: "New York Mets",
+      awayTeam: "Colorado Rockies",
+      startTime: new Date(now + 2 * 3600_000).toISOString(),
+      pick: "Pete Alonso Over 0.5 RBIs",
+      betType: "player_prop",
+      player: "Pete Alonso",
+      bookmaker: "BetMGM",
+      odds: -130,
+    },
+  ];
+
+  const mixParlayOfTheDay: AIParlay = {
+    id: "mix-1",
+    name: "Mixed 4-Legger",
+    legs: mixParlayLegs,
+    combinedOdds: calcCombinedOdds(mixParlayLegs),
+    confidence: 39,
+    reasoning: "Blends the Thunder ML and under with targeted player props on SGA and Alonso. The game picks and props reinforce the same narrative — OKC dominating at home and an Alonso hitting spot.",
+  };
+
   return {
     lockOfTheDay,
     safeParlay,
     lottoParlay,
-    summary: "Today's slate features strong home-team narratives in the NBA playoffs, elite pitcher matchups in MLB, and a standout player prop opportunity on SGA.",
+    gameParlayOfTheDay,
+    propParlayOfTheDay,
+    mixParlayOfTheDay,
+    summary: "Today's slate features strong home-team narratives in the NBA playoffs, elite pitcher matchups in MLB, and standout player prop opportunities.",
     generatedAt: new Date().toISOString(),
     isAI: false,
   };
@@ -341,7 +502,7 @@ router.get("/ai-picks", async (req, res) => {
     const userPrompt = `Date: ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
 Games: ${JSON.stringify(gameData)}
 Value bets detected by model: ${JSON.stringify(valueBetData)}
-Generate the lockOfTheDay, safeParlay, and lottoParlay. Include at least one player prop pick if the data supports it.`;
+Generate all six picks: lockOfTheDay, safeParlay, lottoParlay, gameParlayOfTheDay, propParlayOfTheDay, mixParlayOfTheDay.`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -360,26 +521,34 @@ Generate the lockOfTheDay, safeParlay, and lottoParlay. Include at least one pla
       lockOfTheDay: AIPick;
       safeParlay: AIParlay;
       lottoParlay: AIParlay;
+      gameParlayOfTheDay: AIParlay;
+      propParlayOfTheDay: AIParlay;
+      mixParlayOfTheDay: AIParlay;
       summary: string;
     };
 
     // Recalculate combined odds server-side for accuracy
-    if (parsed.safeParlay?.legs?.length >= 2) {
-      parsed.safeParlay.combinedOdds = calcCombinedOdds(parsed.safeParlay.legs);
-    }
-    if (parsed.lottoParlay?.legs?.length >= 2) {
-      parsed.lottoParlay.combinedOdds = calcCombinedOdds(parsed.lottoParlay.legs);
+    const parlayKeys = ["safeParlay", "lottoParlay", "gameParlayOfTheDay", "propParlayOfTheDay", "mixParlayOfTheDay"] as const;
+    for (const key of parlayKeys) {
+      const p = parsed[key];
+      if (p?.legs?.length >= 2) p.combinedOdds = calcCombinedOdds(p.legs);
     }
 
     // Ensure IDs
     if (parsed.lockOfTheDay && !parsed.lockOfTheDay.id) parsed.lockOfTheDay.id = "lock-1";
     if (parsed.safeParlay && !parsed.safeParlay.id) parsed.safeParlay.id = "safe-1";
     if (parsed.lottoParlay && !parsed.lottoParlay.id) parsed.lottoParlay.id = "lotto-1";
+    if (parsed.gameParlayOfTheDay && !parsed.gameParlayOfTheDay.id) parsed.gameParlayOfTheDay.id = "game-1";
+    if (parsed.propParlayOfTheDay && !parsed.propParlayOfTheDay.id) parsed.propParlayOfTheDay.id = "prop-1";
+    if (parsed.mixParlayOfTheDay && !parsed.mixParlayOfTheDay.id) parsed.mixParlayOfTheDay.id = "mix-1";
 
     const result: AIPicksResponse = {
       lockOfTheDay: parsed.lockOfTheDay ?? null,
       safeParlay: parsed.safeParlay ?? null,
       lottoParlay: parsed.lottoParlay ?? null,
+      gameParlayOfTheDay: parsed.gameParlayOfTheDay ?? null,
+      propParlayOfTheDay: parsed.propParlayOfTheDay ?? null,
+      mixParlayOfTheDay: parsed.mixParlayOfTheDay ?? null,
       summary: parsed.summary ?? "",
       generatedAt: new Date().toISOString(),
       isAI: true,
