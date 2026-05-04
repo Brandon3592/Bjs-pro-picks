@@ -126,13 +126,13 @@ export function BookmakerSheet({ visible, onClose, bet }: BookmakerSheetProps) {
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
 
-  const openSportsbook = async (sb: Sportsbook) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const openSportsbook = (sb: Sportsbook) => {
     const url = sb.getUrl(bet?.sport);
-    try {
-      await Linking.openURL(url);
-    } catch {
-      // no-op
+    if (Platform.OS === "web") {
+      window.open(url, "_blank", "noopener,noreferrer");
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Linking.openURL(url).catch(() => {});
     }
     onClose();
   };
