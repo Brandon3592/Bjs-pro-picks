@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { jsonrepair } from "jsonrepair";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, hasApiKey } from "../lib/odds-api";
 import { getRealValueBets } from "./predictions";
@@ -81,13 +82,17 @@ async function fetchRealPropsForAI(
     icehockey_nhl:  ["player_shots_on_goal", "player_points"],
   };
 
-  // Use ALL upcoming games per sport — no cap
+  // Use all games starting within the next 36 hours (today's slate only)
+  const cutoff = now + 36 * 3600_000;
   const targets: { sport: string; sportLabel: string; event: OddsEvent }[] = [];
   for (const { sport, events } of allOdds) {
     if (!SPORT_MARKETS[sport]) continue;
     const sportLabel = SPORT_KEYS[sport] ?? sport; // e.g. "NBA"
-    const upcoming = events.filter((e) => new Date(e.commence_time).getTime() > now);
-    for (const ev of upcoming) targets.push({ sport, sportLabel, event: ev });
+    const todaySlate = events.filter((e) => {
+      const t = new Date(e.commence_time).getTime();
+      return t > now && t < cutoff;
+    });
+    for (const ev of todaySlate) targets.push({ sport, sportLabel, event: ev });
   }
 
   const results = await Promise.allSettled(
@@ -212,12 +217,15 @@ function calcCombinedOdds(legs: AIPickLeg[]): number {
 
 function buildCompactGameData(events: { sport: string; events: OddsEvent[] }[]): object[] {
   const now = Date.now();
+  const cutoff = now + 36 * 3600_000; // today's slate only
   const games: object[] = [];
 
   for (const { sport, events: evs } of events) {
     const upcoming = evs
-      .filter((e) => new Date(e.commence_time).getTime() > now - 4 * 3600_000)
-      .slice(0, 4); // max 4 per sport
+      .filter((e) => {
+        const t = new Date(e.commence_time).getTime();
+        return t > now - 4 * 3600_000 && t < cutoff;
+      });
 
     for (const ev of upcoming) {
       const mlHome = getBestOdds(ev, "h2h", ev.home_team);
@@ -670,16 +678,15 @@ CRITICAL: For ALL player_prop legs you MUST only use player names and lines from
     req.log.info({ finish: response.choices[0]?.finish_reason, len: raw?.length }, "AI picks raw response");
     if (!raw) throw new Error("Empty AI response");
 
-    // Strip code fences, fix common AI JSON issues
-    const jsonStr = raw
+    // Strip code fences, then use jsonrepair to handle all AI JSON quirks
+    // (single quotes, unquoted keys, trailing commas, +300 odds, control chars, etc.)
+    const rawStripped = raw
       .replace(/^```(?:json)?\s*/i, "")
       .replace(/\s*```\s*$/, "")
       .trim()
-      // "odds": +300  →  "odds": 300  (JSON doesn't allow leading +)
-      .replace(/:\s*\+(\d+)/g, ": $1")
-      // Remove bad control characters inside strings (keep \n \r \t)
       // eslint-disable-next-line no-control-regex
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+    const jsonStr = jsonrepair(rawStripped);
     const parsed = JSON.parse(jsonStr) as {
       lockOfTheDay: AIPick;
       safeParlay: AIParlay;
