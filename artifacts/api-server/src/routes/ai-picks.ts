@@ -74,12 +74,13 @@ async function fetchRealPropsForAI(
 ): Promise<CompactProp[]> {
   const now = Date.now();
 
-  // allOdds uses full API keys (e.g. "basketball_nba"); translate to label for market lookup
-  // SPORT_KEYS is bidirectional: "basketball_nba" → "NBA"
+  // allOdds.sport is now the label key ("NBA", "MLB", etc.)
+  // We translate to the Odds API key (e.g. "baseball_mlb") before fetching props.
   const SPORT_MARKETS: Record<string, string[]> = {
-    basketball_nba: ["player_points", "player_rebounds", "player_assists", "player_threes"],
-    baseball_mlb:   ["pitcher_strikeouts", "batter_hits", "batter_total_bases", "batter_home_runs"],
-    icehockey_nhl:  ["player_shots_on_goal", "player_points"],
+    basketball_nba:      ["player_points", "player_rebounds", "player_assists", "player_threes"],
+    baseball_mlb:        ["pitcher_strikeouts", "batter_hits", "batter_total_bases", "batter_home_runs"],
+    icehockey_nhl:       ["player_shots_on_goal", "player_points"],
+    americanfootball_nfl: ["player_pass_yds", "player_rush_yds", "player_reception_yds", "player_anytime_td"],
   };
 
   // Use all games starting within the next 36 hours (today's slate only)
