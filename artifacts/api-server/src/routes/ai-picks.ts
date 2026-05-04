@@ -81,14 +81,12 @@ async function fetchRealPropsForAI(
     icehockey_nhl:  ["player_shots_on_goal", "player_points"],
   };
 
-  // Pick top 3 upcoming games per sport to give the AI real player variety
+  // Use ALL upcoming games per sport — no cap
   const targets: { sport: string; sportLabel: string; event: OddsEvent }[] = [];
   for (const { sport, events } of allOdds) {
     if (!SPORT_MARKETS[sport]) continue;
     const sportLabel = SPORT_KEYS[sport] ?? sport; // e.g. "NBA"
-    const upcoming = events
-      .filter((e) => new Date(e.commence_time).getTime() > now)
-      .slice(0, 3);
+    const upcoming = events.filter((e) => new Date(e.commence_time).getTime() > now);
     for (const ev of upcoming) targets.push({ sport, sportLabel, event: ev });
   }
 
@@ -162,10 +160,9 @@ function parsePropEvent(
     });
   }
 
-  // Return top 20 by absolute over odds closest to -110 (most liquid lines)
+  // Sort by liquidity (odds closest to -110) — no cap, return all props
   return props
-    .sort((a, b) => Math.abs(Math.abs(a.overOdds) - 110) - Math.abs(Math.abs(b.overOdds) - 110))
-    .slice(0, 20);
+    .sort((a, b) => Math.abs(Math.abs(a.overOdds) - 110) - Math.abs(Math.abs(b.overOdds) - 110));
 }
 
 // ─── Cache ────────────────────────────────────────────────────────────────────
@@ -673,13 +670,16 @@ CRITICAL: For ALL player_prop legs you MUST only use player names and lines from
     req.log.info({ finish: response.choices[0]?.finish_reason, len: raw?.length }, "AI picks raw response");
     if (!raw) throw new Error("Empty AI response");
 
-    // Strip code fences, then fix +NNN odds that aren't valid JSON numbers
+    // Strip code fences, fix common AI JSON issues
     const jsonStr = raw
       .replace(/^```(?:json)?\s*/i, "")
       .replace(/\s*```\s*$/, "")
       .trim()
       // "odds": +300  →  "odds": 300  (JSON doesn't allow leading +)
-      .replace(/:\s*\+(\d+)/g, ": $1");
+      .replace(/:\s*\+(\d+)/g, ": $1")
+      // Remove bad control characters inside strings (keep \n \r \t)
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
     const parsed = JSON.parse(jsonStr) as {
       lockOfTheDay: AIPick;
       safeParlay: AIParlay;
