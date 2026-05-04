@@ -399,6 +399,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/GameLineHistory"
 
+  /alerts/vapid-key:
+    get:
+      operationId: getVapidPublicKey
+      tags: [alerts]
+      summary: Get the VAPID public key for push subscription
+      responses:
+        "200":
+          description: VAPID public key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VapidPublicKey"
+        "503":
+          description: Push not configured
+
   /alerts/subscribe:
     post:
       operationId: subscribeAlerts
@@ -904,6 +919,13 @@ components:
         hasHistory:
           type: boolean
       required: [gameId, series, hasHistory]
+
+    VapidPublicKey:
+      type: object
+      properties:
+        publicKey:
+          type: string
+      required: [publicKey]
 
     AlertSubscribeBody:
       type: object

@@ -42,6 +42,7 @@ import type {
   TrackedBet,
   UpdateBetBody,
   ValueBet,
+  VapidPublicKey,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1421,6 +1422,81 @@ export function useGetGameLineHistory<
     params,
     options,
   );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get the VAPID public key for push subscription
+ */
+export const getGetVapidPublicKeyUrl = () => {
+  return `/api/alerts/vapid-key`;
+};
+
+export const getVapidPublicKey = async (
+  options?: RequestInit,
+): Promise<VapidPublicKey> => {
+  return customFetch<VapidPublicKey>(getGetVapidPublicKeyUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetVapidPublicKeyQueryKey = () => {
+  return [`/api/alerts/vapid-key`] as const;
+};
+
+export const getGetVapidPublicKeyQueryOptions = <
+  TData = Awaited<ReturnType<typeof getVapidPublicKey>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getVapidPublicKey>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetVapidPublicKeyQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getVapidPublicKey>>
+  > = ({ signal }) => getVapidPublicKey({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getVapidPublicKey>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetVapidPublicKeyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getVapidPublicKey>>
+>;
+export type GetVapidPublicKeyQueryError = ErrorType<void>;
+
+/**
+ * @summary Get the VAPID public key for push subscription
+ */
+
+export function useGetVapidPublicKey<
+  TData = Awaited<ReturnType<typeof getVapidPublicKey>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getVapidPublicKey>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetVapidPublicKeyQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

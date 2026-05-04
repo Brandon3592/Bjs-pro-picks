@@ -353,6 +353,10 @@ export interface GameLineHistory {
   hasHistory: boolean;
 }
 
+export interface VapidPublicKey {
+  publicKey: string;
+}
+
 export type AlertSubscribeBodyKeys = {
   p256dh: string;
   auth: string;

@@ -1,44 +1,83 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
-import { useSubscribeAlerts } from "@workspace/api-client-react";
-import { Moon, Sun, Bell, BellOff, Shield, AlertTriangle } from "lucide-react";
+import { useSubscribeAlerts, useGetVapidPublicKey } from "@workspace/api-client-react";
+import { Moon, Sun, Bell, BellOff, Shield, AlertTriangle, Flame, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
+type AlertStatus = "idle" | "pending" | "granted" | "denied" | "unsupported";
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
 export default function Settings() {
   const { theme, setTheme } = useTheme();
   const [minEdge, setMinEdge] = useState("3");
   const [bankroll, setBankroll] = useState("1000");
-  const [notifStatus, setNotifStatus] = useState<"idle" | "pending" | "granted" | "denied">("idle");
+  const [alertStatus, setAlertStatus] = useState<AlertStatus>("idle");
+  const [currentEndpoint, setCurrentEndpoint] = useState<string | null>(null);
 
   const subscribeAlerts = useSubscribeAlerts();
+  const { data: vapidData } = useGetVapidPublicKey();
 
-  async function enablePushAlerts() {
+  // Detect if browser already granted push permission
+  useEffect(() => {
+    if (!("Notification" in window)) {
+      setAlertStatus("unsupported");
+      return;
+    }
+    if (Notification.permission === "granted") {
+      // Check if we have a push subscription active
+      navigator.serviceWorker.ready.then((reg) => {
+        reg.pushManager.getSubscription().then((sub) => {
+          if (sub) {
+            setCurrentEndpoint(sub.endpoint);
+            setAlertStatus("granted");
+          }
+        });
+      }).catch(() => {});
+    } else if (Notification.permission === "denied") {
+      setAlertStatus("denied");
+    }
+  }, []);
+
+  async function enableSteamAlerts() {
     if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-      setNotifStatus("denied");
+      setAlertStatus("unsupported");
       return;
     }
 
-    setNotifStatus("pending");
-    const permission = await Notification.requestPermission();
+    if (!vapidData?.publicKey) {
+      setAlertStatus("denied");
+      return;
+    }
 
+    setAlertStatus("pending");
+
+    const permission = await Notification.requestPermission();
     if (permission !== "granted") {
-      setNotifStatus("denied");
+      setAlertStatus("denied");
       return;
     }
 
     try {
       const reg = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U",
+        applicationServerKey: urlBase64ToUint8Array(vapidData.publicKey),
       });
 
       const json = sub.toJSON();
-      subscribeAlerts.mutate({
+      await subscribeAlerts.mutateAsync({
         data: {
           endpoint: sub.endpoint,
           keys: {
@@ -50,9 +89,30 @@ export default function Settings() {
         },
       });
 
-      setNotifStatus("granted");
+      setCurrentEndpoint(sub.endpoint);
+      setAlertStatus("granted");
     } catch {
-      setNotifStatus("denied");
+      setAlertStatus("denied");
+    }
+  }
+
+  async function disableSteamAlerts() {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await fetch("/api/alerts/subscribe", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        await sub.unsubscribe();
+      }
+      setCurrentEndpoint(null);
+      setAlertStatus("idle");
+    } catch {
+      // best effort
+      setAlertStatus("idle");
     }
   }
 
@@ -87,33 +147,71 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Alerts */}
+      {/* Steam Move Alerts */}
       <div className="bg-card border border-card-border rounded-lg overflow-hidden">
         <div className="px-4 py-3 border-b border-border">
-          <h2 className="text-sm font-semibold">Push Alerts</h2>
+          <div className="flex items-center gap-2">
+            <Flame className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold">Steam Move Alerts</h2>
+          </div>
         </div>
         <div className="px-4 py-4 space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <Label className="text-sm font-medium">Edge Alerts</Label>
-              <p className="text-xs text-muted-foreground mt-0.5">Get notified when new value bets appear or odds shift significantly</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Receive a push notification the moment <strong className="text-foreground">2 or more bookmakers</strong> simultaneously move the same line in the same direction — a classic signal of sharp money entering the market.
+          </p>
+
+          {alertStatus === "unsupported" && (
+            <div className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
+              Push notifications are not supported in this browser.
             </div>
-            <Button
-              variant={notifStatus === "granted" ? "secondary" : "outline"}
-              size="sm"
-              onClick={enablePushAlerts}
-              disabled={notifStatus === "pending" || notifStatus === "granted" || notifStatus === "denied"}
-              data-testid="button-enable-alerts"
-            >
-              {notifStatus === "idle" && <><Bell className="h-3.5 w-3.5 mr-1.5" />Enable</>}
-              {notifStatus === "pending" && "Requesting..."}
-              {notifStatus === "granted" && <><Bell className="h-3.5 w-3.5 mr-1.5" />Active</>}
-              {notifStatus === "denied" && <><BellOff className="h-3.5 w-3.5 mr-1.5" />Blocked</>}
-            </Button>
-          </div>
-          {notifStatus === "denied" && (
-            <p className="text-xs text-destructive">Notifications blocked. Please enable them in your browser settings.</p>
           )}
+
+          {alertStatus === "denied" && (
+            <div className="text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">
+              Notifications are blocked. Enable them in your browser settings and reload.
+            </div>
+          )}
+
+          {alertStatus === "granted" && (
+            <div className="flex items-center gap-2 text-xs text-primary bg-primary/10 rounded-md px-3 py-2">
+              <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
+              Steam move alerts are active. You'll be notified within 5 minutes of a detected move.
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label className="text-sm font-medium">
+                {alertStatus === "granted" ? "Alerts Active" : "Enable Steam Alerts"}
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Browser push · updates every 5 min · no account required
+              </p>
+            </div>
+            {alertStatus === "granted" ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={disableSteamAlerts}
+                data-testid="button-disable-alerts"
+              >
+                <BellOff className="h-3.5 w-3.5 mr-1.5" />
+                Disable
+              </Button>
+            ) : (
+              <Button
+                variant={alertStatus === "denied" || alertStatus === "unsupported" ? "outline" : "default"}
+                size="sm"
+                onClick={enableSteamAlerts}
+                disabled={alertStatus === "pending" || alertStatus === "denied" || alertStatus === "unsupported" || !vapidData}
+                data-testid="button-enable-alerts"
+              >
+                {alertStatus === "pending"
+                  ? "Requesting…"
+                  : <><Bell className="h-3.5 w-3.5 mr-1.5" />Enable</>}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -159,7 +257,7 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* API Keys */}
+      {/* API Configuration */}
       <div className="bg-card border border-card-border rounded-lg overflow-hidden">
         <div className="px-4 py-3 border-b border-border">
           <h2 className="text-sm font-semibold">API Configuration</h2>

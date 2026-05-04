@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startSnapshotJob } from "./lib/snapshot-job";
+import { initWebPush } from "./lib/push-notifications";
 
 const rawPort = process.env["PORT"];
 
@@ -23,5 +24,6 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+  initWebPush();
   startSnapshotJob();
 });

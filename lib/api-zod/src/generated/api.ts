@@ -458,6 +458,13 @@ export const GetGameLineHistoryResponse = zod.object({
 });
 
 /**
+ * @summary Get the VAPID public key for push subscription
+ */
+export const GetVapidPublicKeyResponse = zod.object({
+  publicKey: zod.string(),
+});
+
+/**
  * @summary Subscribe to push alerts for edge opportunities and odds shifts
  */
 export const subscribeAlertsBodyMinEdgeDefault = 3;
