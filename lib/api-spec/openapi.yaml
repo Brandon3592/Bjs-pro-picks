@@ -349,6 +349,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
 
+  /arb:
+    get:
+      operationId: getArbOpportunities
+      tags: [predictions]
+      summary: Scan all current games for arbitrage and near-arbitrage opportunities
+      responses:
+        "200":
+          description: List of arb opportunities sorted by profit %
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ArbOpportunity"
+
   /line-movements:
     get:
       operationId: getLineMovements
@@ -919,6 +934,55 @@ components:
         hasHistory:
           type: boolean
       required: [gameId, series, hasHistory]
+
+    ArbLeg:
+      type: object
+      properties:
+        outcome:
+          type: string
+        bookmaker:
+          type: string
+        odds:
+          type: integer
+        impliedProb:
+          type: number
+        stakeRatio:
+          type: number
+      required: [outcome, bookmaker, odds, impliedProb, stakeRatio]
+
+    ArbOpportunity:
+      type: object
+      properties:
+        id:
+          type: string
+        gameId:
+          type: string
+        sport:
+          type: string
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        market:
+          type: string
+          enum: [h2h, totals]
+        legs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArbLeg"
+        totalImplied:
+          type: number
+        profitPct:
+          type: number
+        isArb:
+          type: boolean
+        status:
+          type: string
+          enum: [live, upcoming]
+      required: [id, gameId, sport, homeTeam, awayTeam, startTime, market, legs, totalImplied, profitPct, isArb, status]
 
     VapidPublicKey:
       type: object

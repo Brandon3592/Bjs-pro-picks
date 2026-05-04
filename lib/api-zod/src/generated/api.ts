@@ -400,6 +400,35 @@ export const GetDashboardSummaryResponse = zod.object({
 });
 
 /**
+ * @summary Scan all current games for arbitrage and near-arbitrage opportunities
+ */
+export const GetArbOpportunitiesResponseItem = zod.object({
+  id: zod.string(),
+  gameId: zod.string(),
+  sport: zod.string(),
+  homeTeam: zod.string(),
+  awayTeam: zod.string(),
+  startTime: zod.coerce.date(),
+  market: zod.enum(["h2h", "totals"]),
+  legs: zod.array(
+    zod.object({
+      outcome: zod.string(),
+      bookmaker: zod.string(),
+      odds: zod.number(),
+      impliedProb: zod.number(),
+      stakeRatio: zod.number(),
+    }),
+  ),
+  totalImplied: zod.number(),
+  profitPct: zod.number(),
+  isArb: zod.boolean(),
+  status: zod.enum(["live", "upcoming"]),
+});
+export const GetArbOpportunitiesResponse = zod.array(
+  GetArbOpportunitiesResponseItem,
+);
+
+/**
  * @summary Get recent significant line movements across all games
  */
 export const getLineMovementsQueryHoursDefault = 3;

@@ -8,6 +8,7 @@ import betsRouter from "./bets";
 import dashboardRouter from "./dashboard";
 import alertsRouter from "./alerts";
 import lineMovementsRouter from "./line-movements";
+import arbRouter from "./arb";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(betsRouter);
 router.use(dashboardRouter);
 router.use(alertsRouter);
 router.use(lineMovementsRouter);
+router.use(arbRouter);
 
 export default router;

@@ -48,10 +48,11 @@ Full-stack sports betting value finder. React+Vite frontend, Express 5 API backe
 |---|---|---|
 | `/` | Dashboard | Stats, top value bets, Line Movements widget, sport/bookmaker breakdown |
 | `/value-bets` | Value Bets | Filterable/sortable table of live-market edge bets (≥0.5% edge) |
+| `/arb` | Arb Finder | Arbitrage + near-arb scanner across all books; stake-split calculator |
 | `/games` | Games | Game cards (live/upcoming/final) across all sports |
 | `/games/:id` | Game Detail | Odds comparison, model prediction, moneyline history chart, injury report |
 | `/tracker` | Bet Tracker | Log bets, mark W/L, ROI/bankroll chart |
-| `/settings` | Settings | Theme, push alerts, preferences, disclaimer |
+| `/settings` | Settings | Theme, steam-move push alerts, preferences, disclaimer |
 
 ## Data Flow
 
@@ -73,6 +74,14 @@ Snapshot job in `artifacts/api-server/src/lib/snapshot-job.ts`:
 - Dashboard shows "Line Movements" widget (last 3h)
 - Game Detail shows "Moneyline History" chart (Recharts LineChart, implied win %)
 - Snapshots older than 48h are automatically pruned
+
+## Arbitrage Finder
+
+Route `GET /api/arb` — scans all current games for cross-book arbitrage:
+- **H2H (moneyline)**: finds best price on each team across all books, checks if sum of implied probs < 100%
+- **Totals (over/under)**: finds best over + best under at the same line number across books
+- Shows **true arbs** (profit > 0%) and **near-arbs** (combined vig < 2%) with stake-split calculator
+- Frontend at `/arb` — configurable total stake input, auto-calculates exact dollar amounts per leg
 
 ## DB Schema
 

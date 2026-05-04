@@ -353,6 +353,45 @@ export interface GameLineHistory {
   hasHistory: boolean;
 }
 
+export interface ArbLeg {
+  outcome: string;
+  bookmaker: string;
+  odds: number;
+  impliedProb: number;
+  stakeRatio: number;
+}
+
+export type ArbOpportunityMarket =
+  (typeof ArbOpportunityMarket)[keyof typeof ArbOpportunityMarket];
+
+export const ArbOpportunityMarket = {
+  h2h: "h2h",
+  totals: "totals",
+} as const;
+
+export type ArbOpportunityStatus =
+  (typeof ArbOpportunityStatus)[keyof typeof ArbOpportunityStatus];
+
+export const ArbOpportunityStatus = {
+  live: "live",
+  upcoming: "upcoming",
+} as const;
+
+export interface ArbOpportunity {
+  id: string;
+  gameId: string;
+  sport: string;
+  homeTeam: string;
+  awayTeam: string;
+  startTime: string;
+  market: ArbOpportunityMarket;
+  legs: ArbLeg[];
+  totalImplied: number;
+  profitPct: number;
+  isArb: boolean;
+  status: ArbOpportunityStatus;
+}
+
 export interface VapidPublicKey {
   publicKey: string;
 }

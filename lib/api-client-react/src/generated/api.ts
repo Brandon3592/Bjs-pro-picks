@@ -19,6 +19,7 @@ import type {
 import type {
   AlertSubscribeBody,
   AlertSubscription,
+  ArbOpportunity,
   AuthUser,
   BankrollDataPoint,
   BetStats,
@@ -1205,6 +1206,81 @@ export function useGetDashboardSummary<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetDashboardSummaryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Scan all current games for arbitrage and near-arbitrage opportunities
+ */
+export const getGetArbOpportunitiesUrl = () => {
+  return `/api/arb`;
+};
+
+export const getArbOpportunities = async (
+  options?: RequestInit,
+): Promise<ArbOpportunity[]> => {
+  return customFetch<ArbOpportunity[]>(getGetArbOpportunitiesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetArbOpportunitiesQueryKey = () => {
+  return [`/api/arb`] as const;
+};
+
+export const getGetArbOpportunitiesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getArbOpportunities>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getArbOpportunities>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetArbOpportunitiesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getArbOpportunities>>
+  > = ({ signal }) => getArbOpportunities({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getArbOpportunities>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetArbOpportunitiesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getArbOpportunities>>
+>;
+export type GetArbOpportunitiesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Scan all current games for arbitrage and near-arbitrage opportunities
+ */
+
+export function useGetArbOpportunities<
+  TData = Awaited<ReturnType<typeof getArbOpportunities>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getArbOpportunities>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetArbOpportunitiesQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
