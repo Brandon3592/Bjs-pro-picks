@@ -258,10 +258,12 @@ function ParlayCard({
             <View style={[styles.legDot, { backgroundColor: sportBadgeColor(leg.sport) }]} />
             <View style={styles.legInfo}>
               <Text style={[styles.legMatchup, { color: colors.mutedForeground }]} numberOfLines={1}>
-                {leg.awayTeam} @ {leg.homeTeam}
+                {leg.awayTeam && leg.homeTeam
+                  ? `${leg.awayTeam} @ ${leg.homeTeam}`
+                  : leg.homeTeam || leg.awayTeam || "Today's game"}
               </Text>
               <Text style={[styles.legPick, { color: colors.foreground }]}>
-                {(leg as any).player ? `${(leg as any).player} — ` : ""}{leg.pick}
+                {leg.pick}
               </Text>
             </View>
             <Text style={[styles.legOdds, { color: accent }]}>{fmtOdds(leg.odds)}</Text>
