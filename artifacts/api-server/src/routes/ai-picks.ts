@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { openai } from "@workspace/integrations-openai-ai-server";
-import { fetchAllSportOdds, hasApiKey } from "../lib/odds-api";
+import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, hasApiKey } from "../lib/odds-api";
 import { getRealValueBets } from "./predictions";
 import { consensusProb, americanToDecimal, decimalToAmerican } from "../lib/model";
-import type { OddsEvent } from "../lib/odds-api";
+import type { OddsEvent, PropEvent } from "../lib/odds-api";
 
 const router = Router();
 
@@ -49,6 +49,125 @@ export interface AIPicksResponse {
   summary: string;
   generatedAt: string;
   isAI: boolean;
+}
+
+// ─── Props helper ─────────────────────────────────────────────────────────────
+
+interface CompactProp {
+  game: string;
+  gameId: string;
+  sport: string;
+  homeTeam: string;
+  awayTeam: string;
+  startTime: string;
+  player: string;
+  market: string;
+  line: number;
+  overOdds: number;
+  underOdds: number;
+  bestBook: string;
+}
+
+async function fetchRealPropsForAI(
+  allOdds: { sport: string; events: OddsEvent[] }[],
+): Promise<CompactProp[]> {
+  const now = Date.now();
+  const NBA_MARKETS = ["player_points", "player_rebounds", "player_assists", "player_threes"];
+  const MLB_MARKETS = ["pitcher_strikeouts", "batter_hits", "batter_total_bases", "batter_home_runs"];
+  const NHL_MARKETS = ["player_shots_on_goal", "player_points"];
+
+  const sportMarkets: Record<string, string[]> = {
+    NBA: NBA_MARKETS,
+    MLB: MLB_MARKETS,
+    NHL: NHL_MARKETS,
+  };
+
+  // Pick top 1 upcoming game per sport (NBA, MLB, NHL) to limit credit usage
+  const targets: { sport: string; event: OddsEvent }[] = [];
+  for (const { sport, events } of allOdds) {
+    if (!sportMarkets[sport]) continue;
+    const upcoming = events
+      .filter((e) => new Date(e.commence_time).getTime() > now)
+      .slice(0, 1);
+    for (const ev of upcoming) targets.push({ sport, event: ev });
+  }
+
+  const results = await Promise.allSettled(
+    targets.map(async ({ sport, event }) => {
+      const sportKey = SPORT_KEYS[sport];
+      if (!sportKey) return [];
+      const markets = sportMarkets[sport] ?? [];
+      const propEvent = await fetchPlayerPropsForEvent(sportKey, event.id, markets);
+      if (!propEvent) return [];
+      return parsePropEvent(propEvent, sport, event);
+    })
+  );
+
+  const props: CompactProp[] = [];
+  for (const r of results) {
+    if (r.status === "fulfilled") props.push(...r.value);
+  }
+  return props;
+}
+
+function parsePropEvent(
+  propEvent: PropEvent,
+  sport: string,
+  event: OddsEvent,
+): CompactProp[] {
+  // Collect best over/under per player+market+line combo
+  type Entry = { overOdds: number; underOdds: number; book: string };
+  const byKey = new Map<string, Entry>();
+
+  for (const bk of propEvent.bookmakers) {
+    for (const market of bk.markets) {
+      const marketLabel = market.key.replace(/^(player_|batter_|pitcher_)/, "").replace(/_/g, " ");
+      // Group outcomes by player+line
+      const pairMap = new Map<string, { over?: number; under?: number }>();
+      for (const o of market.outcomes) {
+        if (!o.description || o.point == null) continue;
+        const key = `${o.description}|${market.key}|${o.point}`;
+        if (!pairMap.has(key)) pairMap.set(key, {});
+        if (o.name === "Over") pairMap.get(key)!.over = o.price;
+        else pairMap.get(key)!.under = o.price;
+      }
+      for (const [key, pair] of pairMap) {
+        if (pair.over == null || pair.under == null) continue;
+        const existing = byKey.get(key);
+        // Keep the book with the best over odds (most value for AI to pick from)
+        if (!existing || pair.over > existing.overOdds) {
+          byKey.set(key, { overOdds: pair.over, underOdds: pair.under, book: bk.title });
+        }
+      }
+    }
+  }
+
+  const props: CompactProp[] = [];
+  for (const [key, entry] of byKey) {
+    const [player, marketKey, lineStr] = key.split("|");
+    const line = parseFloat(lineStr);
+    if (isNaN(line)) continue;
+    const marketLabel = marketKey.replace(/^(player_|batter_|pitcher_)/, "").replace(/_/g, " ");
+    props.push({
+      game: `${event.away_team} @ ${event.home_team}`,
+      gameId: event.id,
+      sport,
+      homeTeam: event.home_team,
+      awayTeam: event.away_team,
+      startTime: event.commence_time,
+      player,
+      market: marketLabel,
+      line,
+      overOdds: entry.overOdds,
+      underOdds: entry.underOdds,
+      bestBook: entry.book,
+    });
+  }
+
+  // Return top 20 by absolute over odds closest to -110 (most liquid lines)
+  return props
+    .sort((a, b) => Math.abs(Math.abs(a.overOdds) - 110) - Math.abs(Math.abs(b.overOdds) - 110))
+    .slice(0, 20);
 }
 
 // ─── Cache ────────────────────────────────────────────────────────────────────
@@ -493,16 +612,24 @@ router.get("/ai-picks", async (req, res) => {
       getRealValueBets(0),
     ]);
 
+    // Fetch real player props (cached 15 min, ~3 API requests)
+    const realProps = await fetchRealPropsForAI(allOdds);
+
     const gameData = buildCompactGameData(allOdds);
     const valueBetData = valueBets.slice(0, 8).map((vb) => ({
       gameId: vb.gameId, sport: vb.sport, away: vb.awayTeam, home: vb.homeTeam,
       pick: vb.team, betType: vb.betType, book: vb.bookmaker, odds: vb.odds, edge: vb.edge,
     }));
 
+    const propsSection = realProps.length > 0
+      ? `\nReal player props available (use these for propParlayOfTheDay, mixParlayOfTheDay, lockOfTheDay):\n${JSON.stringify(realProps)}`
+      : "\nNo live player prop data available — use your knowledge of today's players for prop picks.";
+
     const userPrompt = `Date: ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
 Games: ${JSON.stringify(gameData)}
-Value bets detected by model: ${JSON.stringify(valueBetData)}
-Generate all six picks: lockOfTheDay, safeParlay, lottoParlay, gameParlayOfTheDay, propParlayOfTheDay, mixParlayOfTheDay.`;
+Value bets detected by model: ${JSON.stringify(valueBetData)}${propsSection}
+Generate all six picks: lockOfTheDay, safeParlay, lottoParlay, gameParlayOfTheDay, propParlayOfTheDay, mixParlayOfTheDay.
+IMPORTANT: propParlayOfTheDay legs MUST use real player names and player_prop betType from the props data above. Do NOT use team names as the "player" field.`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -527,11 +654,55 @@ Generate all six picks: lockOfTheDay, safeParlay, lottoParlay, gameParlayOfTheDa
       summary: string;
     };
 
-    // Recalculate combined odds server-side for accuracy
+    // Build gameId → event lookup for leg normalization
+    const gameMap = new Map<string, OddsEvent & { sport: string }>();
+    for (const { sport, events } of allOdds) {
+      for (const ev of events) gameMap.set(ev.id, { ...ev, sport });
+    }
+
+    // Normalize legs: fix `bet` → `pick`, fill missing fields from game map
+    function normalizeLegs(legs: any[]): AIPickLeg[] {
+      return (legs ?? [])
+        .map((leg: any): AIPickLeg | null => {
+          const pick = leg.pick ?? leg.bet ?? null;
+          if (!pick) return null;
+          const game = leg.gameId ? gameMap.get(leg.gameId) : null;
+          const betType = leg.betType ?? inferBetType(pick);
+          return {
+            gameId: leg.gameId ?? "",
+            sport: leg.sport ?? game?.sport ?? "",
+            homeTeam: leg.homeTeam ?? game?.home_team ?? "",
+            awayTeam: leg.awayTeam ?? game?.away_team ?? "",
+            startTime: leg.startTime ?? game?.commence_time ?? new Date().toISOString(),
+            pick,
+            betType,
+            bookmaker: leg.bookmaker ?? "DraftKings",
+            odds: typeof leg.odds === "number" ? leg.odds : -110,
+            player: leg.player ?? null,
+          };
+        })
+        .filter((l): l is AIPickLeg => l !== null);
+    }
+
+    function inferBetType(pick: string): string {
+      const p = pick.toLowerCase();
+      if (p.includes("over") || p.includes("under")) {
+        if (p.match(/\b(points|rebounds|assists|strikeouts|hits|goals|shots|yards|receptions|tds|bases)\b/))
+          return "player_prop";
+        return p.includes("over") ? "over" : "under";
+      }
+      if (p.includes(" ml") || p.includes(" moneyline")) return "moneyline";
+      if (p.match(/[+-]\d+\.?\d*\s*$/)) return "spread";
+      return "moneyline";
+    }
+
+    // Apply normalization to all parlays
     const parlayKeys = ["safeParlay", "lottoParlay", "gameParlayOfTheDay", "propParlayOfTheDay", "mixParlayOfTheDay"] as const;
     for (const key of parlayKeys) {
       const p = parsed[key];
-      if (p?.legs?.length >= 2) p.combinedOdds = calcCombinedOdds(p.legs);
+      if (!p) continue;
+      p.legs = normalizeLegs(p.legs);
+      if (p.legs.length >= 2) p.combinedOdds = calcCombinedOdds(p.legs);
     }
 
     // Ensure IDs
