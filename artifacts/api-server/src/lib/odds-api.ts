@@ -100,7 +100,7 @@ function setCache<T>(key: string, data: T): void {
 }
 
 export function getApiKey(): string | undefined {
-  return process.env.ODDS_API_KEY?.trim() || undefined;
+  return (process.env.THE_ODDS_KEY || process.env.ODDS_API_KEY)?.trim() || undefined;
 }
 
 export function hasApiKey(): boolean {

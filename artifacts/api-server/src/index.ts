@@ -23,8 +23,7 @@ app.listen(port, (err) => {
     process.exit(1);
   }
 
-  const rawKey = process.env.ODDS_API_KEY ?? "";
-  logger.info({ port, oddsKeyLength: rawKey.length, oddsKeyPrefix: rawKey.slice(0, 6) }, "Server listening");
+  logger.info({ port }, "Server listening");
   initWebPush();
   startSnapshotJob();
 });
