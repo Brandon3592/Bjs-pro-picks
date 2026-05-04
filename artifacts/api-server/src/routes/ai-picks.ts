@@ -738,38 +738,48 @@ CRITICAL RULES:
       propsByPlayer.get(key)!.push(prop);
     }
 
-    // Given a player_prop leg, find the real bookmaker odds from filteredProps.
-    // Extracts the line from the pick text and matches against the prop catalog.
-    function lookupPropOdds(playerName: string, pick: string): { odds: number; bookmaker: string } | null {
+    // Resolve a player_prop leg fully from real props data.
+    // Returns real odds + the authoritative game info from the Odds API so we
+    // never trust the AI's hallucinated homeTeam/awayTeam/gameId for props.
+    function resolvePlayerProp(playerName: string, pick: string): {
+      odds: number; bookmaker: string;
+      homeTeam: string; awayTeam: string; gameId: string; startTime: string;
+    } | null {
+      // Exact player name lookup first; fall back to pick-text scan
       const playerKey = playerName.toLowerCase();
-      // Also try scanning whitelist for a name that appears in the pick text
-      let props = propsByPlayer.get(playerKey);
-      if (!props || props.length === 0) {
+      let matchedProps = propsByPlayer.get(playerKey);
+      if (!matchedProps || matchedProps.length === 0) {
         const pickLower = pick.toLowerCase();
         for (const [name, list] of propsByPlayer) {
-          if (pickLower.includes(name)) { props = list; break; }
+          if (pickLower.includes(name)) { matchedProps = list; break; }
         }
       }
-      if (!props || props.length === 0) return null;
+      if (!matchedProps || matchedProps.length === 0) return null;
 
       // Determine direction (over/under) and line from pick text
       const direction = /\bunder\b/i.test(pick) ? "under" : "over";
       const lineMatch = pick.match(/(\d+\.?\d*)/);
       const line = lineMatch ? parseFloat(lineMatch[1]) : null;
 
+      let best: typeof matchedProps[0];
       if (line !== null) {
-        // Try to find exact line match first, then closest
-        const exact = props.find((p) => p.line === line);
-        const best = exact ?? props.reduce((a, b) =>
+        const exact = matchedProps.find((p) => p.line === line);
+        best = exact ?? matchedProps.reduce((a, b) =>
           Math.abs(a.line - line) <= Math.abs(b.line - line) ? a : b
         );
-        const odds = direction === "over" ? best.overOdds : best.underOdds;
-        return { odds, bookmaker: best.bestBook };
+      } else {
+        best = matchedProps[0];
       }
 
-      // No line found — just return the most liquid prop for that player
-      const odds = direction === "over" ? props[0].overOdds : props[0].underOdds;
-      return { odds, bookmaker: props[0].bestBook };
+      return {
+        odds: direction === "over" ? best.overOdds : best.underOdds,
+        bookmaker: best.bestBook,
+        // ↓ authoritative game data from Odds API — never trust AI for these
+        homeTeam: best.homeTeam,
+        awayTeam: best.awayTeam,
+        gameId: best.gameId,
+        startTime: best.startTime,
+      };
     }
 
     // Find game by scanning pick text for any team name
@@ -808,11 +818,29 @@ CRITICAL RULES:
             }
           }
 
-          // For player_prop legs, always use real bookmaker odds from props catalog
+          // For player_prop legs: resolve ALL fields (teams, game, odds) from
+          // the real Odds API data — never trust the AI's game assignment.
           const playerName = leg.player ?? "";
-          const realProp = betType === "player_prop"
-            ? lookupPropOdds(playerName, pick)
-            : null;
+          if (betType === "player_prop") {
+            const resolved = resolvePlayerProp(playerName, pick);
+            if (!resolved) {
+              // Player not found in real props — strip this leg
+              req.log.warn({ player: playerName, pick }, "Stripped prop leg: no real market found");
+              return null;
+            }
+            return {
+              gameId: resolved.gameId,
+              sport: leg.sport || game?.sport || "",
+              homeTeam: resolved.homeTeam,
+              awayTeam: resolved.awayTeam,
+              startTime: resolved.startTime,
+              pick,
+              betType,
+              bookmaker: resolved.bookmaker,
+              odds: resolved.odds,
+              player: playerName || null,
+            };
+          }
 
           return {
             gameId: game?.id || leg.gameId || "",
@@ -822,8 +850,8 @@ CRITICAL RULES:
             startTime: leg.startTime || game?.commence_time || new Date().toISOString(),
             pick,
             betType,
-            bookmaker: realProp?.bookmaker ?? leg.bookmaker ?? "DraftKings",
-            odds: realProp?.odds ?? (typeof leg.odds === "number" ? leg.odds : -110),
+            bookmaker: leg.bookmaker ?? "DraftKings",
+            odds: typeof leg.odds === "number" ? leg.odds : -110,
             player: playerName || null,
           };
         })
