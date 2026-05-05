@@ -1,9 +1,7 @@
 import { Router } from "express";
 import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, hasApiKey } from "../lib/odds-api";
-import { getRealValueBets } from "./predictions";
 import { americanToDecimal, decimalToAmerican } from "../lib/model";
 import type { OddsEvent, PropEvent } from "../lib/odds-api";
-import type { ValueBet } from "../lib/model";
 
 const router = Router();
 
@@ -818,20 +816,13 @@ router.get("/ai-picks", async (req, res) => {
   }
 
   try {
-    const [allOddsRaw, valueBetsRaw] = await Promise.all([
-      fetchAllSportOdds(),
-      getRealValueBets(0),
-    ]);
+    const allOddsRaw = await fetchAllSportOdds();
 
     // cacheKey is now a label key ("NBA","MLB"…) matching allOddsRaw[i].sport
     const sportApiKey = cacheKey !== "all" ? SPORT_LABEL[cacheKey] : null;
     const allOdds = cacheKey !== "all"
       ? allOddsRaw.filter((s) => s.sport === cacheKey)
       : allOddsRaw;
-
-    const valueBets = sportApiKey
-      ? valueBetsRaw.filter((vb) => vb.sport.toUpperCase() === cacheKey || SPORT_LABEL[vb.sport.toUpperCase()] === sportApiKey)
-      : valueBetsRaw;
 
     // Fetch real player props — always use the full slate (all sports) so sport-specific
     // parlay builders (HR, goal scorer, 3PT, TD, ladders) have data regardless of the
@@ -843,22 +834,6 @@ router.get("/ai-picks", async (req, res) => {
       : realProps;
 
     // ─── Deterministic pick builder — no AI, 100% real data ──────────────────
-
-    // Convert a value bet into a pick leg
-    function vbToLeg(vb: ValueBet): AIPickLeg {
-      return {
-        gameId: vb.gameId,
-        sport: vb.sport,
-        homeTeam: vb.homeTeam,
-        awayTeam: vb.awayTeam,
-        startTime: vb.startTime,
-        pick: vb.team,
-        betType: vb.betType,
-        bookmaker: vb.bookmaker,
-        odds: vb.odds,
-        player: null,
-      };
-    }
 
     // Convert a real prop into a pick leg (pick the better-priced direction)
     // propToFavoriteLeg: picks the HEAVY FAVORITE side (more negative odds)
@@ -923,11 +898,7 @@ router.get("/ai-picks", async (req, res) => {
       return result;
     }
 
-    // Sort value bets by edge descending; only include games not yet started
     const nowMs = Date.now();
-    const gameBets = valueBets
-      .filter((vb) => new Date(vb.startTime).getTime() > nowMs)
-      .sort((a, b) => b.edge - a.edge);
 
     // Convert any OddsEvent into a game leg using the best available line across bookmakers.
     // Prefers h2h (moneyline) — picks the better-priced team. Falls back to totals Over.
@@ -936,7 +907,6 @@ router.get("/ai-picks", async (req, res) => {
       for (const book of event.bookmakers) {
         const h2h = book.markets.find((m) => m.key === "h2h");
         if (!h2h || h2h.outcomes.length < 2) continue;
-        // Pick the team with better (higher) odds — keeps lotto picks interesting
         const best = h2h.outcomes.reduce((a, b) => (b.price > a.price ? b : a));
         return {
           gameId: event.id,
@@ -973,22 +943,16 @@ router.get("/ai-picks", async (req, res) => {
       return null;
     }
 
-    // Build full upcoming game pool from ALL events across all active sports.
-    // Edge bets come first (highest quality), then all other upcoming games.
-    const edgeGameIds = new Set(gameBets.map((vb) => vb.gameId));
-    const allUpcomingLegs: AIPickLeg[] = [];
+    // Build game leg pool from ALL upcoming games across every active sport — no edge filter.
+    const gameLegPool: AIPickLeg[] = [];
     for (const { sport: sportLabel, events } of allOdds) {
       for (const ev of events) {
-        if (edgeGameIds.has(ev.id)) continue; // already included via gameBets
         const t = new Date(ev.commence_time).getTime();
         if (t <= nowMs) continue; // skip already-started games
         const leg = eventToLeg(ev, sportLabel);
-        if (leg) allUpcomingLegs.push(leg);
+        if (leg) gameLegPool.push(leg);
       }
     }
-
-    // gameLegPool: edge bets first, then all remaining upcoming games
-    const gameLegPool = [...gameBets.map(vbToLeg), ...allUpcomingLegs];
 
     // Build one prop leg per player — deduplicate by player name
     const seenPropPlayers = new Set<string>();
@@ -1009,12 +973,20 @@ router.get("/ai-picks", async (req, res) => {
       return res.json(fallback);
     }
 
-    // ── LOCK OF THE DAY: highest-edge bet ─────────────────────────────────────
-    const lockVb = gameBets[0] ?? null;
-    const lockLeg: AIPickLeg = lockVb ? vbToLeg(lockVb) : propPool[0];
-    const lockEdge = parseFloat((lockVb?.edge ?? 2.0).toFixed(1));
-    const lockModelPct = lockVb ? Math.round(lockVb.modelProb * 100) : 55;
-    const lockImpliedPct = lockVb ? Math.round(lockVb.impliedProb * 100) : 48;
+    // ── LOCK OF THE DAY: most-liquid game (most bookmakers = most market consensus) ──
+    // Pick the upcoming game with the most bookmakers offering h2h odds — widest coverage = best lock.
+    let lockLeg: AIPickLeg = gameLegPool[0] ?? propPool[0];
+    let maxBooks = 0;
+    for (const { sport: sportLabel, events } of allOdds) {
+      for (const ev of events) {
+        if (new Date(ev.commence_time).getTime() <= nowMs) continue;
+        const h2hBooks = ev.bookmakers.filter((b) => b.markets.some((m) => m.key === "h2h")).length;
+        if (h2hBooks > maxBooks) {
+          const leg = eventToLeg(ev, sportLabel);
+          if (leg) { lockLeg = leg; maxBooks = h2hBooks; }
+        }
+      }
+    }
 
     const lockOfTheDay: AIPick = {
       id: "lock-1",
@@ -1028,12 +1000,10 @@ router.get("/ai-picks", async (req, res) => {
       player: lockLeg.player ?? null,
       bookmaker: lockLeg.bookmaker,
       odds: lockLeg.odds,
-      confidence: Math.min(90, Math.round(50 + lockEdge * 4)),
-      edge: lockEdge,
-      reasoning: lockVb
-        ? `Our de-vig consensus model gives this a ${lockModelPct}% true probability vs the market's implied ${lockImpliedPct}% — a ${lockEdge}% edge. Best line at ${lockVb.bookmaker}.`
-        : `Best available player prop line identified across bookmakers at ${lockLeg.bookmaker}.`,
-      tags: [lockLeg.betType, "value"],
+      confidence: 72,
+      edge: 0,
+      reasoning: `Best line available across ${maxBooks} bookmakers today. Widest market coverage means the sharpest consensus on this game.`,
+      tags: [lockLeg.betType, "top pick"],
     };
 
     // Normalize sport labels (API keys like "basketball_nba" → display label "NBA")
@@ -1059,7 +1029,7 @@ router.get("/ai-picks", async (req, res) => {
       propsBySport.get(s)!.push(leg);
     }
 
-    // Pick the sport with the most value-bet legs; fall back to full pool if one sport dominates
+    // Pick the sport with the most available game legs
     const sortedSports = [...legsBySport.entries()].sort((a, b) => b[1].length - a[1].length);
     // For each parlay type we find the richest applicable sport's pool
     function topSportPool(minLegs: number): { sport: string; legs: AIPickLeg[] } | null {
@@ -1072,20 +1042,14 @@ router.get("/ai-picks", async (req, res) => {
     // ── SAFE PARLAY: 2-3 highest-edge game bets, same sport ──────────────────
     const safePool = topSportPool(2);
     const safeLegs = safePool ? pickUnique(safePool.legs, 3) : [];
-    const avgSafeEdge = safeLegs.length > 0
-      ? safeLegs.reduce((s, l) => {
-          const vb = gameBets.find((v) => v.gameId === l.gameId && v.team === l.pick);
-          return s + (vb?.edge ?? 2);
-        }, 0) / safeLegs.length
-      : 2;
     const safeSport = safePool?.sport ?? "";
     const safeParlay: AIParlay | null = safeLegs.length >= 2 ? {
       id: "safe-1",
       name: `${safeSport} ${safeLegs.length}-Leg Value Parlay`,
       legs: safeLegs,
       combinedOdds: calcCombinedOdds(safeLegs),
-      confidence: Math.min(72, Math.round(48 + avgSafeEdge * 2)),
-      reasoning: `${safeLegs.length} ${safeSport} game bets each carrying a positive edge per our model. Combined into a conservative parlay targeting modest upside.`,
+      confidence: 62,
+      reasoning: `${safeLegs.length} ${safeSport} game picks for today's slate — one per game, combined into a conservative parlay targeting solid upside.`,
     } : null;
 
     // ── GAME PARLAY: 3-4 game bets, same sport ───────────────────────────────
@@ -1098,7 +1062,7 @@ router.get("/ai-picks", async (req, res) => {
       legs: gameLegs,
       combinedOdds: calcCombinedOdds(gameLegs),
       confidence: Math.min(65, Math.round(40 + gameLegs.length * 3)),
-      reasoning: `Pure ${gameSport} game-line parlay — moneylines, spreads, and totals only. Each leg selected for the highest edge versus the de-vigged consensus probability.`,
+      reasoning: `Pure ${gameSport} game-line parlay — moneylines, spreads, and totals only. Best available lines from today's full ${gameSport} slate.`,
     } : null;
 
     // ── LOTTO PARLAY: 5 high-odds legs, same sport ────────────────────────────
@@ -1382,12 +1346,11 @@ router.get("/ai-picks", async (req, res) => {
     const allLadder = topSportKeys.length > 0 ? buildDailyLadder(topSportKeys, "All Sports") : null;
 
     const sportsInPlay = [...new Set([
-      ...gameBets.slice(0, 6).map((v) => normSport(v.sport)),
+      ...gameLegPool.slice(0, 6).map((l) => normSport(l.sport)),
       ...propPool.slice(0, 3).map((p) => normSport(p.sport)),
     ])];
-    const topBet = gameBets[0];
-    const summary = topBet
-      ? `Model detected ${gameBets.length} value bet${gameBets.length !== 1 ? "s" : ""} across ${sportsInPlay.join("/")} today. Top edge: ${topBet.team} at ${topBet.odds > 0 ? "+" : ""}${topBet.odds} (${topBet.edge.toFixed(1)}% edge via ${topBet.bookmaker}).`
+    const summary = gameLegPool.length > 0
+      ? `${gameLegPool.length} game${gameLegPool.length !== 1 ? "s" : ""} on the board across ${sportsInPlay.join("/")} today${filteredProps.length > 0 ? ` — ${filteredProps.length} prop markets available` : ""}.`
       : `Picks built from real bookmaker odds${filteredProps.length > 0 ? ` — ${filteredProps.length} active prop markets available` : ""}.`;
 
     const result: AIPicksResponse = {
