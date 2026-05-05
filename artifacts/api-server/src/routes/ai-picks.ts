@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, hasApiKey } from "../lib/odds-api";
+import { fetchMlbLineupNames } from "../lib/mlb-lineups";
 import { americanToDecimal, decimalToAmerican } from "../lib/model";
 import type { OddsEvent, PropEvent } from "../lib/odds-api";
 
@@ -1301,6 +1302,11 @@ router.get("/ai-picks", async (req, res) => {
 
     // MLB: Home Run parlay — anytime HR props (lowest available line per player, one per game)
     // Falls back to mock data when real HR props haven't been posted yet.
+    // Fetch confirmed MLB lineups — filters out scratched/resting players.
+    // Returns null when lineups haven't been posted yet (early in the day); in that case
+    // we skip the filter so the parlay still shows up rather than going empty.
+    const mlbLineups = await fetchMlbLineupNames();
+
     function buildHrParlayLegs(n: number): AIPickLeg[] {
       const hrProps = realProps.filter(
         (p) => p.sport === "baseball_mlb" && p.market === "home runs",
@@ -1314,6 +1320,8 @@ router.get("/ai-picks", async (req, res) => {
       // Now pick one player per game, sorted by best odds (closest to 0, e.g. +250 before +1000)
       const seenGames = new Set<string>();
       return [...bestPerPlayer.values()]
+        // If lineups are posted, only include confirmed starters. If not posted yet, include all.
+        .filter((p) => !mlbLineups || mlbLineups.has(p.player))
         .sort((a, b) => a.overOdds - b.overOdds) // ascending: lower positive odds = more likely
         .filter((p) => {
           if (seenGames.has(p.gameId)) return false;
