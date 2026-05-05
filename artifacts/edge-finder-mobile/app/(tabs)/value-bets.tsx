@@ -874,8 +874,8 @@ export default function AiPicksScreen() {
               <View style={styles.section}>
                 <SectionHeader
                   icon="🏒"
-                  label="NHL Goal Scorer Parlay"
-                  sublabel="Anytime goal scorer combo"
+                  label="NHL Points Parlay"
+                  sublabel="Anytime goal or assist combo"
                   accent="#8b5cf6"
                 />
                 {(goalScorerParlay?.legs?.length ?? 0) > 0 ? (

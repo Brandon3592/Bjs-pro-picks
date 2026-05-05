@@ -1307,23 +1307,53 @@ router.get("/ai-picks", async (req, res) => {
 
 
     // ── SPORT-SPECIFIC PROP PARLAYS ───────────────────────────────────────────
-    // Filter realProps (all sports) by sport API key + market label
+    // Builds legs using the lowest available line per player (e.g. Over 0.5 goals, not Over 1.5),
+    // one player per game, sorted by most-likely odds ascending.
+    // forceOver=true always picks the Over side (used for scorer/points parlays).
     function buildSpecificPropLegs(
       sportApiKey: string,
       marketLabel: string,
       n: number,
+      forceOver = false,
     ): AIPickLeg[] {
-      const seen = new Set<string>();
-      return realProps
-        .filter((p) => p.sport === sportApiKey && p.market === marketLabel)
-        .sort((a, b) => Math.max(b.overOdds, b.underOdds) - Math.max(a.overOdds, a.underOdds))
-        .map(propToLeg)
-        .filter((l) => {
-          if (!l.player || seen.has(l.player)) return false;
-          seen.add(l.player!);
+      const candidates = realProps.filter(
+        (p) => p.sport === sportApiKey && p.market === marketLabel,
+      );
+      // Keep only the lowest line per player
+      const bestPerPlayer = new Map<string, CompactProp>();
+      for (const p of candidates) {
+        const existing = bestPerPlayer.get(p.player);
+        if (!existing || p.line < existing.line) bestPerPlayer.set(p.player, p);
+      }
+      // One player per game, sorted by ascending Over odds (most likely first)
+      const seenGames = new Set<string>();
+      const toLeg = forceOver
+        ? (prop: CompactProp): AIPickLeg => {
+            const rawMarket = prop.market.replace(/^(player_|batter_|pitcher_)/, "").replace(/_/g, " ");
+            const marketLabel2 = rawMarket.replace(/\b\w/g, (c) => c.toUpperCase());
+            return {
+              gameId: prop.gameId,
+              sport: SPORT_FROM_KEY[prop.sport] ?? prop.sport,
+              homeTeam: prop.homeTeam,
+              awayTeam: prop.awayTeam,
+              startTime: prop.startTime,
+              pick: `${prop.player} Over ${prop.line} ${marketLabel2}`,
+              betType: "player_prop",
+              bookmaker: prop.bestBook,
+              odds: prop.overOdds,
+              player: prop.player,
+            };
+          }
+        : propToLeg;
+      return [...bestPerPlayer.values()]
+        .sort((a, b) => a.overOdds - b.overOdds)
+        .filter((p) => {
+          if (seenGames.has(p.gameId)) return false;
+          seenGames.add(p.gameId);
           return true;
         })
-        .slice(0, n);
+        .slice(0, n)
+        .map(toLeg);
     }
 
     // MLB: Home Run parlay — anytime HR props (lowest available line per player, one per game)
@@ -1371,19 +1401,20 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `${hrLegs.length} anytime home run props from today's MLB slate. Each player faces a starter with an elevated hard-contact and HR-allowed rate. High-variance parlay — best with a small stake for a big payout.`,
     } : null;
 
-    // NHL: Goal scorer parlay ("player_goals" → "goals")
-    const goalScorerLegs = buildSpecificPropLegs("icehockey_nhl", "goals", 4);
+    // NHL: Points parlay — uses "player_points" (goal OR assist, Over 0.5) since the
+    // "player_goals" market only posts alternate lines (1.5+) with no anytime-goal (0.5) line.
+    const goalScorerLegs = buildSpecificPropLegs("icehockey_nhl", "points", 4, true);
     const goalScorerParlay: AIParlay | null = goalScorerLegs.length >= 2 ? {
       id: "goal-scorer-1",
-      name: `NHL Goal Scorer ${goalScorerLegs.length}-Legger`,
+      name: `NHL Points ${goalScorerLegs.length}-Legger`,
       legs: goalScorerLegs,
       combinedOdds: calcCombinedOdds(goalScorerLegs),
       confidence: Math.min(28, Math.round(16 + goalScorerLegs.length * 2)),
-      reasoning: `${goalScorerLegs.length} anytime goal scorer props from tonight's NHL slate. Each player is averaging over 0.4 goals/game over the last 10 and faces a below-average defensive unit.`,
+      reasoning: `${goalScorerLegs.length} anytime points props (goal or assist) from tonight's NHL slate.`,
     } : null;
 
     // NBA: 3-pointer parlay ("player_threes" → "threes")
-    const threePtLegs = buildSpecificPropLegs("basketball_nba", "threes", 4);
+    const threePtLegs = buildSpecificPropLegs("basketball_nba", "threes", 4, true);
     const threePtParlay: AIParlay | null = threePtLegs.length >= 2 ? {
       id: "3pt-1",
       name: `NBA 3PT ${threePtLegs.length}-Legger`,
@@ -1394,7 +1425,7 @@ router.get("/ai-picks", async (req, res) => {
     } : null;
 
     // NFL: TD parlay ("player_anytime_td" → "anytime td")
-    const tdLegs = buildSpecificPropLegs("americanfootball_nfl", "anytime td", 4);
+    const tdLegs = buildSpecificPropLegs("americanfootball_nfl", "anytime td", 4, true);
     const tdParlay: AIParlay | null = tdLegs.length >= 2 ? {
       id: "td-1",
       name: `NFL TD ${tdLegs.length}-Legger`,
