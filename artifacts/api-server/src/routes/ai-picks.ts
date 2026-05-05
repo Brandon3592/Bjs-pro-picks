@@ -867,10 +867,10 @@ router.get("/ai-picks", async (req, res) => {
       return result;
     }
 
-    // Sort value bets by edge descending; drop games already started > 4 h ago
+    // Sort value bets by edge descending; only include games not yet started
     const nowMs = Date.now();
     const gameBets = valueBets
-      .filter((vb) => new Date(vb.startTime).getTime() > nowMs - 4 * 3600_000)
+      .filter((vb) => new Date(vb.startTime).getTime() > nowMs)
       .sort((a, b) => b.edge - a.edge);
 
     // Build one prop leg per player — deduplicate by player name

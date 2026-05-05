@@ -102,9 +102,8 @@ async function getRealValueBets(minEdge = 2.5): Promise<ValueBet[]> {
     for (const ev of events) {
       const now = Date.now();
       const start = new Date(ev.commence_time).getTime();
-      if (start < now - 5 * 60 * 60 * 1000) continue; // skip old games
-      const status: "live" | "upcoming" = start <= now ? "live" : "upcoming";
-      const bets = findValueBets(ev, sport, status, minEdge);
+      if (start <= now) continue; // skip games already started or in-progress
+      const bets = findValueBets(ev, sport, "upcoming", minEdge);
       allBets.push(...bets);
     }
   }

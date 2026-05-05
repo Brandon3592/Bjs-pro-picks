@@ -24,7 +24,7 @@ router.get("/props/games", async (req, res) => {
     const games = events
       .filter((ev) => {
         const s = gameStatus(ev);
-        return s === "upcoming" || s === "live";
+        return s === "upcoming";
       })
       .slice(0, 10) // cap at 10 games per sport
       .map((ev) => ({
