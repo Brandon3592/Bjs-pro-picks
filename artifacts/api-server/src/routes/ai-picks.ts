@@ -96,7 +96,8 @@ interface CompactProp {
   player: string;
   market: string;
   line: number;
-  overOdds: number;
+  overOdds: number;    // best (highest) over odds across books — used for lotto / value
+  minOverOdds: number; // tightest (most negative) over odds — used to rank by true probability
   underOdds: number;
   bestBook: string;
 }
@@ -150,8 +151,10 @@ function parsePropEvent(
   sport: string,
   event: OddsEvent,
 ): CompactProp[] {
-  // Collect best over/under per player+market+line combo
-  type Entry = { overOdds: number; underOdds: number; book: string };
+  // Collect best over/under per player+market+line combo.
+  // Track both the BEST (highest) over odds (for lotto/value) and
+  // the MIN (most negative) over odds (for probability-based best-pick sorting).
+  type Entry = { overOdds: number; minOverOdds: number; underOdds: number; book: string };
   const byKey = new Map<string, Entry>();
 
   for (const bk of propEvent.bookmakers) {
@@ -172,9 +175,21 @@ function parsePropEvent(
         if (pair.over == null) continue;
         if (pair.under == null) pair.under = 9999;
         const existing = byKey.get(key);
-        // Keep the book with the best over odds (most value for AI to pick from)
-        if (!existing || pair.over > existing.overOdds) {
-          byKey.set(key, { overOdds: pair.over, underOdds: pair.under, book: bk.title });
+        if (!existing) {
+          byKey.set(key, {
+            overOdds: pair.over,
+            minOverOdds: pair.over,
+            underOdds: pair.under,
+            book: bk.title,
+          });
+        } else {
+          // Best over odds: highest American odds (most value / underdog-friendly)
+          if (pair.over > existing.overOdds) {
+            existing.overOdds = pair.over;
+            existing.book = bk.title; // best-value book
+          }
+          // Min over odds: most negative (tightest market = true probability consensus)
+          if (pair.over < existing.minOverOdds) existing.minOverOdds = pair.over;
         }
       }
     }
@@ -197,6 +212,7 @@ function parsePropEvent(
       market: marketLabel,
       line,
       overOdds: entry.overOdds,
+      minOverOdds: entry.minOverOdds,
       underOdds: entry.underOdds,
       bestBook: entry.book,
     });
@@ -1043,8 +1059,8 @@ router.get("/ai-picks", async (req, res) => {
     // Picks the FAVORITE side of each prop (most negative odds = more likely to hit).
     const seenSmartPropPlayers = new Set<string>();
     const propPool: AIPickLeg[] = filteredProps
-      .filter((p) => Math.min(p.overOdds, p.underOdds) <= -130) // must have a clear favorite side
-      .sort((a, b) => Math.min(a.overOdds, a.underOdds) - Math.min(b.overOdds, b.underOdds)) // most negative first
+      .filter((p) => Math.min(p.minOverOdds, p.underOdds) <= -130) // must have a clear favorite side
+      .sort((a, b) => Math.min(a.minOverOdds, a.underOdds) - Math.min(b.minOverOdds, b.underOdds)) // most negative first
       .map(propToFavoriteLeg)
       .filter((l) => {
         if (!l.player || seenSmartPropPlayers.has(l.player)) return false;
@@ -1189,8 +1205,17 @@ router.get("/ai-picks", async (req, res) => {
       })[0] ?? null;
     const lottoSportLabel = lottoSportEntry?.[0] ?? "";
     const lottoSportProps = lottoPropsBySport.get(lottoSportLabel) ?? [];
-    const lottoGamePool = [...(lottoSportEntry?.[1] ?? [])].sort((a, b) => b.odds - a.odds);
-    const lottoLegs = pickUnique([...lottoGamePool, ...lottoSportProps], 5);
+    // Deduplicate lotto game pool by team name so doubleheaders don't surface the same team twice
+    const seenLottoTeams = new Set<string>();
+    const lottoGamePoolDeduped = [...(lottoSportEntry?.[1] ?? [])]
+      .sort((a, b) => b.odds - a.odds)
+      .filter((leg) => {
+        const teamKey = leg.player ? null : leg.pick; // game legs: pick = team name
+        if (teamKey && seenLottoTeams.has(teamKey)) return false;
+        if (teamKey) seenLottoTeams.add(teamKey);
+        return true;
+      });
+    const lottoLegs = pickUnique([...lottoGamePoolDeduped, ...lottoSportProps], 5);
     const lottoParlay: AIParlay | null = lottoLegs.length >= 3 ? {
       id: "lotto-1",
       name: `${lottoSportLabel} ${lottoLegs.length}-Leg Lotto`,
@@ -1288,7 +1313,7 @@ router.get("/ai-picks", async (req, res) => {
     } : null;
 
     const mixCrossMap = new Map<string, AIPickLeg[]>(
-      [...legsBySport.keys()].map((s) => {
+      [...legsBySport.keys()].map((s): [string, AIPickLeg[]] => {
         const games = (legsBySport.get(s) ?? []).slice(0, 1);
         const props = (propsBySport.get(s) ?? []).slice(0, 1);
         return [s, [...games, ...props]];
@@ -1346,7 +1371,7 @@ router.get("/ai-picks", async (req, res) => {
           }
         : propToLeg;
       return [...bestPerPlayer.values()]
-        .sort((a, b) => a.overOdds - b.overOdds)
+        .sort((a, b) => a.minOverOdds - b.minOverOdds) // most negative = most likely to hit
         .filter((p) => {
           if (seenGames.has(p.gameId)) return false;
           seenGames.add(p.gameId);
@@ -1368,10 +1393,10 @@ router.get("/ai-picks", async (req, res) => {
         const existing = bestPerPlayer.get(p.player);
         if (!existing || p.line < existing.line) bestPerPlayer.set(p.player, p);
       }
-      // Now pick one player per game, sorted by best odds (closest to 0, e.g. +250 before +1000)
+      // Now pick one player per game, sorted by consensus most-likely (tightest market odds first)
       const seenGames = new Set<string>();
       return [...bestPerPlayer.values()]
-        .sort((a, b) => a.overOdds - b.overOdds) // ascending: lower positive odds = more likely
+        .sort((a, b) => a.minOverOdds - b.minOverOdds) // ascending: most negative = most likely
         .filter((p) => {
           if (seenGames.has(p.gameId)) return false;
           seenGames.add(p.gameId);
