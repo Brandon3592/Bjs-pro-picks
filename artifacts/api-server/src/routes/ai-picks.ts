@@ -838,7 +838,8 @@ router.get("/ai-picks", async (req, res) => {
       const marketLabel = rawMarket.replace(/\b\w/g, (c) => c.toUpperCase());
       return {
         gameId: prop.gameId,
-        sport: prop.sport,
+        // Normalize API key → display label so prop and game legs share the same sport value
+        sport: SPORT_FROM_KEY[prop.sport] ?? prop.sport,
         homeTeam: prop.homeTeam,
         awayTeam: prop.awayTeam,
         startTime: prop.startTime,
@@ -921,75 +922,7 @@ router.get("/ai-picks", async (req, res) => {
       tags: [lockLeg.betType, "value"],
     };
 
-    // ── SAFE PARLAY: 2-3 highest-edge game bets, different games ─────────────
-    // Include the lock game in the pool — it's valid to parlay the lock too
-    const safeLegs = pickUnique(gameLegPool, 3);
-    const avgSafeEdge = safeLegs.length > 0
-      ? safeLegs.reduce((s, l) => {
-          const vb = gameBets.find((v) => v.gameId === l.gameId && v.team === l.pick);
-          return s + (vb?.edge ?? 2);
-        }, 0) / safeLegs.length
-      : 2;
-    const safeParlay: AIParlay | null = safeLegs.length >= 2 ? {
-      id: "safe-1",
-      name: `${safeLegs.length}-Leg Value Parlay`,
-      legs: safeLegs,
-      combinedOdds: calcCombinedOdds(safeLegs),
-      confidence: Math.min(72, Math.round(48 + avgSafeEdge * 2)),
-      reasoning: `${safeLegs.length} independent game bets each carrying a positive edge per our model. Combined into a conservative parlay targeting modest upside.`,
-    } : null;
-
-    // ── GAME PARLAY: 3-4 game bets (no props) ────────────────────────────────
-    const gameLegs = pickUnique(gameLegPool, 4);
-    const gameParlayOfTheDay: AIParlay | null = gameLegs.length >= 2 ? {
-      id: "game-1",
-      name: `Game Picks ${gameLegs.length}-Legger`,
-      legs: gameLegs,
-      combinedOdds: calcCombinedOdds(gameLegs),
-      confidence: Math.min(65, Math.round(40 + gameLegs.length * 3)),
-      reasoning: `Pure game-line parlay — moneylines, spreads, and totals only. Each leg selected for the highest edge versus the de-vigged consensus probability across bookmakers.`,
-    } : null;
-
-    // ── LOTTO PARLAY: 5 legs biased toward underdogs / higher odds ───────────
-    const lottoGamePool = [...gameBets]
-      .sort((a, b) => b.odds - a.odds)
-      .map(vbToLeg);
-    const lottoLegs = pickUnique([...lottoGamePool, ...propPool], 5);
-    const lottoParlay: AIParlay | null = lottoLegs.length >= 3 ? {
-      id: "lotto-1",
-      name: `${lottoLegs.length}-Leg Lotto Parlay`,
-      legs: lottoLegs,
-      combinedOdds: calcCombinedOdds(lottoLegs),
-      confidence: Math.max(12, Math.round(38 - lottoLegs.length * 3)),
-      reasoning: `High-upside parlay mixing value underdogs and player props. Each leg has standalone merit — small stake for a big payout potential.`,
-    } : null;
-
-    // ── PROPS PARLAY: 3-4 player props (can share game) ──────────────────────
-    const propParlayLegs = propPool.slice(0, 4);
-    const propParlayOfTheDay: AIParlay | null = propParlayLegs.length >= 2 ? {
-      id: "prop-1",
-      name: `Player Props ${propParlayLegs.length}-Legger`,
-      legs: propParlayLegs,
-      combinedOdds: calcCombinedOdds(propParlayLegs),
-      confidence: Math.max(20, Math.round(44 - propParlayLegs.length * 2)),
-      reasoning: `Real bookmaker lines for these player performance props, sourced directly from the best available odds across major sportsbooks.`,
-    } : null;
-
-    // ── MIX PARLAY: 2 game bets + 2 props from different games ───────────────
-    const mixGameLegs = pickUnique(gameLegPool, 2);
-    const mixGameIds = new Set(mixGameLegs.map((l) => l.gameId));
-    const mixPropLegs = propPool.filter((l) => !mixGameIds.has(l.gameId)).slice(0, 2);
-    const mixLegs = [...mixGameLegs, ...mixPropLegs];
-    const mixParlayOfTheDay: AIParlay | null = mixLegs.length >= 3 ? {
-      id: "mix-1",
-      name: `Mixed ${mixLegs.length}-Legger`,
-      legs: mixLegs,
-      combinedOdds: calcCombinedOdds(mixLegs),
-      confidence: Math.max(18, Math.round(40 - mixLegs.length * 2)),
-      reasoning: `Blends the strongest game-line value bets with real player prop lines. Game legs for structure, props for upside.`,
-    } : null;
-
-    // Normalize sport labels (API keys like "baseball_mlb" → display label "MLB")
+    // Normalize sport labels (API keys like "basketball_nba" → display label "NBA")
     const SPORT_KEY_TO_LABEL: Record<string, string> = {
       basketball_nba: "NBA", baseball_mlb: "MLB",
       icehockey_nhl: "NHL", americanfootball_nfl: "NFL",
@@ -997,6 +930,117 @@ router.get("/ai-picks", async (req, res) => {
     function normSport(s: string): string {
       return SPORT_KEY_TO_LABEL[s] ?? SPORT_FROM_KEY[s] ?? s.toUpperCase();
     }
+
+    // ── Group legs & props by sport (keep parlays sport-pure) ────────────────
+    const legsBySport = new Map<string, AIPickLeg[]>();
+    for (const leg of gameLegPool) {
+      const s = normSport(leg.sport);
+      if (!legsBySport.has(s)) legsBySport.set(s, []);
+      legsBySport.get(s)!.push(leg);
+    }
+    const propsBySport = new Map<string, AIPickLeg[]>();
+    for (const leg of propPool) {
+      const s = normSport(leg.sport);
+      if (!propsBySport.has(s)) propsBySport.set(s, []);
+      propsBySport.get(s)!.push(leg);
+    }
+
+    // Pick the sport with the most value-bet legs; fall back to full pool if one sport dominates
+    const sortedSports = [...legsBySport.entries()].sort((a, b) => b[1].length - a[1].length);
+    // For each parlay type we find the richest applicable sport's pool
+    function topSportPool(minLegs: number): { sport: string; legs: AIPickLeg[] } | null {
+      for (const [s, legs] of sortedSports) {
+        if (legs.length >= minLegs) return { sport: s, legs };
+      }
+      return null;
+    }
+
+    // ── SAFE PARLAY: 2-3 highest-edge game bets, same sport ──────────────────
+    const safePool = topSportPool(2);
+    const safeLegs = safePool ? pickUnique(safePool.legs, 3) : [];
+    const avgSafeEdge = safeLegs.length > 0
+      ? safeLegs.reduce((s, l) => {
+          const vb = gameBets.find((v) => v.gameId === l.gameId && v.team === l.pick);
+          return s + (vb?.edge ?? 2);
+        }, 0) / safeLegs.length
+      : 2;
+    const safeSport = safePool?.sport ?? "";
+    const safeParlay: AIParlay | null = safeLegs.length >= 2 ? {
+      id: "safe-1",
+      name: `${safeSport} ${safeLegs.length}-Leg Value Parlay`,
+      legs: safeLegs,
+      combinedOdds: calcCombinedOdds(safeLegs),
+      confidence: Math.min(72, Math.round(48 + avgSafeEdge * 2)),
+      reasoning: `${safeLegs.length} ${safeSport} game bets each carrying a positive edge per our model. Combined into a conservative parlay targeting modest upside.`,
+    } : null;
+
+    // ── GAME PARLAY: 3-4 game bets, same sport ───────────────────────────────
+    const gamePool = topSportPool(2);
+    const gameLegs = gamePool ? pickUnique(gamePool.legs, 4) : [];
+    const gameSport = gamePool?.sport ?? "";
+    const gameParlayOfTheDay: AIParlay | null = gameLegs.length >= 2 ? {
+      id: "game-1",
+      name: `${gameSport} Game ${gameLegs.length}-Legger`,
+      legs: gameLegs,
+      combinedOdds: calcCombinedOdds(gameLegs),
+      confidence: Math.min(65, Math.round(40 + gameLegs.length * 3)),
+      reasoning: `Pure ${gameSport} game-line parlay — moneylines, spreads, and totals only. Each leg selected for the highest edge versus the de-vigged consensus probability.`,
+    } : null;
+
+    // ── LOTTO PARLAY: 5 high-odds legs, same sport ────────────────────────────
+    const lottoSportEntry = [...legsBySport.entries()]
+      .sort((a, b) => {
+        // Prefer the sport with the most underdog/plus-money legs
+        const aPlus = a[1].filter((l) => l.odds > 0).length;
+        const bPlus = b[1].filter((l) => l.odds > 0).length;
+        return bPlus - aPlus || b[1].length - a[1].length;
+      })[0] ?? null;
+    const lottoSportLabel = lottoSportEntry?.[0] ?? "";
+    const lottoSportProps = propsBySport.get(lottoSportLabel) ?? [];
+    const lottoGamePool = [...(lottoSportEntry?.[1] ?? [])].sort((a, b) => b.odds - a.odds);
+    const lottoLegs = pickUnique([...lottoGamePool, ...lottoSportProps], 5);
+    const lottoParlay: AIParlay | null = lottoLegs.length >= 3 ? {
+      id: "lotto-1",
+      name: `${lottoSportLabel} ${lottoLegs.length}-Leg Lotto`,
+      legs: lottoLegs,
+      combinedOdds: calcCombinedOdds(lottoLegs),
+      confidence: Math.max(12, Math.round(38 - lottoLegs.length * 3)),
+      reasoning: `High-upside ${lottoSportLabel} parlay mixing value underdogs and player props. Each leg has standalone merit — small stake for a big payout potential.`,
+    } : null;
+
+    // ── PROPS PARLAY: 3-4 props, same sport ──────────────────────────────────
+    const sortedPropSports = [...propsBySport.entries()].sort((a, b) => b[1].length - a[1].length);
+    const topPropSport = sortedPropSports[0];
+    const propParlayLegs = topPropSport ? topPropSport[1].slice(0, 4) : propPool.slice(0, 4);
+    const propSportLabel = topPropSport?.[0] ?? "";
+    const propParlayOfTheDay: AIParlay | null = propParlayLegs.length >= 2 ? {
+      id: "prop-1",
+      name: `${propSportLabel} Props ${propParlayLegs.length}-Legger`,
+      legs: propParlayLegs,
+      combinedOdds: calcCombinedOdds(propParlayLegs),
+      confidence: Math.max(20, Math.round(44 - propParlayLegs.length * 2)),
+      reasoning: `Real bookmaker lines for these ${propSportLabel} player performance props, sourced directly from the best available odds across major sportsbooks.`,
+    } : null;
+
+    // ── MIX PARLAY: 2 game bets + 2 props, same sport ────────────────────────
+    const mixSportEntry = sortedSports.find(([s, legs]) => legs.length >= 2 && (propsBySport.get(s)?.length ?? 0) >= 1)
+      ?? sortedSports[0] ?? null;
+    const mixSportLabel = mixSportEntry?.[0] ?? "";
+    const mixSportProps = propsBySport.get(mixSportLabel) ?? [];
+    const mixGameLegs = mixSportEntry ? pickUnique(mixSportEntry[1], 2) : [];
+    const mixGameIds = new Set(mixGameLegs.map((l) => l.gameId));
+    const mixPropLegs = mixSportProps.filter((l) => !mixGameIds.has(l.gameId)).slice(0, 2);
+    const mixLegs = [...mixGameLegs, ...mixPropLegs];
+    const mixParlayOfTheDay: AIParlay | null = mixLegs.length >= 3 ? {
+      id: "mix-1",
+      name: `${mixSportLabel} Mix ${mixLegs.length}-Legger`,
+      legs: mixLegs,
+      combinedOdds: calcCombinedOdds(mixLegs),
+      confidence: Math.max(18, Math.round(40 - mixLegs.length * 2)),
+      reasoning: `Blends the strongest ${mixSportLabel} game-line value bets with real player prop lines. Game legs for structure, props for upside.`,
+    } : null;
+
+
 
     // ── SPORT-SPECIFIC PROP PARLAYS ───────────────────────────────────────────
     // Filter realProps (all sports) by sport API key + market label
@@ -1018,15 +1062,37 @@ router.get("/ai-picks", async (req, res) => {
         .slice(0, n);
     }
 
-    // MLB: Home Run parlay (market label after transform of "batter_home_runs" → "home runs")
-    const hrLegs = buildSpecificPropLegs("baseball_mlb", "home runs", 4);
+    // MLB: Home Run parlay — try "home runs" first; if scarce, fall back to
+    // any MLB batter prop with a plus-money line (totals, hits, total bases)
+    // because batter_home_runs isn't always offered by every bookmaker.
+    let hrLegs = buildSpecificPropLegs("baseball_mlb", "home runs", 4);
+    if (hrLegs.length < 2) {
+      // Fallback: high-odds MLB batter props (Over lines priced +100 or better)
+      const seenHrPlayers = new Set<string>();
+      const mlbBatterMarkets = ["total bases", "hits", "home runs"];
+      hrLegs = realProps
+        .filter((p) => {
+          if (p.sport !== "baseball_mlb") return false;
+          if (!mlbBatterMarkets.includes(p.market)) return false;
+          // Prefer the plus-money side (higher odds = rarer outcome = more upside)
+          return Math.max(p.overOdds, p.underOdds) >= 100;
+        })
+        .sort((a, b) => Math.max(b.overOdds, b.underOdds) - Math.max(a.overOdds, a.underOdds))
+        .map(propToLeg)
+        .filter((l) => {
+          if (!l.player || seenHrPlayers.has(l.player)) return false;
+          seenHrPlayers.add(l.player!);
+          return true;
+        })
+        .slice(0, 4);
+    }
     const hrParlay: AIParlay | null = hrLegs.length >= 2 ? {
       id: "hr-1",
-      name: `MLB Home Run ${hrLegs.length}-Legger`,
+      name: `MLB Power ${hrLegs.length}-Legger`,
       legs: hrLegs,
       combinedOdds: calcCombinedOdds(hrLegs),
       confidence: Math.min(30, Math.round(18 + hrLegs.length * 2)),
-      reasoning: `${hrLegs.length} home run props from today's MLB slate. Each player faces a starter with an elevated HR allowed rate. High-variance prop parlay — best with a small stake.`,
+      reasoning: `${hrLegs.length} high-upside MLB batter props from today's slate — home runs, total bases, and extra-base hits. Each player faces a starter with an elevated hard-contact rate. High-variance parlay, best with a small stake.`,
     } : null;
 
     // NHL: Goal scorer parlay ("player_goals" → "goals")
