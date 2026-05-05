@@ -1334,7 +1334,7 @@ router.get("/ai-picks", async (req, res) => {
           player: p.player,
         }));
     }
-    const hrLegs = buildHrParlayLegs(5);
+    const hrLegs = buildHrParlayLegs(3);
     const hrParlay: AIParlay | null = hrLegs.length >= 2 ? {
       id: "hr-1",
       name: `MLB Home Run ${hrLegs.length}-Legger`,
