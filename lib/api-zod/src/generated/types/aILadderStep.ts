@@ -11,5 +11,5 @@ export interface AILadderStep {
   day: number;
   stake: number;
   targetWin: number;
-  leg: AIPickLeg;
+  legs: AIPickLeg[];
 }

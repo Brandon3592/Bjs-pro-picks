@@ -43,7 +43,7 @@ export interface AILadderStep {
   day: number;
   stake: number;
   targetWin: number;
-  leg: AIPickLeg;
+  legs: AIPickLeg[];
 }
 
 export interface AILadderParlay {
@@ -567,14 +567,19 @@ function buildFallbackPicks(): AIPicksResponse {
 
   // Build a daily-compounding ladder from an array of legs at ~+100 odds
   function makeDailyLadder(legs: AIPickLeg[]): AILadderStep[] {
+    const steps: AILadderStep[] = [];
     let stake = 10;
-    return legs.map((leg, i) => {
-      const dec = leg.odds > 0 ? leg.odds / 100 + 1 : 100 / Math.abs(leg.odds) + 1;
-      const targetWin = parseFloat((stake * dec).toFixed(2));
-      const step: AILadderStep = { day: i + 1, stake: parseFloat(stake.toFixed(2)), targetWin, leg };
+    for (let i = 0; i + 1 < legs.length; i += 2) {
+      const leg1 = legs[i];
+      const leg2 = legs[i + 1];
+      const dec1 = leg1.odds > 0 ? leg1.odds / 100 + 1 : 100 / Math.abs(leg1.odds) + 1;
+      const dec2 = leg2.odds > 0 ? leg2.odds / 100 + 1 : 100 / Math.abs(leg2.odds) + 1;
+      const combined = dec1 * dec2;
+      const targetWin = parseFloat((stake * combined).toFixed(2));
+      steps.push({ day: steps.length + 1, stake: parseFloat(stake.toFixed(2)), targetWin, legs: [leg1, leg2] });
       stake = targetWin;
-      return step;
-    });
+    }
+    return steps;
   }
 
   // NBA daily ladder — 10 picks near +100 odds (player props + game lines)
@@ -1129,8 +1134,8 @@ router.get("/ai-picks", async (req, res) => {
     } : null;
 
     // ── DAILY COMPOUNDING LADDERS ($10 → $10K) ───────────────────────────────
-    // Each step = one day's bet. Win it, roll the payout to tomorrow.
-    // Targets ~+100 odds per pick so the stake roughly doubles each day.
+    // Each step = one day's 2-leg parlay. Win both legs, roll the payout to tomorrow.
+    // Each individual leg has odds between -150 and +150.
     function buildDailyLadder(
       apiKeys: string[],
       sportLabel: string,
@@ -1140,14 +1145,15 @@ router.get("/ai-picks", async (req, res) => {
       const TOTAL_DAYS = 10;
       const seenPlayers = new Set<string>();
 
-      // Look for props where the better side is near even money (+80 to +200)
+      // Only use props where each leg's best side is between -150 and +150
       const candidates: AIPickLeg[] = realProps
         .filter((p) => {
           if (!apiKeys.includes(p.sport)) return false;
-          return Math.max(p.overOdds, p.underOdds) >= 80;
+          const best = Math.max(p.overOdds, p.underOdds);
+          return best >= -150 && best <= 150;
         })
         .sort((a, b) => {
-          // Prefer odds closest to +100 (cleanest doubling)
+          // Prefer odds closest to +100 (clean value, not extreme)
           const aBest = Math.max(a.overOdds, a.underOdds);
           const bBest = Math.max(b.overOdds, b.underOdds);
           return Math.abs(aBest - 100) - Math.abs(bBest - 100);
@@ -1159,16 +1165,25 @@ router.get("/ai-picks", async (req, res) => {
           return true;
         });
 
-      if (candidates.length < 1) return null;
+      if (candidates.length < 2) return null;
 
-      // Build day-by-day compound steps
+      // Build day-by-day compound steps — 2 legs per day from different games
       const steps: AILadderStep[] = [];
       let stake = START;
-      for (let day = 1; day <= Math.min(TOTAL_DAYS, candidates.length); day++) {
-        const leg = candidates[day - 1];
-        const dec = americanToDecimal(leg.odds);
-        const targetWin = parseFloat((stake * dec).toFixed(2));
-        steps.push({ day, stake: parseFloat(stake.toFixed(2)), targetWin, leg });
+      let idx = 0;
+
+      for (let day = 1; day <= TOTAL_DAYS && idx + 1 < candidates.length; day++) {
+        const leg1 = candidates[idx++];
+        // Skip legs from the same game as leg1
+        while (idx < candidates.length && candidates[idx].gameId === leg1.gameId) idx++;
+        if (idx >= candidates.length) break;
+        const leg2 = candidates[idx++];
+
+        const dec1 = americanToDecimal(leg1.odds);
+        const dec2 = americanToDecimal(leg2.odds);
+        const combined = dec1 * dec2;
+        const targetWin = parseFloat((stake * combined).toFixed(2));
+        steps.push({ day, stake: parseFloat(stake.toFixed(2)), targetWin, legs: [leg1, leg2] });
         stake = targetWin;
       }
 
@@ -1176,6 +1191,8 @@ router.get("/ai-picks", async (req, res) => {
 
       const today = steps[0];
       const finalWin = steps[steps.length - 1].targetWin;
+      const leg1Fmt = `${today.legs[0].odds > 0 ? "+" : ""}${today.legs[0].odds}`;
+      const leg2Fmt = `${today.legs[1].odds > 0 ? "+" : ""}${today.legs[1].odds}`;
       return {
         id: `ladder-${sportLabel.toLowerCase().replace(/\s+/g, "-")}`,
         name: `${sportLabel} Daily Ladder`,
@@ -1185,7 +1202,7 @@ router.get("/ai-picks", async (req, res) => {
         totalDays: TOTAL_DAYS,
         steps,
         confidence: 45,
-        reasoning: `TODAY: Bet $${today.stake.toFixed(0)} on "${today.leg.pick}" (${today.leg.odds > 0 ? "+" : ""}${today.leg.odds}). If it wins you'll have $${today.targetWin.toFixed(0)}. Roll that onto tomorrow's pick. Win all ${steps.length} days in a row to build to $${Math.round(finalWin).toLocaleString()}. Keep stakes small — these are ~+100 props.`,
+        reasoning: `TODAY: Bet $${today.stake.toFixed(0)} on a 2-leg ${sportLabel} parlay — "${today.legs[0].pick}" (${leg1Fmt}) + "${today.legs[1].pick}" (${leg2Fmt}). Both legs have odds between -150 and +150. Win both = $${today.targetWin.toFixed(0)}. Roll the payout onto tomorrow's 2-legger. Win all ${steps.length} days in a row to build to $${Math.round(finalWin).toLocaleString()}.`,
       };
     }
 

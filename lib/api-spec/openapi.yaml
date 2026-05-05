@@ -1338,9 +1338,11 @@ components:
           type: number
         targetWin:
           type: number
-        leg:
-          $ref: "#/components/schemas/AIPickLeg"
-      required: [day, stake, targetWin, leg]
+        legs:
+          type: array
+          items:
+            $ref: "#/components/schemas/AIPickLeg"
+      required: [day, stake, targetWin, legs]
 
     AILadderParlay:
       type: object
