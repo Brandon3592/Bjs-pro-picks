@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, hasApiKey } from "../lib/odds-api";
 import { fetchMlbLineupNames } from "../lib/mlb-lineups";
+import { fetchNbaOut, fetchNhlOut } from "../lib/sport-lineups";
 import { americanToDecimal, decimalToAmerican } from "../lib/model";
 import type { OddsEvent, PropEvent } from "../lib/odds-api";
 
@@ -831,7 +832,32 @@ router.get("/ai-picks", async (req, res) => {
     // parlay builders (HR, goal scorer, 3PT, TD, ladders) have data regardless of the
     // active sport filter. The filteredProps variable below re-applies the sport filter
     // for the existing generic parlays.
-    const realProps = await fetchRealPropsForAI(allOddsRaw);
+    const rawProps = await fetchRealPropsForAI(allOddsRaw);
+
+    // Fetch all sport lineup/injury data in parallel — filter out unavailable players
+    // from every prop-based parlay in one pass before any builder runs.
+    const [mlbLineups, nbaOut, nhlOut] = await Promise.all([
+      fetchMlbLineupNames(), // MLB: whitelist confirmed starters; null = lineups not posted yet
+      fetchNbaOut(),          // NBA: blacklist OUT players
+      fetchNhlOut(),          // NHL: blacklist OUT players
+    ]);
+
+    const realProps = rawProps.filter((p) => {
+      if (p.sport === "baseball_mlb") {
+        // If lineups posted, only include confirmed starters
+        return !mlbLineups || mlbLineups.has(p.player);
+      }
+      if (p.sport === "basketball_nba") {
+        // Exclude players marked OUT
+        return !nbaOut || !nbaOut.has(p.player);
+      }
+      if (p.sport === "icehockey_nhl") {
+        // Exclude players marked OUT
+        return !nhlOut || !nhlOut.has(p.player);
+      }
+      return true;
+    });
+
     const filteredProps = sportApiKey
       ? realProps.filter((p) => p.sport === sportApiKey)
       : realProps;
@@ -1301,12 +1327,7 @@ router.get("/ai-picks", async (req, res) => {
     }
 
     // MLB: Home Run parlay — anytime HR props (lowest available line per player, one per game)
-    // Falls back to mock data when real HR props haven't been posted yet.
-    // Fetch confirmed MLB lineups — filters out scratched/resting players.
-    // Returns null when lineups haven't been posted yet (early in the day); in that case
-    // we skip the filter so the parlay still shows up rather than going empty.
-    const mlbLineups = await fetchMlbLineupNames();
-
+    // realProps is already filtered for confirmed starters / non-OUT players upstream.
     function buildHrParlayLegs(n: number): AIPickLeg[] {
       const hrProps = realProps.filter(
         (p) => p.sport === "baseball_mlb" && p.market === "home runs",
@@ -1320,8 +1341,6 @@ router.get("/ai-picks", async (req, res) => {
       // Now pick one player per game, sorted by best odds (closest to 0, e.g. +250 before +1000)
       const seenGames = new Set<string>();
       return [...bestPerPlayer.values()]
-        // If lineups are posted, only include confirmed starters. If not posted yet, include all.
-        .filter((p) => !mlbLineups || mlbLineups.has(p.player))
         .sort((a, b) => a.overOdds - b.overOdds) // ascending: lower positive odds = more likely
         .filter((p) => {
           if (seenGames.has(p.gameId)) return false;
