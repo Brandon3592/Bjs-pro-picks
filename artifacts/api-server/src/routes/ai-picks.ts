@@ -929,6 +929,67 @@ router.get("/ai-picks", async (req, res) => {
       .filter((vb) => new Date(vb.startTime).getTime() > nowMs)
       .sort((a, b) => b.edge - a.edge);
 
+    // Convert any OddsEvent into a game leg using the best available line across bookmakers.
+    // Prefers h2h (moneyline) — picks the better-priced team. Falls back to totals Over.
+    function eventToLeg(event: OddsEvent, sportLabel: string): AIPickLeg | null {
+      // Try h2h first
+      for (const book of event.bookmakers) {
+        const h2h = book.markets.find((m) => m.key === "h2h");
+        if (!h2h || h2h.outcomes.length < 2) continue;
+        // Pick the team with better (higher) odds — keeps lotto picks interesting
+        const best = h2h.outcomes.reduce((a, b) => (b.price > a.price ? b : a));
+        return {
+          gameId: event.id,
+          sport: sportLabel,
+          homeTeam: event.home_team,
+          awayTeam: event.away_team,
+          startTime: event.commence_time,
+          pick: best.name,
+          betType: "moneyline",
+          bookmaker: book.key,
+          odds: best.price,
+          player: null,
+        };
+      }
+      // Fall back to totals Over
+      for (const book of event.bookmakers) {
+        const totals = book.markets.find((m) => m.key === "totals");
+        if (!totals) continue;
+        const over = totals.outcomes.find((o) => o.name === "Over");
+        if (!over) continue;
+        return {
+          gameId: event.id,
+          sport: sportLabel,
+          homeTeam: event.home_team,
+          awayTeam: event.away_team,
+          startTime: event.commence_time,
+          pick: `Over ${over.point}`,
+          betType: "total",
+          bookmaker: book.key,
+          odds: over.price,
+          player: null,
+        };
+      }
+      return null;
+    }
+
+    // Build full upcoming game pool from ALL events across all active sports.
+    // Edge bets come first (highest quality), then all other upcoming games.
+    const edgeGameIds = new Set(gameBets.map((vb) => vb.gameId));
+    const allUpcomingLegs: AIPickLeg[] = [];
+    for (const { sport: sportLabel, events } of allOdds) {
+      for (const ev of events) {
+        if (edgeGameIds.has(ev.id)) continue; // already included via gameBets
+        const t = new Date(ev.commence_time).getTime();
+        if (t <= nowMs) continue; // skip already-started games
+        const leg = eventToLeg(ev, sportLabel);
+        if (leg) allUpcomingLegs.push(leg);
+      }
+    }
+
+    // gameLegPool: edge bets first, then all remaining upcoming games
+    const gameLegPool = [...gameBets.map(vbToLeg), ...allUpcomingLegs];
+
     // Build one prop leg per player — deduplicate by player name
     const seenPropPlayers = new Set<string>();
     const propPool: AIPickLeg[] = filteredProps
@@ -941,10 +1002,8 @@ router.get("/ai-picks", async (req, res) => {
         return true;
       });
 
-    const gameLegPool = gameBets.map(vbToLeg);
-
     // If there are no real bets at all, fall back to mock data
-    if (gameBets.length === 0 && propPool.length === 0) {
+    if (gameLegPool.length === 0 && propPool.length === 0) {
       const fallback = buildFallbackPicks();
       picksCacheMap.set(cacheKey, { data: fallback, expiresAt: Date.now() + 5 * 60_000 });
       return res.json(fallback);
