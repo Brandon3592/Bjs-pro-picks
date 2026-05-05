@@ -772,25 +772,28 @@ export default function AiPicksScreen() {
             </View>
 
             {/* ── Game Picks Parlay ── */}
-            <View style={styles.section}>
-              <SectionHeader
-                icon="🏆"
-                label="Game Picks Parlay"
-                sublabel="Moneyline, spread & O/U only — no props"
-                accent="#3b82f6"
-              />
-              {(activeParlay.game?.legs?.length ?? 0) > 0 ? (
-                <ParlayCard
-                  parlay={activeParlay.game!}
+            {/* Game Picks hidden on All Sports — too similar to Safe when game pool is small; only show on individual sport tabs */}
+            {selectedSport !== "all" && (
+              <View style={styles.section}>
+                <SectionHeader
+                  icon="🏆"
+                  label="Game Picks Parlay"
+                  sublabel="Moneyline, spread & O/U only — no props"
                   accent="#3b82f6"
-                  onBet={(leg) => openBet({ ...leg, pick: `${activeParlay.game!.name} (game parlay)`, odds: activeParlay.game!.combinedOdds })}
                 />
-              ) : (
-                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No game parlay — pull to refresh.</Text>
-                </View>
-              )}
-            </View>
+                {(activeParlay.game?.legs?.length ?? 0) > 0 ? (
+                  <ParlayCard
+                    parlay={activeParlay.game!}
+                    accent="#3b82f6"
+                    onBet={(leg) => openBet({ ...leg, pick: `${activeParlay.game!.name} (game parlay)`, odds: activeParlay.game!.combinedOdds })}
+                  />
+                ) : (
+                  <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No game parlay — pull to refresh.</Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* ── Player Props Parlay ── */}
             <View style={styles.section}>
@@ -858,7 +861,7 @@ export default function AiPicksScreen() {
                   />
                 ) : (
                   <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No HR parlay today — check back when MLB games are on.</Text>
+                    <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>Home run prop odds haven't been posted yet — check back closer to first pitch.</Text>
                   </View>
                 )}
               </View>

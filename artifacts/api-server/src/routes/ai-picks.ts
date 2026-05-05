@@ -1123,28 +1123,22 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `${allSafeCrossLegs.length} game bets drawn from across today's active sports — one per sport, each carrying a positive edge per our model.`,
     } : null;
 
-    const allLottoMap = new Map(
-      [...legsBySport.entries()].map(([s, legs]) => [s, [...legs].sort((a, b) => b.odds - a.odds)]),
+    // allLottoParlay: use props sorted by highest odds — completely different from Safe (which is game bets)
+    const allLottoPropMap = new Map(
+      [...propsBySport.entries()].map(([s, legs]) => [s, [...legs].sort((a, b) => b.odds - a.odds)]),
     );
-    const allLottoCrossLegs = buildCrossSportLegs(allLottoMap, 5);
-    const allLottoParlay: AIParlay | null = allLottoCrossLegs.length >= 3 ? {
+    const allLottoCrossLegs = buildCrossSportLegs(allLottoPropMap, 5);
+    const allLottoParlay: AIParlay | null = allLottoCrossLegs.length >= 2 ? {
       id: "all-lotto-1",
-      name: `${allLottoCrossLegs.length}-Leg Cross-Sport Lotto`,
+      name: `${allLottoCrossLegs.length}-Leg Cross-Sport Props Lotto`,
       legs: allLottoCrossLegs,
       combinedOdds: calcCombinedOdds(allLottoCrossLegs),
       confidence: Math.max(10, Math.round(35 - allLottoCrossLegs.length * 3)),
-      reasoning: `High-upside parlay pulling the best-odds underdog legs from each sport — NBA, MLB, and NHL legs all represented. Small stake, big potential.`,
+      reasoning: `High-upside player prop parlay pulling the best-odds prop legs from each sport — one standout from NBA, MLB, and NHL. Small stake, big potential payout.`,
     } : null;
 
-    const allGameCrossLegs = buildCrossSportLegs(legsBySport, 4);
-    const allGameParlay: AIParlay | null = allGameCrossLegs.length >= 2 ? {
-      id: "all-game-1",
-      name: `${allGameCrossLegs.length}-Leg Cross-Sport Game Picks`,
-      legs: allGameCrossLegs,
-      combinedOdds: calcCombinedOdds(allGameCrossLegs),
-      confidence: Math.min(60, Math.round(42 + allGameCrossLegs.length * 2)),
-      reasoning: `Pure game-line parlay — moneylines, spreads, and totals. One best pick per sport from today's full slate, no props.`,
-    } : null;
+    // allGameParlay: intentionally null on All Sports — when the game pool is small it duplicates Safe Parlay
+    const allGameParlay: AIParlay | null = null;
 
     const allPropsCrossLegs = buildCrossSportLegs(propsBySport, 4);
     const allPropsParlay: AIParlay | null = allPropsCrossLegs.length >= 2 ? {
