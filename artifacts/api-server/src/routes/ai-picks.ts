@@ -1342,7 +1342,7 @@ router.get("/ai-picks", async (req, res) => {
       combinedOdds: calcCombinedOdds(hrLegs),
       confidence: Math.min(30, Math.round(18 + hrLegs.length * 2)),
       reasoning: `${hrLegs.length} anytime home run props from today's MLB slate. Each player faces a starter with an elevated hard-contact and HR-allowed rate. High-variance parlay — best with a small stake for a big payout.`,
-    } : buildFallbackPicks().hrParlay;
+    } : null;
 
     // NHL: Goal scorer parlay ("player_goals" → "goals")
     const goalScorerLegs = buildSpecificPropLegs("icehockey_nhl", "goals", 4);
