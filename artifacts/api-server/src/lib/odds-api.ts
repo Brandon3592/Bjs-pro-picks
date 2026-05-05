@@ -306,7 +306,7 @@ export const PROP_MARKETS: Record<string, { key: string; label: string; alt?: bo
   ],
 };
 
-const PROPS_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes — props move slowly
+const PROPS_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours — props move slowly; conserves quota
 
 export async function fetchPlayerPropsForEvent(
   sportKey: string,

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { fetchAllSportOdds, fetchOddsForSportAllMarkets, SPORT_KEYS, SPORT_FROM_KEY, hasApiKey } from "../lib/odds-api";
+import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, hasApiKey } from "../lib/odds-api";
 import { americanToDecimal, decimalToAmerican } from "../lib/model";
 import type { OddsEvent, PropEvent } from "../lib/odds-api";
 
@@ -99,8 +99,8 @@ interface CompactProp {
   bestBook: string;
 }
 
-// One bulk call per sport fetches ALL games + ALL prop markets in a single request.
-// This is far more quota-efficient than one call per game (26 MLB games = 26 calls → now 1).
+// Player props MUST use the per-event endpoint — the bulk sport endpoint doesn't support them.
+// Props are cached for 2 hours, so quota cost per day stays well within the 20k/month budget.
 const SPORT_PROP_MARKETS: Record<string, string[]> = {
   basketball_nba:       ["player_points", "player_rebounds", "player_assists", "player_threes"],
   baseball_mlb:         ["pitcher_strikeouts", "batter_hits", "batter_total_bases", "batter_home_runs"],
@@ -114,27 +114,28 @@ async function fetchRealPropsForAI(
   const now = Date.now();
   const cutoff = now + 48 * 3600_000;
 
-  // Build the list of sports to fetch — one bulk call per sport
-  const sportFetches = Object.entries(SPORT_PROP_MARKETS).map(async ([sportApiKey, marketKeys]) => {
-    // One request: ALL games for this sport, ALL prop markets combined
-    const events = await fetchOddsForSportAllMarkets(sportApiKey, marketKeys.join(","));
-    if (!events) return [];
+  // Build one fetch per game (all games, all sports — no caps)
+  const fetches: Promise<CompactProp[]>[] = [];
 
-    const props: CompactProp[] = [];
+  for (const { sport, events } of allOdds) {
+    const sportApiKey = SPORT_KEYS[sport] ?? sport;
+    const marketKeys = SPORT_PROP_MARKETS[sportApiKey];
+    if (!marketKeys) continue;
+
     for (const ev of events) {
       const t = new Date(ev.commence_time).getTime();
       if (t <= now || t > cutoff) continue; // upcoming games only
 
-      // fetchOddsForSportAllMarkets returns OddsEvent[] which has the same
-      // bookmakers/markets/outcomes shape as PropEvent — cast it for parsePropEvent
-      const asPropEvent = ev as unknown as PropEvent;
-      const sportLabel = SPORT_FROM_KEY[sportApiKey] ?? sportApiKey.toUpperCase();
-      props.push(...parsePropEvent(asPropEvent, sportApiKey, ev));
+      fetches.push(
+        fetchPlayerPropsForEvent(sportApiKey, ev.id, marketKeys).then((propEvent) => {
+          if (!propEvent) return [];
+          return parsePropEvent(propEvent, sportApiKey, ev);
+        }),
+      );
     }
-    return props;
-  });
+  }
 
-  const results = await Promise.allSettled(sportFetches);
+  const results = await Promise.allSettled(fetches);
   const props: CompactProp[] = [];
   for (const r of results) {
     if (r.status === "fulfilled") props.push(...r.value);
