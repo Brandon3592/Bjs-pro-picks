@@ -986,26 +986,53 @@ router.get("/ai-picks", async (req, res) => {
       return null;
     }
 
-    // Build game leg pool from ALL upcoming games across every active sport — no edge filter.
+    // ── FAVORITE game leg pool (used for safe, game, mix, cross-sport parlays) ──
+    // Picks the FAVORITE side of each game — the most likely winner. Never underdogs here.
     const gameLegPool: AIPickLeg[] = [];
     for (const { sport: sportLabel, events } of allOdds) {
       for (const ev of events) {
         const t = new Date(ev.commence_time).getTime();
-        if (t <= nowMs) continue; // skip already-started games
-        const leg = eventToLeg(ev, sportLabel);
+        if (t <= nowMs) continue;
+        const leg = eventToFavoriteLeg(ev, sportLabel);
         if (leg) gameLegPool.push(leg);
       }
     }
 
-    // Build one prop leg per player — deduplicate by player name
-    const seenPropPlayers = new Set<string>();
+    // ── UNDERDOG game leg pool (used exclusively for lotto parlays) ──
+    // Picks the highest-priced / plus-money side — intentional for high-upside lotto picks.
+    const underdogLegPool: AIPickLeg[] = [];
+    for (const { sport: sportLabel, events } of allOdds) {
+      for (const ev of events) {
+        const t = new Date(ev.commence_time).getTime();
+        if (t <= nowMs) continue;
+        const leg = eventToLeg(ev, sportLabel);
+        if (leg) underdogLegPool.push(leg);
+      }
+    }
+
+    // ── SMART prop pool (safe/game/mix/props parlays) ──
+    // Picks the FAVORITE side of each prop (most negative odds = more likely to hit).
+    const seenSmartPropPlayers = new Set<string>();
     const propPool: AIPickLeg[] = filteredProps
+      .filter((p) => Math.min(p.overOdds, p.underOdds) <= -130) // must have a clear favorite side
+      .sort((a, b) => Math.min(a.overOdds, a.underOdds) - Math.min(b.overOdds, b.underOdds)) // most negative first
+      .map(propToFavoriteLeg)
+      .filter((l) => {
+        if (!l.player || seenSmartPropPlayers.has(l.player)) return false;
+        seenSmartPropPlayers.add(l.player!);
+        return true;
+      });
+
+    // ── LOTTO prop pool (lotto parlays only) ──
+    // Picks the highest-odds (plus-money) side — intentional upside hunting.
+    const seenLottoPropPlayers = new Set<string>();
+    const lottoPropPool: AIPickLeg[] = filteredProps
       .filter((p) => Math.max(p.overOdds, p.underOdds) >= -160)
       .sort((a, b) => Math.max(b.overOdds, b.underOdds) - Math.max(a.overOdds, a.underOdds))
       .map(propToLeg)
       .filter((l) => {
-        if (!l.player || seenPropPlayers.has(l.player)) return false;
-        seenPropPlayers.add(l.player!);
+        if (!l.player || seenLottoPropPlayers.has(l.player)) return false;
+        seenLottoPropPlayers.add(l.player!);
         return true;
       });
 
@@ -1059,6 +1086,7 @@ router.get("/ai-picks", async (req, res) => {
     }
 
     // ── Group legs & props by sport (keep parlays sport-pure) ────────────────
+    // Favorite pools — used by safe, game, mix, props, cross-sport parlays
     const legsBySport = new Map<string, AIPickLeg[]>();
     for (const leg of gameLegPool) {
       const s = normSport(leg.sport);
@@ -1070,6 +1098,19 @@ router.get("/ai-picks", async (req, res) => {
       const s = normSport(leg.sport);
       if (!propsBySport.has(s)) propsBySport.set(s, []);
       propsBySport.get(s)!.push(leg);
+    }
+    // Underdog/lotto pools — used exclusively by lotto parlays
+    const underdogLegsBySport = new Map<string, AIPickLeg[]>();
+    for (const leg of underdogLegPool) {
+      const s = normSport(leg.sport);
+      if (!underdogLegsBySport.has(s)) underdogLegsBySport.set(s, []);
+      underdogLegsBySport.get(s)!.push(leg);
+    }
+    const lottoPropsBySport = new Map<string, AIPickLeg[]>();
+    for (const leg of lottoPropPool) {
+      const s = normSport(leg.sport);
+      if (!lottoPropsBySport.has(s)) lottoPropsBySport.set(s, []);
+      lottoPropsBySport.get(s)!.push(leg);
     }
 
     // Pick the sport with the most available game legs
@@ -1109,15 +1150,16 @@ router.get("/ai-picks", async (req, res) => {
     } : null;
 
     // ── LOTTO PARLAY: 5 high-odds legs, same sport ────────────────────────────
-    const lottoSportEntry = [...legsBySport.entries()]
+    // Uses the underdog pool — intentionally hunting plus-money upside
+    const lottoSportEntry = [...underdogLegsBySport.entries()]
       .sort((a, b) => {
-        // Prefer the sport with the most underdog/plus-money legs
+        // Prefer the sport with the most plus-money legs
         const aPlus = a[1].filter((l) => l.odds > 0).length;
         const bPlus = b[1].filter((l) => l.odds > 0).length;
         return bPlus - aPlus || b[1].length - a[1].length;
       })[0] ?? null;
     const lottoSportLabel = lottoSportEntry?.[0] ?? "";
-    const lottoSportProps = propsBySport.get(lottoSportLabel) ?? [];
+    const lottoSportProps = lottoPropsBySport.get(lottoSportLabel) ?? [];
     const lottoGamePool = [...(lottoSportEntry?.[1] ?? [])].sort((a, b) => b.odds - a.odds);
     const lottoLegs = pickUnique([...lottoGamePool, ...lottoSportProps], 5);
     const lottoParlay: AIParlay | null = lottoLegs.length >= 3 ? {
@@ -1189,9 +1231,9 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `${allSafeCrossLegs.length} game bets drawn from across today's active sports — one per sport, each carrying a positive edge per our model.`,
     } : null;
 
-    // allLottoParlay: use props sorted by highest odds — completely different from Safe (which is game bets)
+    // allLottoParlay: use the lotto prop pool (highest-odds/plus-money side) — underdog hunting
     const allLottoPropMap = new Map(
-      [...propsBySport.entries()].map(([s, legs]) => [s, [...legs].sort((a, b) => b.odds - a.odds)]),
+      [...lottoPropsBySport.entries()].map(([s, legs]) => [s, [...legs].sort((a, b) => b.odds - a.odds)]),
     );
     const allLottoCrossLegs = buildCrossSportLegs(allLottoPropMap, 5);
     const allLottoParlay: AIParlay | null = allLottoCrossLegs.length >= 2 ? {
