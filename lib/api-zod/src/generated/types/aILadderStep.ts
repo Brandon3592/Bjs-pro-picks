@@ -8,6 +8,8 @@
 import type { AIPickLeg } from "./aIPickLeg";
 
 export interface AILadderStep {
+  day: number;
+  stake: number;
+  targetWin: number;
   leg: AIPickLeg;
-  runningPayout: number;
 }

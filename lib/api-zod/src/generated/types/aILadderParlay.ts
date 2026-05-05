@@ -6,11 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AILadderStep } from "./aILadderStep";
-import type { AIParlay } from "./aIParlay";
 
-export type AILadderParlay = AIParlay & {
+export interface AILadderParlay {
+  id: string;
+  name: string;
   sport: string;
   startStake: number;
   targetPayout: number;
+  totalDays: number;
   steps: AILadderStep[];
-};
+  confidence: number;
+  reasoning: string;
+}

@@ -521,16 +521,23 @@ export interface AIParlay {
 }
 
 export interface AILadderStep {
+  day: number;
+  stake: number;
+  targetWin: number;
   leg: AIPickLeg;
-  runningPayout: number;
 }
 
-export type AILadderParlay = AIParlay & {
+export interface AILadderParlay {
+  id: string;
+  name: string;
   sport: string;
   startStake: number;
   targetPayout: number;
+  totalDays: number;
   steps: AILadderStep[];
-};
+  confidence: number;
+  reasoning: string;
+}
 
 export interface AIPicksResponse {
   lockOfTheDay?: AIPick | null;
@@ -543,6 +550,7 @@ export interface AIPicksResponse {
   goalScorerParlay?: AIParlay | null;
   threePtParlay?: AIParlay | null;
   tdParlay?: AIParlay | null;
+  allLadder?: AILadderParlay | null;
   nbaLadder?: AILadderParlay | null;
   mlbLadder?: AILadderParlay | null;
   nhlLadder?: AILadderParlay | null;

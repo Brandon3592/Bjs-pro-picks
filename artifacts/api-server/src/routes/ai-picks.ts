@@ -40,15 +40,22 @@ export interface AIParlay {
 }
 
 export interface AILadderStep {
+  day: number;
+  stake: number;
+  targetWin: number;
   leg: AIPickLeg;
-  runningPayout: number;
 }
 
-export interface AILadderParlay extends AIParlay {
+export interface AILadderParlay {
+  id: string;
+  name: string;
   sport: string;
   startStake: number;
   targetPayout: number;
+  totalDays: number;
   steps: AILadderStep[];
+  confidence: number;
+  reasoning: string;
 }
 
 export interface AIPicksResponse {
@@ -62,6 +69,7 @@ export interface AIPicksResponse {
   goalScorerParlay: AIParlay | null;
   threePtParlay: AIParlay | null;
   tdParlay: AIParlay | null;
+  allLadder: AILadderParlay | null;
   nbaLadder: AILadderParlay | null;
   mlbLadder: AILadderParlay | null;
   nhlLadder: AILadderParlay | null;
@@ -557,143 +565,189 @@ function buildFallbackPicks(): AIPicksResponse {
 
   // ── Ladder parlays ($10 → $10k) ────────────────────────────────────────────
 
-  function makeLadderSteps(legs: AIPickLeg[], start: number): AILadderStep[] {
-    let running = start;
-    return legs.map((leg) => {
+  // Build a daily-compounding ladder from an array of legs at ~+100 odds
+  function makeDailyLadder(legs: AIPickLeg[]): AILadderStep[] {
+    let stake = 10;
+    return legs.map((leg, i) => {
       const dec = leg.odds > 0 ? leg.odds / 100 + 1 : 100 / Math.abs(leg.odds) + 1;
-      running = parseFloat((running * dec).toFixed(2));
-      return { leg, runningPayout: running };
+      const targetWin = parseFloat((stake * dec).toFixed(2));
+      const step: AILadderStep = { day: i + 1, stake: parseFloat(stake.toFixed(2)), targetWin, leg };
+      stake = targetWin;
+      return step;
     });
   }
 
+  // NBA daily ladder — 10 picks near +100 odds (player props + game lines)
   const nbaLadderLegs: AIPickLeg[] = [
     { gameId: "nba-mock-1", sport: "NBA", homeTeam: "Oklahoma City Thunder", awayTeam: "Dallas Mavericks",
-      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "SGA Over 4.5 Threes",
-      betType: "player_prop", player: "Shai Gilgeous-Alexander", bookmaker: "DraftKings", odds: +180 },
+      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "SGA Over 25.5 Points",
+      betType: "player_prop", player: "Shai Gilgeous-Alexander", bookmaker: "DraftKings", odds: +100 },
     { gameId: "nba-mock-2", sport: "NBA", homeTeam: "Cleveland Cavaliers", awayTeam: "Miami Heat",
-      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Anthony Davis Over 27.5 Pts",
-      betType: "player_prop", player: "Anthony Davis", bookmaker: "FanDuel", odds: +165 },
-    { gameId: "nba-mock-2", sport: "NBA", homeTeam: "Cleveland Cavaliers", awayTeam: "Miami Heat",
-      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Cavaliers ML",
-      betType: "moneyline", bookmaker: "BetMGM", odds: +150 },
+      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Donovan Mitchell Over 8.5 Assists",
+      betType: "player_prop", player: "Donovan Mitchell", bookmaker: "FanDuel", odds: +105 },
     { gameId: "nba-mock-6", sport: "NBA", homeTeam: "Denver Nuggets", awayTeam: "Phoenix Suns",
-      startTime: new Date(now + 7 * 3600_000).toISOString(), pick: "Nikola Jokic Over 12.5 Reb",
-      betType: "player_prop", player: "Nikola Jokic", bookmaker: "DraftKings", odds: +200 },
-    { gameId: "nba-mock-2", sport: "NBA", homeTeam: "Cleveland Cavaliers", awayTeam: "Miami Heat",
-      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Darius Garland Over 8.5 Ast",
-      betType: "player_prop", player: "Darius Garland", bookmaker: "FanDuel", odds: +155 },
-    { gameId: "nba-mock-7", sport: "NBA", homeTeam: "Boston Celtics", awayTeam: "New York Knicks",
-      startTime: new Date(now + 8 * 3600_000).toISOString(), pick: "Heat ML",
-      betType: "moneyline", bookmaker: "BetMGM", odds: +220 },
+      startTime: new Date(now + 7 * 3600_000).toISOString(), pick: "Jokic Under 14.5 Rebounds",
+      betType: "player_prop", player: "Nikola Jokic", bookmaker: "DraftKings", odds: +100 },
     { gameId: "nba-mock-3", sport: "NBA", homeTeam: "Boston Celtics", awayTeam: "New York Knicks",
-      startTime: new Date(now + 8 * 3600_000).toISOString(), pick: "Over 225.5",
-      betType: "over", bookmaker: "DraftKings", odds: +175 },
+      startTime: new Date(now + 8 * 3600_000).toISOString(), pick: "Jayson Tatum Over 2.5 Threes",
+      betType: "player_prop", player: "Jayson Tatum", bookmaker: "BetMGM", odds: +110 },
+    { gameId: "nba-mock-4", sport: "NBA", homeTeam: "Golden State Warriors", awayTeam: "Sacramento Kings",
+      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Steph Curry Over 1.5 Threes",
+      betType: "player_prop", player: "Stephen Curry", bookmaker: "FanDuel", odds: +100 },
+    { gameId: "nba-mock-5", sport: "NBA", homeTeam: "Philadelphia 76ers", awayTeam: "Chicago Bulls",
+      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Tyrese Maxey Under 28.5 Points",
+      betType: "player_prop", player: "Tyrese Maxey", bookmaker: "DraftKings", odds: +105 },
+    { gameId: "nba-mock-7", sport: "NBA", homeTeam: "Miami Heat", awayTeam: "Indiana Pacers",
+      startTime: new Date(now + 7 * 3600_000).toISOString(), pick: "T. Haliburton Over 9.5 Assists",
+      betType: "player_prop", player: "Tyrese Haliburton", bookmaker: "BetMGM", odds: +100 },
+    { gameId: "nba-mock-8", sport: "NBA", homeTeam: "Los Angeles Lakers", awayTeam: "Minnesota Timberwolves",
+      startTime: new Date(now + 8 * 3600_000).toISOString(), pick: "Anthony Edwards Over 2.5 Threes",
+      betType: "player_prop", player: "Anthony Edwards", bookmaker: "FanDuel", odds: +110 },
+    { gameId: "nba-mock-9", sport: "NBA", homeTeam: "Memphis Grizzlies", awayTeam: "New Orleans Pelicans",
+      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Ja Morant Under 27.5 Points",
+      betType: "player_prop", player: "Ja Morant", bookmaker: "DraftKings", odds: +100 },
+    { gameId: "nba-mock-10", sport: "NBA", homeTeam: "Milwaukee Bucks", awayTeam: "Orlando Magic",
+      startTime: new Date(now + 7 * 3600_000).toISOString(), pick: "Damian Lillard Over 1.5 Threes",
+      betType: "player_prop", player: "Damian Lillard", bookmaker: "BetMGM", odds: +105 },
   ];
-  const nbaLadderSteps = makeLadderSteps(nbaLadderLegs, 10);
   const nbaLadder: AILadderParlay = {
-    id: "ladder-nba", name: "$10 → $10,000 NBA Ladder", sport: "NBA",
-    startStake: 10, targetPayout: 10000, steps: nbaLadderSteps, legs: nbaLadderLegs,
-    combinedOdds: calcCombinedOdds(nbaLadderLegs), confidence: 3,
-    reasoning: "A 7-leg NBA ladder that turns $10 into $12,000+ if all legs hit. Stack props and game lines from tonight's biggest NBA matchups. High variance, tiny stake — big dream.",
+    id: "ladder-nba", name: "NBA Daily Ladder", sport: "NBA",
+    startStake: 10, targetPayout: 10240, totalDays: 10,
+    steps: makeDailyLadder(nbaLadderLegs), confidence: 45,
+    reasoning: "Start today with $10 on SGA Over 25.5 Points (+100). If it wins, roll $20 onto tomorrow's pick. Each pick is near even odds — clean doubling. Chain all 10 wins to turn $10 into $10,240+.",
   };
 
+  // MLB daily ladder
   const mlbLadderLegs: AIPickLeg[] = [
-    { gameId: "mlb-mock-4", sport: "MLB", homeTeam: "New York Yankees", awayTeam: "Boston Red Sox",
-      startTime: new Date(now + 3 * 3600_000).toISOString(), pick: "Aaron Judge Over 0.5 Home Runs",
-      betType: "player_prop", player: "Aaron Judge", bookmaker: "DraftKings", odds: +230 },
-    { gameId: "mlb-mock-2", sport: "MLB", homeTeam: "New York Mets", awayTeam: "Colorado Rockies",
-      startTime: new Date(now + 2 * 3600_000).toISOString(), pick: "Pete Alonso Over 0.5 Home Runs",
-      betType: "player_prop", player: "Pete Alonso", bookmaker: "FanDuel", odds: +210 },
-    { gameId: "mlb-mock-2", sport: "MLB", homeTeam: "New York Mets", awayTeam: "Colorado Rockies",
-      startTime: new Date(now + 2 * 3600_000).toISOString(), pick: "Mets ML",
-      betType: "moneyline", bookmaker: "BetMGM", odds: +145 },
-    { gameId: "mlb-mock-5", sport: "MLB", homeTeam: "Los Angeles Dodgers", awayTeam: "San Diego Padres",
-      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Shohei Ohtani Over 1.5 Total Bases",
-      betType: "player_prop", player: "Shohei Ohtani", bookmaker: "DraftKings", odds: +170 },
-    { gameId: "mlb-mock-6", sport: "MLB", homeTeam: "Arizona Diamondbacks", awayTeam: "Colorado Rockies",
-      startTime: new Date(now + 4 * 3600_000).toISOString(), pick: "Rockies ML",
-      betType: "moneyline", bookmaker: "FanDuel", odds: +195 },
+    { gameId: "mlb-mock-1", sport: "MLB", homeTeam: "New York Mets", awayTeam: "Colorado Rockies",
+      startTime: new Date(now + 2 * 3600_000).toISOString(), pick: "Francisco Lindor Over 1.5 Total Bases",
+      betType: "player_prop", player: "Francisco Lindor", bookmaker: "DraftKings", odds: +100 },
+    { gameId: "mlb-mock-2", sport: "MLB", homeTeam: "Los Angeles Dodgers", awayTeam: "San Diego Padres",
+      startTime: new Date(now + 3 * 3600_000).toISOString(), pick: "Shohei Ohtani Over 1.5 Total Bases",
+      betType: "player_prop", player: "Shohei Ohtani", bookmaker: "FanDuel", odds: +105 },
     { gameId: "mlb-mock-3", sport: "MLB", homeTeam: "Houston Astros", awayTeam: "Seattle Mariners",
-      startTime: new Date(now + 4 * 3600_000).toISOString(), pick: "Yordan Alvarez Over 0.5 Home Runs",
-      betType: "player_prop", player: "Yordan Alvarez", bookmaker: "BetMGM", odds: +205 },
-    { gameId: "mlb-mock-7", sport: "MLB", homeTeam: "St. Louis Cardinals", awayTeam: "Pittsburgh Pirates",
-      startTime: new Date(now + 3 * 3600_000).toISOString(), pick: "Cardinals ML",
-      betType: "moneyline", bookmaker: "DraftKings", odds: +155 },
+      startTime: new Date(now + 4 * 3600_000).toISOString(), pick: "Yordan Alvarez Under 1.5 Home Runs",
+      betType: "player_prop", player: "Yordan Alvarez", bookmaker: "BetMGM", odds: +100 },
+    { gameId: "mlb-mock-4", sport: "MLB", homeTeam: "New York Yankees", awayTeam: "Boston Red Sox",
+      startTime: new Date(now + 3 * 3600_000).toISOString(), pick: "Juan Soto Over 1.5 Total Bases",
+      betType: "player_prop", player: "Juan Soto", bookmaker: "DraftKings", odds: +110 },
+    { gameId: "mlb-mock-5", sport: "MLB", homeTeam: "Atlanta Braves", awayTeam: "Philadelphia Phillies",
+      startTime: new Date(now + 3 * 3600_000).toISOString(), pick: "Ronald Acuña Over 1.5 Total Bases",
+      betType: "player_prop", player: "Ronald Acuña Jr.", bookmaker: "FanDuel", odds: +100 },
+    { gameId: "mlb-mock-6", sport: "MLB", homeTeam: "Chicago Cubs", awayTeam: "St. Louis Cardinals",
+      startTime: new Date(now + 4 * 3600_000).toISOString(), pick: "Kyle Tucker Over 0.5 RBIs",
+      betType: "player_prop", player: "Kyle Tucker", bookmaker: "BetMGM", odds: +105 },
+    { gameId: "mlb-mock-7", sport: "MLB", homeTeam: "Tampa Bay Rays", awayTeam: "Toronto Blue Jays",
+      startTime: new Date(now + 4 * 3600_000).toISOString(), pick: "Vladimir Guerrero Jr. Over 1.5 TB",
+      betType: "player_prop", player: "Vladimir Guerrero Jr.", bookmaker: "DraftKings", odds: +100 },
+    { gameId: "mlb-mock-8", sport: "MLB", homeTeam: "Minnesota Twins", awayTeam: "Detroit Tigers",
+      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Carlos Correa Under 1.5 TB",
+      betType: "player_prop", player: "Carlos Correa", bookmaker: "FanDuel", odds: +100 },
+    { gameId: "mlb-mock-9", sport: "MLB", homeTeam: "Arizona Diamondbacks", awayTeam: "Colorado Rockies",
+      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Ketel Marte Over 1.5 Total Bases",
+      betType: "player_prop", player: "Ketel Marte", bookmaker: "BetMGM", odds: +105 },
+    { gameId: "mlb-mock-10", sport: "MLB", homeTeam: "Cincinnati Reds", awayTeam: "Pittsburgh Pirates",
+      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Elly De La Cruz Over 1.5 Total Bases",
+      betType: "player_prop", player: "Elly De La Cruz", bookmaker: "DraftKings", odds: +100 },
   ];
-  const mlbLadderSteps = makeLadderSteps(mlbLadderLegs, 10);
   const mlbLadder: AILadderParlay = {
-    id: "ladder-mlb", name: "$10 → $10,000 MLB Ladder", sport: "MLB",
-    startStake: 10, targetPayout: 10000, steps: mlbLadderSteps, legs: mlbLadderLegs,
-    combinedOdds: calcCombinedOdds(mlbLadderLegs), confidence: 2,
-    reasoning: "A 7-leg MLB ladder stacking HR props and underdog moneylines across today's full slate. If every leg hits, $10 becomes $15,000+. Low probability, massive upside.",
+    id: "ladder-mlb", name: "MLB Daily Ladder", sport: "MLB",
+    startStake: 10, targetPayout: 10240, totalDays: 10,
+    steps: makeDailyLadder(mlbLadderLegs), confidence: 45,
+    reasoning: "Start today with $10 on Lindor Over 1.5 Total Bases (+100). Win $20, roll it to tomorrow's MLB prop. All picks are total bases or RBI props near even odds — achievable daily.",
   };
 
+  // NHL daily ladder
   const nhlLadderLegs: AIPickLeg[] = [
-    { gameId: "nhl-mock-4", sport: "NHL", homeTeam: "Edmonton Oilers", awayTeam: "Los Angeles Kings",
-      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Connor McDavid Anytime Goal Scorer",
-      betType: "player_prop", player: "Connor McDavid", bookmaker: "DraftKings", odds: +155 },
-    { gameId: "nhl-mock-1", sport: "NHL", homeTeam: "Florida Panthers", awayTeam: "Toronto Maple Leafs",
-      startTime: new Date(now + 7 * 3600_000).toISOString(), pick: "Matthew Tkachuk Anytime Goal Scorer",
-      betType: "player_prop", player: "Matthew Tkachuk", bookmaker: "FanDuel", odds: +170 },
-    { gameId: "nhl-mock-5", sport: "NHL", homeTeam: "Toronto Maple Leafs", awayTeam: "Detroit Red Wings",
-      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Auston Matthews Anytime Goal Scorer",
-      betType: "player_prop", player: "Auston Matthews", bookmaker: "BetMGM", odds: +160 },
-    { gameId: "nhl-mock-1", sport: "NHL", homeTeam: "Florida Panthers", awayTeam: "Toronto Maple Leafs",
-      startTime: new Date(now + 7 * 3600_000).toISOString(), pick: "Panthers ML",
-      betType: "moneyline", bookmaker: "DraftKings", odds: +130 },
+    { gameId: "nhl-mock-1", sport: "NHL", homeTeam: "Vegas Golden Knights", awayTeam: "Anaheim Ducks",
+      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Leo Carlsson Anytime Goal Scorer",
+      betType: "player_prop", player: "Leo Carlsson", bookmaker: "FanDuel", odds: +100 },
     { gameId: "nhl-mock-2", sport: "NHL", homeTeam: "Colorado Avalanche", awayTeam: "Edmonton Oilers",
-      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Leon Draisaitl Anytime Goal Scorer",
-      betType: "player_prop", player: "Leon Draisaitl", bookmaker: "FanDuel", odds: +185 },
-    { gameId: "nhl-mock-5", sport: "NHL", homeTeam: "Toronto Maple Leafs", awayTeam: "Detroit Red Wings",
-      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Maple Leafs +1.5 Goals",
-      betType: "spread", bookmaker: "BetMGM", odds: +165 },
-    { gameId: "nhl-mock-3", sport: "NHL", homeTeam: "Boston Bruins", awayTeam: "Tampa Bay Lightning",
-      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Nikita Kucherov Anytime Goal Scorer",
-      betType: "player_prop", player: "Nikita Kucherov", bookmaker: "DraftKings", odds: +175 },
-    { gameId: "nhl-mock-6", sport: "NHL", homeTeam: "Vegas Golden Knights", awayTeam: "Winnipeg Jets",
-      startTime: new Date(now + 8 * 3600_000).toISOString(), pick: "Over 6.5 Goals",
-      betType: "over", bookmaker: "FanDuel", odds: +120 },
+      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Nathan MacKinnon Over 0.5 Points",
+      betType: "player_prop", player: "Nathan MacKinnon", bookmaker: "DraftKings", odds: +100 },
+    { gameId: "nhl-mock-3", sport: "NHL", homeTeam: "Florida Panthers", awayTeam: "Toronto Maple Leafs",
+      startTime: new Date(now + 7 * 3600_000).toISOString(), pick: "Auston Matthews Anytime Goal Scorer",
+      betType: "player_prop", player: "Auston Matthews", bookmaker: "BetMGM", odds: +110 },
+    { gameId: "nhl-mock-4", sport: "NHL", homeTeam: "Boston Bruins", awayTeam: "Tampa Bay Lightning",
+      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "David Pastrnak Over 0.5 Points",
+      betType: "player_prop", player: "David Pastrnak", bookmaker: "FanDuel", odds: +100 },
+    { gameId: "nhl-mock-5", sport: "NHL", homeTeam: "Carolina Hurricanes", awayTeam: "New York Rangers",
+      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Sebastian Aho Anytime Goal Scorer",
+      betType: "player_prop", player: "Sebastian Aho", bookmaker: "DraftKings", odds: +105 },
+    { gameId: "nhl-mock-6", sport: "NHL", homeTeam: "New Jersey Devils", awayTeam: "New York Islanders",
+      startTime: new Date(now + 7 * 3600_000).toISOString(), pick: "Jack Hughes Over 0.5 Points",
+      betType: "player_prop", player: "Jack Hughes", bookmaker: "BetMGM", odds: +100 },
+    { gameId: "nhl-mock-7", sport: "NHL", homeTeam: "Dallas Stars", awayTeam: "Minnesota Wild",
+      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Jason Robertson Anytime Goal Scorer",
+      betType: "player_prop", player: "Jason Robertson", bookmaker: "FanDuel", odds: +110 },
+    { gameId: "nhl-mock-8", sport: "NHL", homeTeam: "Nashville Predators", awayTeam: "Winnipeg Jets",
+      startTime: new Date(now + 7 * 3600_000).toISOString(), pick: "Mark Scheifele Over 0.5 Points",
+      betType: "player_prop", player: "Mark Scheifele", bookmaker: "DraftKings", odds: +100 },
+    { gameId: "nhl-mock-9", sport: "NHL", homeTeam: "Detroit Red Wings", awayTeam: "Ottawa Senators",
+      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Dylan Larkin Over 0.5 Points",
+      betType: "player_prop", player: "Dylan Larkin", bookmaker: "BetMGM", odds: +100 },
+    { gameId: "nhl-mock-10", sport: "NHL", homeTeam: "Pittsburgh Penguins", awayTeam: "Buffalo Sabres",
+      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Evgeni Malkin Anytime Goal Scorer",
+      betType: "player_prop", player: "Evgeni Malkin", bookmaker: "FanDuel", odds: +105 },
   ];
-  const nhlLadderSteps = makeLadderSteps(nhlLadderLegs, 10);
   const nhlLadder: AILadderParlay = {
-    id: "ladder-nhl", name: "$10 → $10,000 NHL Ladder", sport: "NHL",
-    startStake: 10, targetPayout: 10000, steps: nhlLadderSteps, legs: nhlLadderLegs,
-    combinedOdds: calcCombinedOdds(nhlLadderLegs), confidence: 2,
-    reasoning: "An 8-leg NHL ladder stacking tonight's top goal scorers and underdog puck lines. $10 becomes $18,000+ if every leg hits. Best for playoff chaos nights when upsets happen.",
+    id: "ladder-nhl", name: "NHL Daily Ladder", sport: "NHL",
+    startStake: 10, targetPayout: 10240, totalDays: 10,
+    steps: makeDailyLadder(nhlLadderLegs), confidence: 45,
+    reasoning: "Start today with $10 on Leo Carlsson Anytime Goal Scorer (+100). Win $20, roll it onto tomorrow's NHL prop. All picks are goal scorer or points props at near even odds.",
   };
 
+  // NFL daily ladder
   const nflLadderLegs: AIPickLeg[] = [
     { gameId: "nfl-mock-1", sport: "NFL", homeTeam: "Kansas City Chiefs", awayTeam: "Las Vegas Raiders",
-      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Travis Kelce Anytime TD",
-      betType: "player_prop", player: "Travis Kelce", bookmaker: "DraftKings", odds: +130 },
+      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Travis Kelce Over 4.5 Receptions",
+      betType: "player_prop", player: "Travis Kelce", bookmaker: "DraftKings", odds: +100 },
     { gameId: "nfl-mock-2", sport: "NFL", homeTeam: "Dallas Cowboys", awayTeam: "Philadelphia Eagles",
-      startTime: new Date(now + 4 * 3600_000).toISOString(), pick: "CeeDee Lamb Anytime TD",
-      betType: "player_prop", player: "CeeDee Lamb", bookmaker: "FanDuel", odds: +115 },
-    { gameId: "nfl-mock-4", sport: "NFL", homeTeam: "Buffalo Bills", awayTeam: "Miami Dolphins",
-      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Josh Allen Over 275.5 Pass Yds",
-      betType: "player_prop", player: "Josh Allen", bookmaker: "BetMGM", odds: +145 },
-    { gameId: "nfl-mock-3", sport: "NFL", homeTeam: "Green Bay Packers", awayTeam: "Detroit Lions",
-      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Davante Adams Anytime TD",
-      betType: "player_prop", player: "Davante Adams", bookmaker: "DraftKings", odds: +120 },
+      startTime: new Date(now + 4 * 3600_000).toISOString(), pick: "CeeDee Lamb Over 5.5 Receptions",
+      betType: "player_prop", player: "CeeDee Lamb", bookmaker: "FanDuel", odds: +100 },
+    { gameId: "nfl-mock-3", sport: "NFL", homeTeam: "Buffalo Bills", awayTeam: "Miami Dolphins",
+      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Josh Allen Under 1.5 TDs Passing",
+      betType: "player_prop", player: "Josh Allen", bookmaker: "BetMGM", odds: +105 },
+    { gameId: "nfl-mock-4", sport: "NFL", homeTeam: "Green Bay Packers", awayTeam: "Detroit Lions",
+      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Davante Adams Over 4.5 Receptions",
+      betType: "player_prop", player: "Davante Adams", bookmaker: "DraftKings", odds: +100 },
     { gameId: "nfl-mock-5", sport: "NFL", homeTeam: "San Francisco 49ers", awayTeam: "Los Angeles Rams",
-      startTime: new Date(now + 7 * 3600_000).toISOString(), pick: "Dolphins ML",
-      betType: "moneyline", bookmaker: "FanDuel", odds: +175 },
+      startTime: new Date(now + 7 * 3600_000).toISOString(), pick: "Christian McCaffrey Over 5.5 Receptions",
+      betType: "player_prop", player: "Christian McCaffrey", bookmaker: "FanDuel", odds: +110 },
     { gameId: "nfl-mock-6", sport: "NFL", homeTeam: "Minnesota Vikings", awayTeam: "Chicago Bears",
-      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Justin Jefferson Over 85.5 Rec Yds",
-      betType: "player_prop", player: "Justin Jefferson", bookmaker: "BetMGM", odds: +190 },
-    { gameId: "nfl-mock-4", sport: "NFL", homeTeam: "Buffalo Bills", awayTeam: "Miami Dolphins",
-      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Over 51.5",
-      betType: "over", bookmaker: "DraftKings", odds: +125 },
+      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Justin Jefferson Over 5.5 Receptions",
+      betType: "player_prop", player: "Justin Jefferson", bookmaker: "BetMGM", odds: +100 },
     { gameId: "nfl-mock-7", sport: "NFL", homeTeam: "Cincinnati Bengals", awayTeam: "Pittsburgh Steelers",
-      startTime: new Date(now + 7 * 3600_000).toISOString(), pick: "Tyreek Hill Over 75.5 Rec Yds",
-      betType: "player_prop", player: "Tyreek Hill", bookmaker: "FanDuel", odds: +180 },
+      startTime: new Date(now + 7 * 3600_000).toISOString(), pick: "Tyreek Hill Over 5.5 Receptions",
+      betType: "player_prop", player: "Tyreek Hill", bookmaker: "DraftKings", odds: +100 },
+    { gameId: "nfl-mock-8", sport: "NFL", homeTeam: "New England Patriots", awayTeam: "New York Jets",
+      startTime: new Date(now + 4 * 3600_000).toISOString(), pick: "Garrett Wilson Over 4.5 Receptions",
+      betType: "player_prop", player: "Garrett Wilson", bookmaker: "FanDuel", odds: +105 },
+    { gameId: "nfl-mock-9", sport: "NFL", homeTeam: "Seattle Seahawks", awayTeam: "Los Angeles Chargers",
+      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "DK Metcalf Under 65.5 Rec Yds",
+      betType: "player_prop", player: "DK Metcalf", bookmaker: "BetMGM", odds: +100 },
+    { gameId: "nfl-mock-10", sport: "NFL", homeTeam: "Tennessee Titans", awayTeam: "Indianapolis Colts",
+      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Jonathan Taylor Over 15.5 Carries",
+      betType: "player_prop", player: "Jonathan Taylor", bookmaker: "DraftKings", odds: +100 },
   ];
-  const nflLadderSteps = makeLadderSteps(nflLadderLegs, 10);
   const nflLadder: AILadderParlay = {
-    id: "ladder-nfl", name: "$10 → $10,000 NFL Ladder", sport: "NFL",
-    startStake: 10, targetPayout: 10000, steps: nflLadderSteps, legs: nflLadderLegs,
-    combinedOdds: calcCombinedOdds(nflLadderLegs), confidence: 2,
-    reasoning: "An 8-leg NFL ladder stacking TD scorers, high-yardage props, and a game-script underdog. If all 8 hit, $10 turns into $13,000+. Small bet, massive dream.",
+    id: "ladder-nfl", name: "NFL Daily Ladder", sport: "NFL",
+    startStake: 10, targetPayout: 10240, totalDays: 10,
+    steps: makeDailyLadder(nflLadderLegs), confidence: 45,
+    reasoning: "Start today with $10 on Kelce Over 4.5 Receptions (+100). Win $20, roll it onto tomorrow's NFL prop. All picks are reception or carry props at near even odds — grind it daily.",
+  };
+
+  // All-sports ladder: NBA + MLB mix
+  const allLadderLegs: AIPickLeg[] = [
+    nbaLadderLegs[0], mlbLadderLegs[0], nbaLadderLegs[1], mlbLadderLegs[1],
+    nhlLadderLegs[0], nbaLadderLegs[2], mlbLadderLegs[2], nhlLadderLegs[1],
+    nbaLadderLegs[3], mlbLadderLegs[3],
+  ];
+  const allLadder: AILadderParlay = {
+    id: "ladder-all", name: "All Sports Daily Ladder", sport: "All",
+    startStake: 10, targetPayout: 10240, totalDays: 10,
+    steps: makeDailyLadder(allLadderLegs), confidence: 45,
+    reasoning: "Today: $10 on SGA Over 25.5 Points (+100). Win = $20. Tomorrow: Lindor Over 1.5 Total Bases. Alternates between NBA and MLB (and NHL) near-even props. Win all 10 days to turn $10 into $10,240.",
   };
 
   return {
@@ -707,6 +761,7 @@ function buildFallbackPicks(): AIPicksResponse {
     goalScorerParlay,
     threePtParlay,
     tdParlay,
+    allLadder,
     nbaLadder,
     mlbLadder,
     nhlLadder,
@@ -1007,74 +1062,80 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `${tdLegs.length} anytime TD scorer props from today's NFL slate. Each target has high red zone usage and faces a defense ranked bottom-third in TDs allowed.`,
     } : null;
 
-    // ── LADDER PARLAYS ($10 → $10K per sport) ────────────────────────────────
-    function buildLadderParlay(
-      sportApiKey: string,
+    // ── DAILY COMPOUNDING LADDERS ($10 → $10K) ───────────────────────────────
+    // Each step = one day's bet. Win it, roll the payout to tomorrow.
+    // Targets ~+100 odds per pick so the stake roughly doubles each day.
+    function buildDailyLadder(
+      apiKeys: string[],
       sportLabel: string,
     ): AILadderParlay | null {
       const START = 10;
-      const TARGET = 10000;
+      const TARGET = 10240;
+      const TOTAL_DAYS = 10;
       const seenPlayers = new Set<string>();
-      const seenGames = new Set<string>();
 
-      // Collect high-odds props for this sport (prefer positive/bigger odds for ladder upside)
-      const sportPropLegs: AIPickLeg[] = realProps
-        .filter((p) => p.sport === sportApiKey)
-        .sort((a, b) => Math.max(b.overOdds, b.underOdds) - Math.max(a.overOdds, a.underOdds))
+      // Look for props where the better side is near even money (+80 to +200)
+      const candidates: AIPickLeg[] = realProps
+        .filter((p) => {
+          if (!apiKeys.includes(p.sport)) return false;
+          return Math.max(p.overOdds, p.underOdds) >= 80;
+        })
+        .sort((a, b) => {
+          // Prefer odds closest to +100 (cleanest doubling)
+          const aBest = Math.max(a.overOdds, a.underOdds);
+          const bBest = Math.max(b.overOdds, b.underOdds);
+          return Math.abs(aBest - 100) - Math.abs(bBest - 100);
+        })
         .map(propToLeg)
         .filter((l) => {
           if (l.player && seenPlayers.has(l.player)) return false;
           if (l.player) seenPlayers.add(l.player);
-          seenGames.add(l.gameId);
           return true;
-        })
-        .slice(0, 7);
+        });
 
-      // Fill with underdog game bets if needed
-      const sportGameLegs: AIPickLeg[] = valueBetsRaw
-        .filter((vb) => {
-          const label = normSport(vb.sport);
-          return label === sportLabel && !seenGames.has(vb.gameId) && vb.odds > -120;
-        })
-        .sort((a, b) => b.odds - a.odds)
-        .slice(0, 4)
-        .map(vbToLeg);
+      if (candidates.length < 1) return null;
 
-      const candidates = [...sportPropLegs, ...sportGameLegs];
-      if (candidates.length < 3) return null;
-
-      // Walk legs accumulating payout until we hit TARGET (cap at 10 legs)
+      // Build day-by-day compound steps
       const steps: AILadderStep[] = [];
-      let running = START;
-      for (const leg of candidates.slice(0, 10)) {
+      let stake = START;
+      for (let day = 1; day <= Math.min(TOTAL_DAYS, candidates.length); day++) {
+        const leg = candidates[day - 1];
         const dec = americanToDecimal(leg.odds);
-        running = parseFloat((running * dec).toFixed(2));
-        steps.push({ leg, runningPayout: running });
-        if (running >= TARGET) break;
+        const targetWin = parseFloat((stake * dec).toFixed(2));
+        steps.push({ day, stake: parseFloat(stake.toFixed(2)), targetWin, leg });
+        stake = targetWin;
       }
 
-      if (steps.length < 3) return null;
+      if (steps.length < 1) return null;
 
-      const finalLegs = steps.map((s) => s.leg);
-      const finalPayout = steps[steps.length - 1]?.runningPayout ?? 0;
+      const today = steps[0];
+      const finalWin = steps[steps.length - 1].targetWin;
       return {
-        id: `ladder-${sportLabel.toLowerCase()}`,
-        name: `$${START} → $${TARGET.toLocaleString()} ${sportLabel} Ladder`,
+        id: `ladder-${sportLabel.toLowerCase().replace(/\s+/g, "-")}`,
+        name: `${sportLabel} Daily Ladder`,
         sport: sportLabel,
         startStake: START,
         targetPayout: TARGET,
+        totalDays: TOTAL_DAYS,
         steps,
-        legs: finalLegs,
-        combinedOdds: calcCombinedOdds(finalLegs),
-        confidence: Math.max(2, Math.round(20 - finalLegs.length * 2)),
-        reasoning: `A ${finalLegs.length}-leg ${sportLabel} ladder starting at $${START}. If every leg hits, $${START} becomes ~$${Math.round(finalPayout).toLocaleString()}. High variance — small stake only.`,
+        confidence: 45,
+        reasoning: `TODAY: Bet $${today.stake.toFixed(0)} on "${today.leg.pick}" (${today.leg.odds > 0 ? "+" : ""}${today.leg.odds}). If it wins you'll have $${today.targetWin.toFixed(0)}. Roll that onto tomorrow's pick. Win all ${steps.length} days in a row to build to $${Math.round(finalWin).toLocaleString()}. Keep stakes small — these are ~+100 props.`,
       };
     }
 
-    const nbaLadder = buildLadderParlay("basketball_nba", "NBA");
-    const mlbLadder = buildLadderParlay("baseball_mlb", "MLB");
-    const nhlLadder = buildLadderParlay("icehockey_nhl", "NHL");
-    const nflLadder = buildLadderParlay("americanfootball_nfl", "NFL");
+    const nbaLadder = buildDailyLadder(["basketball_nba"], "NBA");
+    const mlbLadder = buildDailyLadder(["baseball_mlb"], "MLB");
+    const nhlLadder = buildDailyLadder(["icehockey_nhl"], "NHL");
+    const nflLadder = buildDailyLadder(["americanfootball_nfl"], "NFL");
+
+    // All-sports ladder: pick from the top 2 most active sports today
+    const sportCounts: Record<string, number> = {};
+    for (const p of realProps) { sportCounts[p.sport] = (sportCounts[p.sport] ?? 0) + 1; }
+    const topSportKeys = Object.entries(sportCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([k]) => k);
+    const allLadder = topSportKeys.length > 0 ? buildDailyLadder(topSportKeys, "All Sports") : null;
 
     const sportsInPlay = [...new Set([
       ...gameBets.slice(0, 6).map((v) => normSport(v.sport)),
@@ -1096,6 +1157,7 @@ router.get("/ai-picks", async (req, res) => {
       goalScorerParlay,
       threePtParlay,
       tdParlay,
+      allLadder,
       nbaLadder,
       mlbLadder,
       nhlLadder,

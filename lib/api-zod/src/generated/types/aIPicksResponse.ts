@@ -20,6 +20,7 @@ export interface AIPicksResponse {
   goalScorerParlay?: AIParlay | null;
   threePtParlay?: AIParlay | null;
   tdParlay?: AIParlay | null;
+  allLadder?: AILadderParlay | null;
   nbaLadder?: AILadderParlay | null;
   mlbLadder?: AILadderParlay | null;
   nhlLadder?: AILadderParlay | null;

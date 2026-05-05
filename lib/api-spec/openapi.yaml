@@ -1332,28 +1332,40 @@ components:
     AILadderStep:
       type: object
       properties:
+        day:
+          type: integer
+        stake:
+          type: number
+        targetWin:
+          type: number
         leg:
           $ref: "#/components/schemas/AIPickLeg"
-        runningPayout:
-          type: number
-      required: [leg, runningPayout]
+      required: [day, stake, targetWin, leg]
 
     AILadderParlay:
-      allOf:
-        - $ref: "#/components/schemas/AIParlay"
-        - type: object
-          properties:
-            sport:
-              type: string
-            startStake:
-              type: number
-            targetPayout:
-              type: number
-            steps:
-              type: array
-              items:
-                $ref: "#/components/schemas/AILadderStep"
-          required: [sport, startStake, targetPayout, steps]
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        sport:
+          type: string
+        startStake:
+          type: number
+        targetPayout:
+          type: number
+        totalDays:
+          type: integer
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/AILadderStep"
+        confidence:
+          type: integer
+        reasoning:
+          type: string
+      required: [id, name, sport, startStake, targetPayout, totalDays, steps, confidence, reasoning]
 
     AIPicksResponse:
       type: object
@@ -1387,6 +1399,9 @@ components:
           nullable: true
         tdParlay:
           $ref: "#/components/schemas/AIParlay"
+          nullable: true
+        allLadder:
+          $ref: "#/components/schemas/AILadderParlay"
           nullable: true
         nbaLadder:
           $ref: "#/components/schemas/AILadderParlay"
