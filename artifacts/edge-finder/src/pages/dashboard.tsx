@@ -1,21 +1,9 @@
 import { useGetDashboardSummary, getGetDashboardSummaryQueryKey, useGetLineMovements } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
 import { Link } from "wouter";
-import { Activity, TrendingUp, Zap, RefreshCw, BarChart2, ChevronRight, TrendingDown, ArrowRight } from "lucide-react";
+import { Activity, BarChart2, RefreshCw, ChevronRight, TrendingUp, TrendingDown, ArrowRight, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow, formatDistance } from "date-fns";
-
-function EdgeBadge({ edge }: { edge: number }) {
-  return (
-    <span className={cn(
-      "inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold border",
-      edge >= 2 ? "edge-bg-high" : edge >= 1 ? "edge-bg-medium" : "edge-bg-low"
-    )}>
-      +{edge.toFixed(2)}%
-    </span>
-  );
-}
+import { formatDistanceToNow } from "date-fns";
 
 function SportBadge({ sport }: { sport: string }) {
   const colors: Record<string, string> = {
@@ -143,23 +131,22 @@ export default function Dashboard() {
 
       {/* Stats */}
       {summary.isLoading ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[...Array(4)].map((_, i) => <div key={i} className="bg-card border border-card-border rounded-lg p-4 h-24 animate-pulse" />)}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {[...Array(3)].map((_, i) => <div key={i} className="bg-card border border-card-border rounded-lg p-4 h-24 animate-pulse" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <StatCard label="Live Games" value={data?.liveGamesCount ?? 0} icon={Activity} color="bg-red-500/10 text-red-400" />
-          <StatCard label="Upcoming" value={data?.upcomingGamesCount ?? 0} icon={BarChart2} color="bg-blue-500/10 text-blue-400" />
-          <StatCard label="Value Bets" value={data?.totalValueBets ?? 0} sub={data?.isLiveData ? "live market data" : "with edge detected"} icon={TrendingUp} color="bg-primary/10 text-primary" />
-          <StatCard label="Avg Edge" value={data?.totalValueBets ? `${(data?.avgEdge ?? 0).toFixed(2)}%` : "—"} sub="across all bets" icon={Zap} color="bg-yellow-500/10 text-yellow-400" />
+          <StatCard label="Upcoming" value={data?.upcomingGamesCount ?? 0} sub="today's slate" icon={Calendar} color="bg-blue-500/10 text-blue-400" />
+          <StatCard label="Total Games" value={data?.totalGames ?? 0} sub="across all sports" icon={BarChart2} color="bg-primary/10 text-primary" />
         </div>
       )}
 
-      {/* Top Value Bets */}
+      {/* Today's Top Games */}
       <div className="bg-card border border-card-border rounded-lg overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h2 className="text-sm font-semibold">Top Value Bets</h2>
-          <Link href="/value-bets">
+          <h2 className="text-sm font-semibold">Today's Top Games</h2>
+          <Link href="/games">
             <span className="text-xs text-primary hover:underline flex items-center gap-1 cursor-pointer" data-testid="link-view-all-bets">
               View all <ChevronRight className="h-3 w-3" />
             </span>
@@ -167,52 +154,26 @@ export default function Dashboard() {
         </div>
         {summary.isLoading ? (
           <div className="p-4 space-y-3">
-            {[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-muted rounded animate-pulse" />)}
+            {[...Array(4)].map((_, i) => <div key={i} className="h-12 bg-muted rounded animate-pulse" />)}
+          </div>
+        ) : !(data?.topGames as any[])?.length ? (
+          <div className="px-4 py-8 text-center">
+            <p className="text-sm text-muted-foreground">No upcoming games found.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-xs text-muted-foreground">
-                  <th className="text-left px-4 py-2 font-medium">Game</th>
-                  <th className="text-left px-4 py-2 font-medium hidden sm:table-cell">Sport</th>
-                  <th className="text-left px-4 py-2 font-medium">Bet</th>
-                  <th className="text-left px-4 py-2 font-medium">Book</th>
-                  <th className="text-right px-4 py-2 font-medium">Edge</th>
-                  <th className="text-right px-4 py-2 font-medium hidden md:table-cell">Kelly</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.topValueBets ?? []).map((vb) => (
-                  <tr key={vb.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors" data-testid={`row-value-bet-${vb.id}`}>
-                    <td className="px-4 py-2.5">
-                      <div className="font-medium text-xs leading-snug">
-                        <span>{vb.homeTeam}</span>
-                        <span className="text-muted-foreground mx-1">vs</span>
-                        <span>{vb.awayTeam}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-2.5 hidden sm:table-cell">
-                      <SportBadge sport={vb.sport} />
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="text-xs">
-                        <span className="font-medium">{vb.team}</span>
-                        <span className="text-muted-foreground ml-1 capitalize">{vb.betType}</span>
-                      </div>
-                      <div className="font-mono text-xs text-muted-foreground">{vb.odds > 0 ? `+${vb.odds}` : vb.odds}</div>
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{vb.bookmaker}</td>
-                    <td className="px-4 py-2.5 text-right">
-                      <EdgeBadge edge={vb.edge} />
-                    </td>
-                    <td className="px-4 py-2.5 text-right hidden md:table-cell">
-                      <span className="text-xs font-mono text-muted-foreground">{(vb.kellyStake * 100).toFixed(1)}%</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="divide-y divide-border">
+            {((data?.topGames ?? []) as any[]).map((g: any) => (
+              <Link key={g.id} href={`/games/${g.id}`}>
+                <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors cursor-pointer" data-testid={`row-game-${g.id}`}>
+                  <SportBadge sport={g.sport} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-medium truncate">{g.awayTeam} @ {g.homeTeam}</div>
+                    <div className="text-[10px] text-muted-foreground">{new Date(g.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {g.bookCount} books</div>
+                  </div>
+                  <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                </div>
+              </Link>
+            ))}
           </div>
         )}
       </div>
@@ -220,23 +181,17 @@ export default function Dashboard() {
       {/* Steam Moves */}
       <SteamMovesWidget />
 
-      {/* Sport Breakdown */}
+      {/* Sport & Bookmaker Breakdown */}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-card border border-card-border rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-border">
             <h2 className="text-sm font-semibold">By Sport</h2>
           </div>
           <div className="divide-y divide-border">
-            {(data?.sportBreakdown ?? []).map((s) => (
+            {((data?.sportBreakdown ?? []) as any[]).map((s: any) => (
               <div key={s.sport} className="flex items-center justify-between px-4 py-3" data-testid={`stat-sport-${s.sport.toLowerCase()}`}>
-                <div className="flex items-center gap-2">
-                  <SportBadge sport={s.sport} />
-                  <span className="text-xs text-muted-foreground">{s.games} games</span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-xs text-muted-foreground">{s.valueBets} bets</span>
-                  <EdgeBadge edge={s.avgEdge} />
-                </div>
+                <SportBadge sport={s.sport} />
+                <span className="text-xs text-muted-foreground">{s.games} game{s.games !== 1 ? "s" : ""}</span>
               </div>
             ))}
           </div>
@@ -247,13 +202,10 @@ export default function Dashboard() {
             <h2 className="text-sm font-semibold">By Bookmaker</h2>
           </div>
           <div className="divide-y divide-border">
-            {(data?.bookmakerBreakdown ?? []).map((b) => (
+            {((data?.bookmakerBreakdown ?? []) as any[]).map((b: any) => (
               <div key={b.bookmaker} className="flex items-center justify-between px-4 py-3" data-testid={`stat-bookmaker-${b.bookmaker.toLowerCase()}`}>
                 <span className="text-sm font-medium">{b.bookmaker}</span>
-                <div className="flex items-center gap-4">
-                  <span className="text-xs text-muted-foreground">{b.valueBets} bets</span>
-                  <EdgeBadge edge={b.avgEdge} />
-                </div>
+                <span className="text-xs text-muted-foreground">{b.games} game{b.games !== 1 ? "s" : ""}</span>
               </div>
             ))}
           </div>

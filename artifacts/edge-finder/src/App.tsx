@@ -7,7 +7,6 @@ import NotFound from "@/pages/not-found";
 import { AppLayout } from "@/components/layout/app-layout";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
-import ValueBets from "@/pages/value-bets";
 import Games from "@/pages/games";
 import GameDetail from "@/pages/game-detail";
 import Tracker from "@/pages/tracker";
@@ -32,7 +31,6 @@ function Router() {
         <AppLayout>
           <Switch>
             <Route path="/" component={Dashboard} />
-            <Route path="/value-bets" component={ValueBets} />
             <Route path="/games" component={Games} />
             <Route path="/games/:gameId" component={GameDetail} />
             <Route path="/tracker" component={Tracker} />

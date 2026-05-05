@@ -3,7 +3,6 @@ import {
   useGetDashboardSummary,
   useGetLineMovements,
   type LineMovement,
-  type ValueBet,
 } from "@workspace/api-client-react";
 import React, { useState } from "react";
 import {
@@ -21,8 +20,8 @@ import { QuickAddModal, type QuickAddBet } from "@/components/QuickAddModal";
 import { StatPill } from "@/components/StatPill";
 import { useColors } from "@/hooks/useColors";
 
-function formatOdds(odds: number) {
-  return odds > 0 ? `+${odds}` : `${odds}`;
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function timeSince(dateStr: string) {
@@ -57,7 +56,9 @@ const secStyles = StyleSheet.create({
   label: { fontSize: 15, fontFamily: "Inter_600SemiBold", letterSpacing: -0.2 },
 });
 
-function TopBetRow({ bet, onTrack }: { bet: ValueBet; onTrack: () => void }) {
+type TopGame = { id: string; sport: string; homeTeam: string; awayTeam: string; startTime: string; bookCount: number };
+
+function TopGameRow({ game, onTrack }: { game: TopGame; onTrack: () => void }) {
   const colors = useColors();
   return (
     <TouchableOpacity
@@ -68,16 +69,13 @@ function TopBetRow({ bet, onTrack }: { bet: ValueBet; onTrack: () => void }) {
       <View style={[styles.topBetAccent, { backgroundColor: colors.primary + "60" }]} />
       <View style={styles.topBetLeft}>
         <Text style={[styles.topBetMatchup, { color: colors.foreground }]} numberOfLines={1}>
-          {bet.team} {bet.betType}
+          {game.awayTeam} @ {game.homeTeam}
         </Text>
         <Text style={[styles.topBetSub, { color: colors.mutedForeground }]} numberOfLines={1}>
-          {bet.awayTeam} @ {bet.homeTeam} · {bet.bookmaker}
+          {game.sport} · {formatTime(game.startTime)} · {game.bookCount} books
         </Text>
       </View>
       <View style={styles.topBetRight}>
-        <Text style={[styles.topBetOdds, { color: colors.primary }]}>
-          {formatOdds(bet.odds)}
-        </Text>
         <View style={[styles.trackPill, { borderColor: colors.border }]}>
           <Feather name="plus" size={10} color={colors.mutedForeground} />
           <Text style={[styles.trackPillText, { color: colors.mutedForeground }]}>Track</Text>
@@ -125,6 +123,7 @@ export default function DashboardScreen() {
   const isRefreshing = summaryQ.isFetching || movementsQ.isFetching;
   const summary = summaryQ.data;
   const movements = movementsQ.data ?? [];
+  const topGames: TopGame[] = (summary as any)?.topGames ?? [];
 
   const onRefresh = () => {
     summaryQ.refetch();
@@ -142,15 +141,15 @@ export default function DashboardScreen() {
     >
       {/* Stats row */}
       <View style={styles.statsRow}>
-        <StatPill label="Live Games" value={summary?.liveGamesCount ?? 0} />
-        <StatPill label="Upcoming" value={summary?.upcomingGamesCount ?? 0} />
-        <StatPill label="Value Bets" value={summary?.totalValueBets ?? 0} accent />
+        <StatPill label="Live" value={(summary as any)?.liveGamesCount ?? 0} />
+        <StatPill label="Upcoming" value={(summary as any)?.upcomingGamesCount ?? 0} />
+        <StatPill label="Total Games" value={(summary as any)?.totalGames ?? 0} accent />
       </View>
 
-      {/* Top Value Bets */}
+      {/* Today's Top Games */}
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.sectionHeaderRow}>
-          <SectionTitle icon="zap" label="Top Value Bets" />
+          <SectionTitle icon="calendar" label="Today's Top Games" />
           {summaryQ.isLoading && (
             <ActivityIndicator size="small" color={colors.mutedForeground} style={{ marginRight: 16 }} />
           )}
@@ -164,21 +163,21 @@ export default function DashboardScreen() {
               </View>
             ))}
           </View>
-        ) : !summary?.topValueBets?.length ? (
+        ) : !topGames.length ? (
           <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-            No value bets right now — pull to refresh
+            No upcoming games yet — pull to refresh
           </Text>
         ) : (
-          summary.topValueBets.slice(0, 6).map((b) => (
-            <TopBetRow
-              key={b.id}
-              bet={b}
+          topGames.slice(0, 6).map((g) => (
+            <TopGameRow
+              key={g.id}
+              game={g}
               onTrack={() =>
                 setQuickAdd({
-                  matchup: `${b.awayTeam} @ ${b.homeTeam}`,
-                  pick: `${b.team} ${b.betType}`,
-                  bookmaker: b.bookmaker,
-                  odds: b.odds,
+                  matchup: `${g.awayTeam} @ ${g.homeTeam}`,
+                  pick: `${g.awayTeam} @ ${g.homeTeam}`,
+                  bookmaker: "",
+                  odds: 0,
                 })
               }
             />
@@ -213,7 +212,7 @@ export default function DashboardScreen() {
       </View>
 
       {/* Sport Breakdown */}
-      {(summaryQ.isLoading || !!summary?.sportBreakdown?.length) && (
+      {(summaryQ.isLoading || !!((summary as any)?.sportBreakdown?.length)) && (
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <SectionTitle icon="bar-chart-2" label="By Sport" />
           {summaryQ.isLoading ? (
@@ -226,18 +225,13 @@ export default function DashboardScreen() {
               ))}
             </View>
           ) : (
-            summary?.sportBreakdown?.map((s) => (
+            ((summary as any)?.sportBreakdown ?? []).map((s: any) => (
               <View key={s.sport} style={[styles.sportRow, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.sportName, { color: colors.foreground }]}>{s.sport}</Text>
                 <View style={styles.sportStats}>
                   <Text style={[styles.sportStat, { color: colors.mutedForeground }]}>
-                    {s.games} games
+                    {s.games} game{s.games !== 1 ? "s" : ""}
                   </Text>
-                  <View style={[styles.sportBadge, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "40" }]}>
-                    <Text style={[styles.sportBadgeText, { color: colors.primary }]}>
-                      {s.valueBets} value bet{s.valueBets !== 1 ? "s" : ""}
-                    </Text>
-                  </View>
                 </View>
               </View>
             ))
@@ -267,77 +261,60 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     padding: 16,
     paddingTop: 4,
-    paddingBottom: 16,
   },
-  skeletonWrap: { paddingBottom: 6 },
-  skeletonRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 8,
-  },
-  skeletonLine: { height: 11, borderRadius: 6 },
   topBetRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingRight: 16,
-    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 10,
+    paddingVertical: 12,
+    paddingRight: 16,
   },
-  topBetAccent: { width: 3, height: 36, borderRadius: 2, marginLeft: 1 },
-  topBetLeft: { flex: 1 },
-  topBetMatchup: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  topBetAccent: { width: 3, height: 36, borderRadius: 2, marginLeft: 12, marginRight: 10 },
+  topBetLeft: { flex: 1, minWidth: 0 },
+  topBetMatchup: { fontSize: 13, fontFamily: "Inter_500Medium", letterSpacing: -0.1 },
   topBetSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
   topBetRight: { alignItems: "flex-end", gap: 4 },
-  topBetOdds: { fontSize: 15, fontFamily: "Inter_700Bold" },
   trackPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 20,
     borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
   },
   trackPillText: { fontSize: 10, fontFamily: "Inter_500Medium" },
   moveRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  moveIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  moveBody: { flex: 1 },
-  moveGame: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  moveSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
-  moveTime: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  sportRow: {
+  moveIconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  moveBody: { flex: 1, minWidth: 0 },
+  moveGame: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  moveSub: { fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 1 },
+  moveTime: { fontSize: 10, fontFamily: "Inter_400Regular" },
+  skeletonWrap: { padding: 12, gap: 10 },
+  skeletonRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  sportName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  sportStats: { flexDirection: "row", gap: 10, alignItems: "center" },
-  sportStat: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  sportBadge: {
-    borderRadius: 6,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  skeletonLine: { height: 12, borderRadius: 6 },
+  sportRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  sportBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  sportName: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  sportStats: { flexDirection: "row", alignItems: "center", gap: 8 },
+  sportStat: { fontSize: 12, fontFamily: "Inter_400Regular" },
 });
