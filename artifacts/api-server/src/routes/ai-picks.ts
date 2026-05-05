@@ -1401,16 +1401,16 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `${hrLegs.length} anytime home run props from today's MLB slate. Each player faces a starter with an elevated hard-contact and HR-allowed rate. High-variance parlay — best with a small stake for a big payout.`,
     } : null;
 
-    // NHL: Points parlay — uses "player_points" (goal OR assist, Over 0.5) since the
-    // "player_goals" market only posts alternate lines (1.5+) with no anytime-goal (0.5) line.
-    const goalScorerLegs = buildSpecificPropLegs("icehockey_nhl", "points", 4, true);
+    // NHL: Anytime goal scorer parlay — uses "player_goals" Over 0.5 (FanDuel posts 0.5 lines;
+    // buildSpecificPropLegs picks the lowest available line per player, so 0.5 wins over 1.5/2.5).
+    const goalScorerLegs = buildSpecificPropLegs("icehockey_nhl", "goals", 4, true);
     const goalScorerParlay: AIParlay | null = goalScorerLegs.length >= 2 ? {
       id: "goal-scorer-1",
-      name: `NHL Points ${goalScorerLegs.length}-Legger`,
+      name: `NHL Goal Scorer ${goalScorerLegs.length}-Legger`,
       legs: goalScorerLegs,
       combinedOdds: calcCombinedOdds(goalScorerLegs),
       confidence: Math.min(28, Math.round(16 + goalScorerLegs.length * 2)),
-      reasoning: `${goalScorerLegs.length} anytime points props (goal or assist) from tonight's NHL slate.`,
+      reasoning: `${goalScorerLegs.length} anytime goal scorer props from tonight's NHL slate.`,
     } : null;
 
     // NBA: 3-pointer parlay ("player_threes" → "threes")
