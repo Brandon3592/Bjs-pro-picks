@@ -1390,6 +1390,21 @@ components:
         mixParlayOfTheDay:
           $ref: "#/components/schemas/AIParlay"
           nullable: true
+        allSafeParlay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
+        allLottoParlay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
+        allGameParlay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
+        allPropsParlay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
+        allMixParlay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
         hrParlay:
           $ref: "#/components/schemas/AIParlay"
           nullable: true

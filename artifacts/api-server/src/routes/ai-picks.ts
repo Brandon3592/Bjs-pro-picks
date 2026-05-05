@@ -65,6 +65,11 @@ export interface AIPicksResponse {
   gameParlayOfTheDay: AIParlay | null;
   propParlayOfTheDay: AIParlay | null;
   mixParlayOfTheDay: AIParlay | null;
+  allSafeParlay: AIParlay | null;
+  allLottoParlay: AIParlay | null;
+  allGameParlay: AIParlay | null;
+  allPropsParlay: AIParlay | null;
+  allMixParlay: AIParlay | null;
   hrParlay: AIParlay | null;
   goalScorerParlay: AIParlay | null;
   threePtParlay: AIParlay | null;
@@ -755,6 +760,23 @@ function buildFallbackPicks(): AIPicksResponse {
     reasoning: "Two heavy favorites from different sports each day — typically one NBA prop (-250 to -270) and one MLB/NHL prop (-250 to -290). Each individual leg is a near-certainty. Combined parlay lands near even money. Win both every day for 10 days to turn $10 into $10K+.",
   };
 
+  // Fallback cross-sport parlays reuse the already-mixed fallback legs
+  const allSafeParlay: AIParlay = {
+    id: "all-safe-1", name: "Cross-Sport Value Parlay",
+    legs: [safeParlayLeg1, safeParlayLeg2],
+    combinedOdds: calcCombinedOdds([safeParlayLeg1, safeParlayLeg2]),
+    confidence: 60,
+    reasoning: "One NBA and one MLB game bet each carrying a positive edge — a conservative two-sport parlay targeting solid upside.",
+  };
+  const allLottoParlay: AIParlay = { ...lottoParlay, id: "all-lotto-1", name: "Cross-Sport 5-Leg Lotto" };
+  const allGameParlay: AIParlay = { ...gameParlayOfTheDay, id: "all-game-1", name: "Cross-Sport Game 3-Legger" };
+  const allPropsParlay: AIParlay = {
+    id: "all-props-1", name: "Cross-Sport Props 3-Legger",
+    legs: propParlayLegs, combinedOdds: calcCombinedOdds(propParlayLegs), confidence: 43,
+    reasoning: "Player props sampled from NBA and MLB — SGA scoring, Garland assists, and Alonso RBIs. Each from a different game and sport.",
+  };
+  const allMixParlay: AIParlay = { ...mixParlayOfTheDay, id: "all-mix-1", name: "Cross-Sport Mix 4-Legger" };
+
   return {
     lockOfTheDay,
     safeParlay,
@@ -762,6 +784,11 @@ function buildFallbackPicks(): AIPicksResponse {
     gameParlayOfTheDay,
     propParlayOfTheDay,
     mixParlayOfTheDay,
+    allSafeParlay,
+    allLottoParlay,
+    allGameParlay,
+    allPropsParlay,
+    allMixParlay,
     hrParlay,
     goalScorerParlay,
     threePtParlay,
@@ -1068,6 +1095,84 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `Blends the strongest ${mixSportLabel} game-line value bets with real player prop lines. Game legs for structure, props for upside.`,
     } : null;
 
+    // ── CROSS-SPORT PARLAYS (All Sports tab) ─────────────────────────────────
+    // Round-robin across sports: take one leg per sport at a time
+    function buildCrossSportLegs(pools: Map<string, AIPickLeg[]>, totalCount: number): AIPickLeg[] {
+      const sports = [...pools.keys()].filter((s) => (pools.get(s)?.length ?? 0) > 0);
+      if (sports.length === 0) return [];
+      const result: AIPickLeg[] = [];
+      const idxMap: Record<string, number> = {};
+      let round = 0;
+      while (result.length < totalCount && round < totalCount * sports.length) {
+        const sport = sports[round % sports.length];
+        const pool = pools.get(sport) ?? [];
+        const idx = idxMap[sport] ?? 0;
+        if (idx < pool.length) { result.push(pool[idx]); idxMap[sport] = idx + 1; }
+        round++;
+      }
+      return result;
+    }
+
+    const allSafeCrossLegs = buildCrossSportLegs(legsBySport, 3);
+    const allSafeParlay: AIParlay | null = allSafeCrossLegs.length >= 2 ? {
+      id: "all-safe-1",
+      name: `${allSafeCrossLegs.length}-Leg Cross-Sport Value Parlay`,
+      legs: allSafeCrossLegs,
+      combinedOdds: calcCombinedOdds(allSafeCrossLegs),
+      confidence: Math.min(68, Math.round(48 + allSafeCrossLegs.length * 2)),
+      reasoning: `${allSafeCrossLegs.length} game bets drawn from across today's active sports — one per sport, each carrying a positive edge per our model.`,
+    } : null;
+
+    const allLottoMap = new Map(
+      [...legsBySport.entries()].map(([s, legs]) => [s, [...legs].sort((a, b) => b.odds - a.odds)]),
+    );
+    const allLottoCrossLegs = buildCrossSportLegs(allLottoMap, 5);
+    const allLottoParlay: AIParlay | null = allLottoCrossLegs.length >= 3 ? {
+      id: "all-lotto-1",
+      name: `${allLottoCrossLegs.length}-Leg Cross-Sport Lotto`,
+      legs: allLottoCrossLegs,
+      combinedOdds: calcCombinedOdds(allLottoCrossLegs),
+      confidence: Math.max(10, Math.round(35 - allLottoCrossLegs.length * 3)),
+      reasoning: `High-upside parlay pulling the best-odds underdog legs from each sport — NBA, MLB, and NHL legs all represented. Small stake, big potential.`,
+    } : null;
+
+    const allGameCrossLegs = buildCrossSportLegs(legsBySport, 4);
+    const allGameParlay: AIParlay | null = allGameCrossLegs.length >= 2 ? {
+      id: "all-game-1",
+      name: `${allGameCrossLegs.length}-Leg Cross-Sport Game Picks`,
+      legs: allGameCrossLegs,
+      combinedOdds: calcCombinedOdds(allGameCrossLegs),
+      confidence: Math.min(60, Math.round(42 + allGameCrossLegs.length * 2)),
+      reasoning: `Pure game-line parlay — moneylines, spreads, and totals. One best pick per sport from today's full slate, no props.`,
+    } : null;
+
+    const allPropsCrossLegs = buildCrossSportLegs(propsBySport, 4);
+    const allPropsParlay: AIParlay | null = allPropsCrossLegs.length >= 2 ? {
+      id: "all-props-1",
+      name: `${allPropsCrossLegs.length}-Leg Cross-Sport Props`,
+      legs: allPropsCrossLegs,
+      combinedOdds: calcCombinedOdds(allPropsCrossLegs),
+      confidence: Math.max(22, Math.round(44 - allPropsCrossLegs.length * 2)),
+      reasoning: `Player performance props sampled from every active sport today — one standout prop per sport for true multi-sport diversification.`,
+    } : null;
+
+    const mixCrossMap = new Map<string, AIPickLeg[]>(
+      [...legsBySport.keys()].map((s) => {
+        const games = (legsBySport.get(s) ?? []).slice(0, 1);
+        const props = (propsBySport.get(s) ?? []).slice(0, 1);
+        return [s, [...games, ...props]];
+      }).filter(([, legs]) => legs.length > 0),
+    );
+    const allMixCrossLegs = buildCrossSportLegs(mixCrossMap, 4);
+    const allMixParlay: AIParlay | null = allMixCrossLegs.length >= 2 ? {
+      id: "all-mix-1",
+      name: `${allMixCrossLegs.length}-Leg Cross-Sport Mix`,
+      legs: allMixCrossLegs,
+      combinedOdds: calcCombinedOdds(allMixCrossLegs),
+      confidence: Math.max(20, Math.round(42 - allMixCrossLegs.length * 2)),
+      reasoning: `Blends game-line value bets and player props from across the full slate — NBA, MLB, and NHL all represented in one parlay.`,
+    } : null;
+
 
 
     // ── SPORT-SPECIFIC PROP PARLAYS ───────────────────────────────────────────
@@ -1260,6 +1365,11 @@ router.get("/ai-picks", async (req, res) => {
       gameParlayOfTheDay,
       propParlayOfTheDay,
       mixParlayOfTheDay,
+      allSafeParlay,
+      allLottoParlay,
+      allGameParlay,
+      allPropsParlay,
+      allMixParlay,
       hrParlay,
       goalScorerParlay,
       threePtParlay,

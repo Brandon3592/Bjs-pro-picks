@@ -16,6 +16,11 @@ export interface AIPicksResponse {
   gameParlayOfTheDay?: AIParlay | null;
   propParlayOfTheDay?: AIParlay | null;
   mixParlayOfTheDay?: AIParlay | null;
+  allSafeParlay?: AIParlay | null;
+  allLottoParlay?: AIParlay | null;
+  allGameParlay?: AIParlay | null;
+  allPropsParlay?: AIParlay | null;
+  allMixParlay?: AIParlay | null;
   hrParlay?: AIParlay | null;
   goalScorerParlay?: AIParlay | null;
   threePtParlay?: AIParlay | null;
