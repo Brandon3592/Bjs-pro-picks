@@ -165,7 +165,10 @@ function parsePropEvent(
         else pairMap.get(key)!.under = o.price;
       }
       for (const [key, pair] of pairMap) {
-        if (pair.over == null || pair.under == null) continue;
+        // HR props (and some other markets) only post the Over side — accept solo-Over entries.
+        // Give them a large positive sentinel underOdds so direction logic always picks "Over".
+        if (pair.over == null) continue;
+        if (pair.under == null) pair.under = 9999;
         const existing = byKey.get(key);
         // Keep the book with the best over odds (most value for AI to pick from)
         if (!existing || pair.over > existing.overOdds) {
@@ -1296,9 +1299,42 @@ router.get("/ai-picks", async (req, res) => {
         .slice(0, n);
     }
 
-    // MLB: Home Run parlay — strictly home run props only (market === "home runs")
-    // Falls back to mock data when real HR props haven't been posted yet (typical early in the day).
-    const hrLegs = buildSpecificPropLegs("baseball_mlb", "home runs", 5);
+    // MLB: Home Run parlay — anytime HR props (lowest available line per player, one per game)
+    // Falls back to mock data when real HR props haven't been posted yet.
+    function buildHrParlayLegs(n: number): AIPickLeg[] {
+      const hrProps = realProps.filter(
+        (p) => p.sport === "baseball_mlb" && p.market === "home runs",
+      );
+      // Group by player — keep only the lowest line (most likely to hit: 0.5 > 1.5 > 2.5)
+      const bestPerPlayer = new Map<string, CompactProp>();
+      for (const p of hrProps) {
+        const existing = bestPerPlayer.get(p.player);
+        if (!existing || p.line < existing.line) bestPerPlayer.set(p.player, p);
+      }
+      // Now pick one player per game, sorted by best odds (closest to 0, e.g. +250 before +1000)
+      const seenGames = new Set<string>();
+      return [...bestPerPlayer.values()]
+        .sort((a, b) => a.overOdds - b.overOdds) // ascending: lower positive odds = more likely
+        .filter((p) => {
+          if (seenGames.has(p.gameId)) return false;
+          seenGames.add(p.gameId);
+          return true;
+        })
+        .slice(0, n)
+        .map((p) => ({
+          gameId: p.gameId,
+          sport: "MLB",
+          homeTeam: p.homeTeam,
+          awayTeam: p.awayTeam,
+          startTime: p.startTime,
+          pick: `${p.player} Over ${p.line} Home Runs`,
+          betType: "player_prop" as const,
+          bookmaker: p.bestBook,
+          odds: p.overOdds,
+          player: p.player,
+        }));
+    }
+    const hrLegs = buildHrParlayLegs(5);
     const hrParlay: AIParlay | null = hrLegs.length >= 2 ? {
       id: "hr-1",
       name: `MLB Home Run ${hrLegs.length}-Legger`,
