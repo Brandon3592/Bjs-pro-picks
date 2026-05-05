@@ -901,7 +901,7 @@ router.get("/ai-picks", async (req, res) => {
     const nowMs = Date.now();
 
     // Convert any OddsEvent into a game leg using the best available line across bookmakers.
-    // Prefers h2h (moneyline) — picks the better-priced team. Falls back to totals Over.
+    // Prefers h2h (moneyline) — picks the better-priced team (underdog / higher odds). Falls back to totals Over.
     function eventToLeg(event: OddsEvent, sportLabel: string): AIPickLeg | null {
       // Try h2h first
       for (const book of event.bookmakers) {
@@ -943,6 +943,49 @@ router.get("/ai-picks", async (req, res) => {
       return null;
     }
 
+    // eventToFavoriteLeg: like eventToLeg but always picks the FAVORITE (most negative / lowest odds).
+    // Used exclusively for Lock of the Day so it never surfaces an underdog as "the lock".
+    function eventToFavoriteLeg(event: OddsEvent, sportLabel: string): AIPickLeg | null {
+      for (const book of event.bookmakers) {
+        const h2h = book.markets.find((m) => m.key === "h2h");
+        if (!h2h || h2h.outcomes.length < 2) continue;
+        // Favorite = lowest price (most negative American odds)
+        const favorite = h2h.outcomes.reduce((a, b) => (b.price < a.price ? b : a));
+        return {
+          gameId: event.id,
+          sport: sportLabel,
+          homeTeam: event.home_team,
+          awayTeam: event.away_team,
+          startTime: event.commence_time,
+          pick: favorite.name,
+          betType: "moneyline",
+          bookmaker: book.key,
+          odds: favorite.price,
+          player: null,
+        };
+      }
+      // Fall back to totals Under (favorites usually go Under in tight games)
+      for (const book of event.bookmakers) {
+        const totals = book.markets.find((m) => m.key === "totals");
+        if (!totals) continue;
+        const under = totals.outcomes.find((o) => o.name === "Under");
+        if (!under) continue;
+        return {
+          gameId: event.id,
+          sport: sportLabel,
+          homeTeam: event.home_team,
+          awayTeam: event.away_team,
+          startTime: event.commence_time,
+          pick: `Under ${under.point}`,
+          betType: "total",
+          bookmaker: book.key,
+          odds: under.price,
+          player: null,
+        };
+      }
+      return null;
+    }
+
     // Build game leg pool from ALL upcoming games across every active sport — no edge filter.
     const gameLegPool: AIPickLeg[] = [];
     for (const { sport: sportLabel, events } of allOdds) {
@@ -973,8 +1016,8 @@ router.get("/ai-picks", async (req, res) => {
       return res.json(fallback);
     }
 
-    // ── LOCK OF THE DAY: most-liquid game (most bookmakers = most market consensus) ──
-    // Pick the upcoming game with the most bookmakers offering h2h odds — widest coverage = best lock.
+    // ── LOCK OF THE DAY: most-liquid game's FAVORITE (most bookmakers = best consensus) ──
+    // Pick the upcoming game with the most bookmakers, then take the FAVORITE side — never an underdog.
     let lockLeg: AIPickLeg = gameLegPool[0] ?? propPool[0];
     let maxBooks = 0;
     for (const { sport: sportLabel, events } of allOdds) {
@@ -982,7 +1025,7 @@ router.get("/ai-picks", async (req, res) => {
         if (new Date(ev.commence_time).getTime() <= nowMs) continue;
         const h2hBooks = ev.bookmakers.filter((b) => b.markets.some((m) => m.key === "h2h")).length;
         if (h2hBooks > maxBooks) {
-          const leg = eventToLeg(ev, sportLabel);
+          const leg = eventToFavoriteLeg(ev, sportLabel);
           if (leg) { lockLeg = leg; maxBooks = h2hBooks; }
         }
       }
@@ -1213,7 +1256,7 @@ router.get("/ai-picks", async (req, res) => {
     }
 
     // MLB: Home Run parlay — strictly home run props only (market === "home runs")
-    // If fewer than 2 HR legs are available, return null (no fallback to hits/total bases)
+    // Falls back to mock data when real HR props haven't been posted yet (typical early in the day).
     const hrLegs = buildSpecificPropLegs("baseball_mlb", "home runs", 5);
     const hrParlay: AIParlay | null = hrLegs.length >= 2 ? {
       id: "hr-1",
@@ -1222,7 +1265,7 @@ router.get("/ai-picks", async (req, res) => {
       combinedOdds: calcCombinedOdds(hrLegs),
       confidence: Math.min(30, Math.round(18 + hrLegs.length * 2)),
       reasoning: `${hrLegs.length} anytime home run props from today's MLB slate. Each player faces a starter with an elevated hard-contact and HR-allowed rate. High-variance parlay — best with a small stake for a big payout.`,
-    } : null;
+    } : buildFallbackPicks().hrParlay;
 
     // NHL: Goal scorer parlay ("player_goals" → "goals")
     const goalScorerLegs = buildSpecificPropLegs("icehockey_nhl", "goals", 4);
