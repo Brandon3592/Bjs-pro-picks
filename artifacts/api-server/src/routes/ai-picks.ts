@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, hasApiKey } from "../lib/odds-api";
+import { fetchAllSportOdds, fetchOddsForSportAllMarkets, SPORT_KEYS, SPORT_FROM_KEY, hasApiKey } from "../lib/odds-api";
 import { americanToDecimal, decimalToAmerican } from "../lib/model";
 import type { OddsEvent, PropEvent } from "../lib/odds-api";
 
@@ -99,54 +99,42 @@ interface CompactProp {
   bestBook: string;
 }
 
-// Maximum prop-fetch requests per sport. Keeps daily quota under control:
-// 4 sports × MAX_PROP_GAMES_PER_SPORT = total event-level API calls per picks refresh.
-const MAX_PROP_GAMES_PER_SPORT = 4;
+// One bulk call per sport fetches ALL games + ALL prop markets in a single request.
+// This is far more quota-efficient than one call per game (26 MLB games = 26 calls → now 1).
+const SPORT_PROP_MARKETS: Record<string, string[]> = {
+  basketball_nba:       ["player_points", "player_rebounds", "player_assists", "player_threes"],
+  baseball_mlb:         ["pitcher_strikeouts", "batter_hits", "batter_total_bases", "batter_home_runs"],
+  icehockey_nhl:        ["player_shots_on_goal", "player_points", "player_goals"],
+  americanfootball_nfl: ["player_pass_yds", "player_rush_yds", "player_reception_yds", "player_anytime_td"],
+};
 
 async function fetchRealPropsForAI(
   allOdds: { sport: string; events: OddsEvent[] }[],
 ): Promise<CompactProp[]> {
   const now = Date.now();
+  const cutoff = now + 48 * 3600_000;
 
-  // allOdds.sport is now the label key ("NBA", "MLB", etc.)
-  // We translate to the Odds API key (e.g. "baseball_mlb") before fetching props.
-  const SPORT_MARKETS: Record<string, string[]> = {
-    basketball_nba:       ["player_points", "player_rebounds", "player_assists", "player_threes"],
-    baseball_mlb:         ["pitcher_strikeouts", "batter_hits", "batter_total_bases", "batter_home_runs"],
-    icehockey_nhl:        ["player_shots_on_goal", "player_points", "player_goals"],
-    americanfootball_nfl: ["player_pass_yds", "player_rush_yds", "player_reception_yds", "player_anytime_td"],
-  };
+  // Build the list of sports to fetch — one bulk call per sport
+  const sportFetches = Object.entries(SPORT_PROP_MARKETS).map(async ([sportApiKey, marketKeys]) => {
+    // One request: ALL games for this sport, ALL prop markets combined
+    const events = await fetchOddsForSportAllMarkets(sportApiKey, marketKeys.join(","));
+    if (!events) return [];
 
-  // Only games starting within the next 24 hours (today's slate only)
-  const cutoff = now + 24 * 3600_000;
-  const targets: { sport: string; sportLabel: string; event: OddsEvent }[] = [];
+    const props: CompactProp[] = [];
+    for (const ev of events) {
+      const t = new Date(ev.commence_time).getTime();
+      if (t <= now || t > cutoff) continue; // upcoming games only
 
-  for (const { sport, events } of allOdds) {
-    const sportApiKey = SPORT_KEYS[sport] ?? sport; // "MLB" → "baseball_mlb"
-    if (!SPORT_MARKETS[sportApiKey]) continue;
+      // fetchOddsForSportAllMarkets returns OddsEvent[] which has the same
+      // bookmakers/markets/outcomes shape as PropEvent — cast it for parsePropEvent
+      const asPropEvent = ev as unknown as PropEvent;
+      const sportLabel = SPORT_FROM_KEY[sportApiKey] ?? sportApiKey.toUpperCase();
+      props.push(...parsePropEvent(asPropEvent, sportApiKey, ev));
+    }
+    return props;
+  });
 
-    const todaySlate = events
-      .filter((e) => {
-        const t = new Date(e.commence_time).getTime();
-        return t > now && t < cutoff;
-      })
-      // Sort by bookmaker count descending — most-covered (most liquid) games first.
-      // Fetching the top-N games gives us the richest prop markets while conserving quota.
-      .sort((a, b) => b.bookmakers.length - a.bookmakers.length)
-      .slice(0, MAX_PROP_GAMES_PER_SPORT);
-
-    for (const ev of todaySlate) targets.push({ sport: sportApiKey, sportLabel: sport, event: ev });
-  }
-
-  const results = await Promise.allSettled(
-    targets.map(async ({ sport, sportLabel, event }) => {
-      const markets = SPORT_MARKETS[sport] ?? [];
-      const propEvent = await fetchPlayerPropsForEvent(sport, event.id, markets);
-      if (!propEvent) return [];
-      return parsePropEvent(propEvent, sport, event);
-    })
-  );
-
+  const results = await Promise.allSettled(sportFetches);
   const props: CompactProp[] = [];
   for (const r of results) {
     if (r.status === "fulfilled") props.push(...r.value);
