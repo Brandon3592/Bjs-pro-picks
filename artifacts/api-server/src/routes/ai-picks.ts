@@ -1195,37 +1195,16 @@ router.get("/ai-picks", async (req, res) => {
         .slice(0, n);
     }
 
-    // MLB: Home Run parlay — try "home runs" first; if scarce, fall back to
-    // any MLB batter prop with a plus-money line (totals, hits, total bases)
-    // because batter_home_runs isn't always offered by every bookmaker.
-    let hrLegs = buildSpecificPropLegs("baseball_mlb", "home runs", 4);
-    if (hrLegs.length < 2) {
-      // Fallback: high-odds MLB batter props (Over lines priced +100 or better)
-      const seenHrPlayers = new Set<string>();
-      const mlbBatterMarkets = ["total bases", "hits", "home runs"];
-      hrLegs = realProps
-        .filter((p) => {
-          if (p.sport !== "baseball_mlb") return false;
-          if (!mlbBatterMarkets.includes(p.market)) return false;
-          // Prefer the plus-money side (higher odds = rarer outcome = more upside)
-          return Math.max(p.overOdds, p.underOdds) >= 100;
-        })
-        .sort((a, b) => Math.max(b.overOdds, b.underOdds) - Math.max(a.overOdds, a.underOdds))
-        .map(propToLeg)
-        .filter((l) => {
-          if (!l.player || seenHrPlayers.has(l.player)) return false;
-          seenHrPlayers.add(l.player!);
-          return true;
-        })
-        .slice(0, 4);
-    }
+    // MLB: Home Run parlay — strictly home run props only (market === "home runs")
+    // If fewer than 2 HR legs are available, return null (no fallback to hits/total bases)
+    const hrLegs = buildSpecificPropLegs("baseball_mlb", "home runs", 5);
     const hrParlay: AIParlay | null = hrLegs.length >= 2 ? {
       id: "hr-1",
-      name: `MLB Power ${hrLegs.length}-Legger`,
+      name: `MLB Home Run ${hrLegs.length}-Legger`,
       legs: hrLegs,
       combinedOdds: calcCombinedOdds(hrLegs),
       confidence: Math.min(30, Math.round(18 + hrLegs.length * 2)),
-      reasoning: `${hrLegs.length} high-upside MLB batter props from today's slate — home runs, total bases, and extra-base hits. Each player faces a starter with an elevated hard-contact rate. High-variance parlay, best with a small stake.`,
+      reasoning: `${hrLegs.length} anytime home run props from today's MLB slate. Each player faces a starter with an elevated hard-contact and HR-allowed rate. High-variance parlay — best with a small stake for a big payout.`,
     } : null;
 
     // NHL: Goal scorer parlay ("player_goals" → "goals")

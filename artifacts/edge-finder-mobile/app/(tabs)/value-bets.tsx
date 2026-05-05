@@ -835,14 +835,14 @@ export default function AiPicksScreen() {
             </View>
 
             {/* ── Divider: Sport-Specific Parlays ── */}
-            {(selectedSport === "all" || selectedSport === "MLB" || selectedSport === "NHL" || selectedSport === "NBA" || selectedSport === "NFL") && (
+            {(selectedSport === "MLB" || selectedSport === "NHL" || selectedSport === "NBA" || selectedSport === "NFL") && (
               <View style={[styles.dividerSection, { borderTopColor: colors.border }]}>
                 <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>SPORT PROP PARLAYS</Text>
               </View>
             )}
 
-            {/* ── MLB Home Run Parlay — only on All or MLB tab ── */}
-            {(selectedSport === "all" || selectedSport === "MLB") && (
+            {/* ── MLB Home Run Parlay — MLB tab only ── */}
+            {selectedSport === "MLB" && (
               <View style={styles.section}>
                 <SectionHeader
                   icon="💣"
@@ -864,8 +864,8 @@ export default function AiPicksScreen() {
               </View>
             )}
 
-            {/* ── NHL Goal Scorer Parlay — only on All or NHL tab ── */}
-            {(selectedSport === "all" || selectedSport === "NHL") && (
+            {/* ── NHL Goal Scorer Parlay — NHL tab only ── */}
+            {selectedSport === "NHL" && (
               <View style={styles.section}>
                 <SectionHeader
                   icon="🏒"
@@ -887,8 +887,8 @@ export default function AiPicksScreen() {
               </View>
             )}
 
-            {/* ── NBA 3PT Parlay — only on All or NBA tab ── */}
-            {(selectedSport === "all" || selectedSport === "NBA") && (
+            {/* ── NBA 3PT Parlay — NBA tab only ── */}
+            {selectedSport === "NBA" && (
               <View style={styles.section}>
                 <SectionHeader
                   icon="🏀"
@@ -910,8 +910,8 @@ export default function AiPicksScreen() {
               </View>
             )}
 
-            {/* ── NFL TD Parlay — only on All or NFL tab ── */}
-            {(selectedSport === "all" || selectedSport === "NFL") && (
+            {/* ── NFL TD Parlay — NFL tab only ── */}
+            {selectedSport === "NFL" && (
               <View style={styles.section}>
                 <SectionHeader
                   icon="🏈"
