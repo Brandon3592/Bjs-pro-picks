@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "EdgeFinder"
+title = "BJ's Pro Picks"
 version = "1.0.0"
 id = "artifacts/edge-finder"
 router = "path"

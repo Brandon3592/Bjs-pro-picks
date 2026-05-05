@@ -1,6 +1,6 @@
 kind = "mobile"
 previewPath = "/mobile/"
-title = "EdgeFinder Mobile"
+title = "BJ's Pro Picks"
 version = "1.0.0"
 id = "artifacts/edge-finder-mobile"
 router = "expo-domain"

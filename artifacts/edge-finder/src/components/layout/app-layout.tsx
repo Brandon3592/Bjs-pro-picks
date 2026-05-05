@@ -64,7 +64,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           <div className="h-6 w-6 rounded bg-primary flex items-center justify-center">
             <TrendingUp className="h-3.5 w-3.5 text-primary-foreground" />
           </div>
-          <span className="font-bold text-sidebar-foreground tracking-tight">EdgeFinder</span>
+          <span className="font-bold text-sidebar-foreground tracking-tight">BJ's Pro Picks</span>
         </div>
         {onClose && (
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
@@ -144,7 +144,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="h-5 w-5 rounded bg-primary flex items-center justify-center">
               <TrendingUp className="h-3 w-3 text-primary-foreground" />
             </div>
-            <span className="font-bold text-sm tracking-tight">EdgeFinder</span>
+            <span className="font-bold text-sm tracking-tight">BJ's Pro Picks</span>
           </div>
         </header>
 

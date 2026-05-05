@@ -74,7 +74,7 @@ function WebSidebar() {
           <Feather name="zap" size={18} color={colors.primary} />
         </View>
         <View>
-          <Text style={[webStyles.brandName, { color: colors.foreground }]}>EdgeFinder</Text>
+          <Text style={[webStyles.brandName, { color: colors.foreground }]}>BJ's Pro Picks</Text>
           <Text style={[webStyles.brandSub, { color: colors.mutedForeground }]}>Sports Betting Edge</Text>
         </View>
       </View>
@@ -149,7 +149,7 @@ function WebLayout() {
         {/* Per-page header */}
         <View style={[webStyles.topBar, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
           <Text style={[webStyles.topBarTitle, { color: colors.foreground }]}>
-            {activeTab?.headerTitle ?? "EdgeFinder"}
+            {activeTab?.headerTitle ?? "BJ's Pro Picks"}
           </Text>
         </View>
         {/* Screen content via tabs (headers hidden on web) */}

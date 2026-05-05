@@ -14,7 +14,7 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center text-foreground font-mono">
       <div className="w-full max-w-md p-8 border border-border bg-card shadow-2xl rounded-sm text-center">
-        <h1 className="text-3xl font-bold tracking-tight mb-2 text-primary">EdgeFinder</h1>
+        <h1 className="text-3xl font-bold tracking-tight mb-2 text-primary">BJ's Pro Picks</h1>
         <p className="text-muted-foreground mb-8">Data-dense betting intelligence terminal.</p>
         
         {isLoading ? (

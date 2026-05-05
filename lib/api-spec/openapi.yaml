@@ -3,7 +3,7 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: EdgeFinder sports betting value prediction API
+  description: BJ's Pro Picks sports betting value prediction API
 servers:
   - url: /api
     description: Base API path

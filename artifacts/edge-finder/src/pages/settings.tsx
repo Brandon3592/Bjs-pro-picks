@@ -120,7 +120,7 @@ export default function Settings() {
     <div className="p-4 md:p-6 space-y-5 pb-20 md:pb-6 max-w-2xl">
       <div>
         <h1 className="text-xl font-bold">Settings</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">Configure your EdgeFinder preferences</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Configure your BJ's Pro Picks preferences</p>
       </div>
 
       {/* Appearance */}
@@ -291,7 +291,7 @@ export default function Settings() {
               <span className="text-sm font-semibold text-yellow-400">For Entertainment Only</span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              EdgeFinder is for entertainment and educational purposes only. The predictions and edge calculations shown are based on statistical models and do not guarantee winning outcomes. Gambling involves risk. Please bet responsibly and within your means. If you or someone you know has a gambling problem, call the National Problem Gambling Helpline at <strong className="text-foreground">1-800-522-4700</strong>.
+              BJ's Pro Picks is for entertainment and educational purposes only. The predictions and edge calculations shown are based on statistical models and do not guarantee winning outcomes. Gambling involves risk. Please bet responsibly and within your means. If you or someone you know has a gambling problem, call the National Problem Gambling Helpline at <strong className="text-foreground">1-800-522-4700</strong>.
             </p>
           </div>
         </div>
