@@ -11,10 +11,12 @@ import arbRouter from "./arb";
 import propsRouter from "./props";
 import allMarketsRouter from "./all-markets";
 import aiPicksRouter from "./ai-picks";
+import pickHistoryRouter from "./pick-history";
 
 const router: IRouter = Router();
 
 router.use(aiPicksRouter);
+router.use(pickHistoryRouter);
 router.use(healthRouter);
 router.use(authRouter);
 router.use(gamesRouter);

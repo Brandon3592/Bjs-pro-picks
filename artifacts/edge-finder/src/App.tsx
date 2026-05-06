@@ -14,6 +14,7 @@ import Settings from "@/pages/settings";
 import Arb from "@/pages/arb";
 import Props from "@/pages/props";
 import AllMarkets from "@/pages/all-markets";
+import Picks from "@/pages/picks";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,6 +38,7 @@ function Router() {
             <Route path="/arb" component={Arb} />
             <Route path="/props" component={Props} />
             <Route path="/all-markets" component={AllMarkets} />
+            <Route path="/picks" component={Picks} />
             <Route path="/settings" component={Settings} />
             <Route component={NotFound} />
           </Switch>

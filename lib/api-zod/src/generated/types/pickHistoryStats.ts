@@ -5,8 +5,12 @@
  * BJ's Pro Picks sports betting value prediction API
  * OpenAPI spec version: 0.1.0
  */
-import type { GetAiPicksSport } from "./getAiPicksSport";
 
-export type GetAiPicksParams = {
-  sport?: GetAiPicksSport;
-};
+export interface PickHistoryStats {
+  wins: number;
+  losses: number;
+  pending: number;
+  total: number;
+  winRate?: number | null;
+  totalProfit: number;
+}

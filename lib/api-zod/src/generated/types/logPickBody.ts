@@ -6,15 +6,17 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface AIPickLeg {
-  gameId: string;
+export interface LogPickBody {
   sport: string;
+  gameId?: string | null;
   homeTeam: string;
   awayTeam: string;
-  startTime: Date;
   pick: string;
-  betType: string;
+  player?: string | null;
   bookmaker: string;
   odds: number;
-  player?: string | null;
+  confidence: number;
+  reasoning?: string | null;
+  betType?: string;
+  gameStartTime: string;
 }

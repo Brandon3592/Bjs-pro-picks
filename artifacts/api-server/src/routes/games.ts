@@ -2,6 +2,7 @@ import { Router } from "express";
 import { GetGamesQueryParams } from "@workspace/api-zod";
 import { fetchAllSportOdds, fetchAllSportScores, SPORT_KEYS, hasApiKey } from "../lib/odds-api";
 import { gameStatus, bestEdgeForGame } from "../lib/model";
+import { fetchWeather } from "../lib/weather";
 
 const router = Router();
 
@@ -105,7 +106,16 @@ async function getLiveGames() {
     }
   }
 
-  const games: ReturnType<typeof generateMockGames> = [];
+  type GameEntry = {
+    id: string; sport: string; homeTeam: string; awayTeam: string;
+    homeScore: number | null; awayScore: number | null;
+    startTime: string; status: string; quarter: string | null;
+    timeRemaining: string | null; venue: string;
+    weather: { temp: number; windSpeed: number; condition: string; precipitation: number } | null;
+    topEdge: number | null;
+  };
+
+  const rawGames: GameEntry[] = [];
 
   for (const { sport, events } of oddsData) {
     for (const ev of events) {
@@ -113,7 +123,7 @@ async function getLiveGames() {
       const status = scores?.completed ? "final" : gameStatus(ev);
       const topEdge = bestEdgeForGame(ev);
 
-      games.push({
+      rawGames.push({
         id: ev.id,
         sport,
         homeTeam: ev.home_team,
@@ -131,7 +141,19 @@ async function getLiveGames() {
     }
   }
 
-  return games.length > 0 ? games : generateMockGames();
+  if (rawGames.length === 0) return generateMockGames();
+
+  // Fetch weather for outdoor venues in parallel (only for upcoming/live games)
+  const weatherResults = await Promise.all(
+    rawGames.map((g) =>
+      (g.sport === "NFL" || g.sport === "MLB") && g.status !== "final"
+        ? fetchWeather(g.homeTeam).catch(() => null)
+        : Promise.resolve(null)
+    )
+  );
+  rawGames.forEach((g, i) => { g.weather = weatherResults[i]; });
+
+  return rawGames;
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────

@@ -122,8 +122,12 @@ Route `GET /api/arb` — scans all current games for cross-book arbitrage:
 
 ## Notes / Gotchas
 
-- **Zod in api-server**: Import from `"zod"`, never `"zod/v4"` — esbuild cannot resolve the subpath.
+- **Zod in api-server**: Import from `"zod"`, never `"zod/v4"` — esbuild cannot resolve the subpath. Never import zod directly in api-server routes; use plain TS interfaces for request validation instead.
 - **Orval codegen**: After changing the OpenAPI spec, run `pnpm --filter @workspace/api-spec run codegen`. The post-codegen script patches `lib/api-zod/src/index.ts`.
 - **Port**: api-server runs on port 8080; edge-finder runs on port 23705. The shared proxy routes `/api` → 8080 and `/` → 23705.
 - **Edge thresholds**: Updated to ≥2% green, ≥1% amber (was 5%/3%) to reflect real efficient US market conditions.
 - **Line movements**: First snapshot taken on server start. Cross-book spread shown as fallback before historical data accumulates (5+ minutes runtime needed for time-based movement detection).
+- **Pre-existing TS errors**: `lib/replit-auth-web` (composite/env), `api-server` (TS7030 in alerts/bets/line-movements, `consensusProb` undefined in games.ts) — do not chase these.
+- **Push notifications**: VAPID keys in env vars (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT). Steam alerts fire on 3+ pt move in <5 min via snapshot-job. Invalid subscriptions were purged from DB.
+- **Pick history**: `ai_pick_history` table in DB. Routes: GET/POST `/api/pick-history`, PATCH `/api/pick-history/:id`, GET `/api/pick-history/stats`.
+- **Weather**: Free OpenMeteo API — no key needed. 60+ NFL/MLB outdoor stadium coords in `api-server/src/lib/weather.ts`. Attached to game objects as `weather` field.

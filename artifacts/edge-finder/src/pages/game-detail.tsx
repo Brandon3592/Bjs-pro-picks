@@ -263,47 +263,93 @@ export default function GameDetail() {
       )}
 
       {/* Odds Comparison */}
-      <div className="bg-card border border-card-border rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-border">
-          <h2 className="text-sm font-semibold">Odds Comparison</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border text-muted-foreground bg-muted/30">
-                <th className="text-left px-3 py-2 font-medium">Bookmaker</th>
-                <th className="text-right px-3 py-2 font-medium">{game.homeTeam} ML</th>
-                <th className="text-right px-3 py-2 font-medium">{game.awayTeam} ML</th>
-                <th className="text-right px-3 py-2 font-medium hidden sm:table-cell">Spread</th>
-                <th className="text-right px-3 py-2 font-medium hidden md:table-cell">O/U</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(odds ?? []).map((o) => (
-                <tr key={o.id} className="border-b border-border last:border-0 hover:bg-muted/20" data-testid={`row-odds-${o.bookmaker}`}>
-                  <td className="px-3 py-2.5 font-medium">{o.bookmaker}</td>
-                  <td className="px-3 py-2.5 text-right font-mono font-bold">
-                    {o.homeMoneyline !== null && o.homeMoneyline !== undefined
-                      ? (o.homeMoneyline > 0 ? `+${o.homeMoneyline}` : o.homeMoneyline)
-                      : "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-mono font-bold">
-                    {o.awayMoneyline !== null && o.awayMoneyline !== undefined
-                      ? (o.awayMoneyline > 0 ? `+${o.awayMoneyline}` : o.awayMoneyline)
-                      : "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-right hidden sm:table-cell text-muted-foreground font-mono">
-                    {o.homeSpread !== null && o.homeSpread !== undefined ? `${o.homeSpread > 0 ? "+" : ""}${o.homeSpread}` : "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-right hidden md:table-cell text-muted-foreground font-mono">
-                    {o.overUnder ?? "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {(() => {
+        const oddsRows = odds ?? [];
+        // Find best (highest = most favorable) moneyline for each side
+        const bestHomeML = oddsRows.reduce<number | null>((best, o) => {
+          if (o.homeMoneyline == null) return best;
+          if (best == null) return o.homeMoneyline;
+          // higher American odds = better for bettor
+          return o.homeMoneyline > best ? o.homeMoneyline : best;
+        }, null);
+        const bestAwayML = oddsRows.reduce<number | null>((best, o) => {
+          if (o.awayMoneyline == null) return best;
+          if (best == null) return o.awayMoneyline;
+          return o.awayMoneyline > best ? o.awayMoneyline : best;
+        }, null);
+        // Best over/under = lowest total line (tightest)
+        const bestOU = oddsRows.reduce<number | null>((best, o) => {
+          if (o.overUnder == null) return best;
+          if (best == null) return o.overUnder;
+          return o.overUnder < best ? o.overUnder : best;
+        }, null);
+
+        return (
+          <div className="bg-card border border-card-border rounded-lg overflow-hidden">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Odds Comparison</h2>
+              <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded">
+                Green = best line
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border text-muted-foreground bg-muted/30">
+                    <th className="text-left px-3 py-2 font-medium">Bookmaker</th>
+                    <th className="text-right px-3 py-2 font-medium">{game.homeTeam} ML</th>
+                    <th className="text-right px-3 py-2 font-medium">{game.awayTeam} ML</th>
+                    <th className="text-right px-3 py-2 font-medium hidden sm:table-cell">Home Spread</th>
+                    <th className="text-right px-3 py-2 font-medium hidden sm:table-cell">Spread Odds</th>
+                    <th className="text-right px-3 py-2 font-medium hidden md:table-cell">O/U Total</th>
+                    <th className="text-right px-3 py-2 font-medium hidden md:table-cell">Over/Under</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {oddsRows.map((o) => {
+                    const isBestHome = o.homeMoneyline != null && o.homeMoneyline === bestHomeML;
+                    const isBestAway = o.awayMoneyline != null && o.awayMoneyline === bestAwayML;
+                    const isBestOU = o.overUnder != null && o.overUnder === bestOU;
+                    return (
+                      <tr key={o.id} className="border-b border-border last:border-0 hover:bg-muted/20" data-testid={`row-odds-${o.bookmaker}`}>
+                        <td className="px-3 py-2.5 font-medium">{o.bookmaker}</td>
+                        <td className={cn("px-3 py-2.5 text-right font-mono font-bold", isBestHome ? "text-green-400" : "")}>
+                          {o.homeMoneyline != null
+                            ? (o.homeMoneyline > 0 ? `+${o.homeMoneyline}` : o.homeMoneyline)
+                            : "—"}
+                          {isBestHome && <span className="ml-1 text-[9px] text-green-400/70">★</span>}
+                        </td>
+                        <td className={cn("px-3 py-2.5 text-right font-mono font-bold", isBestAway ? "text-green-400" : "")}>
+                          {o.awayMoneyline != null
+                            ? (o.awayMoneyline > 0 ? `+${o.awayMoneyline}` : o.awayMoneyline)
+                            : "—"}
+                          {isBestAway && <span className="ml-1 text-[9px] text-green-400/70">★</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-right hidden sm:table-cell text-muted-foreground font-mono">
+                          {o.homeSpread != null ? `${o.homeSpread > 0 ? "+" : ""}${o.homeSpread}` : "—"}
+                        </td>
+                        <td className="px-3 py-2.5 text-right hidden sm:table-cell text-muted-foreground font-mono">
+                          {o.homeSpreadOdds != null ? (o.homeSpreadOdds > 0 ? `+${o.homeSpreadOdds}` : o.homeSpreadOdds) : "—"}
+                        </td>
+                        <td className={cn("px-3 py-2.5 text-right hidden md:table-cell font-mono", isBestOU ? "text-green-400 font-bold" : "text-muted-foreground")}>
+                          {o.overUnder ?? "—"}
+                          {isBestOU && <span className="ml-1 text-[9px] text-green-400/70">★</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-right hidden md:table-cell text-muted-foreground font-mono text-[10px]">
+                          {o.overOdds != null ? `O ${o.overOdds > 0 ? "+" : ""}${o.overOdds}` : ""}
+                          {o.overOdds != null && o.underOdds != null ? " / " : ""}
+                          {o.underOdds != null ? `U ${o.underOdds > 0 ? "+" : ""}${o.underOdds}` : ""}
+                          {o.overOdds == null && o.underOdds == null ? "—" : ""}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Line Movement Chart */}
       <LineMovementChart gameId={gameId} />

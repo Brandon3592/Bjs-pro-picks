@@ -1,7 +1,7 @@
-import { useGetDashboardSummary, getGetDashboardSummaryQueryKey, useGetLineMovements } from "@workspace/api-client-react";
+import { useGetDashboardSummary, getGetDashboardSummaryQueryKey, useGetLineMovements, useGetPickHistoryStats } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Activity, BarChart2, RefreshCw, ChevronRight, TrendingUp, TrendingDown, ArrowRight, Calendar } from "lucide-react";
+import { Activity, BarChart2, RefreshCw, ChevronRight, TrendingUp, TrendingDown, ArrowRight, Calendar, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 
@@ -107,8 +107,10 @@ function SteamMovesWidget() {
 export default function Dashboard() {
   const qc = useQueryClient();
   const summary = useGetDashboardSummary({ query: { refetchInterval: 60000, queryKey: getGetDashboardSummaryQueryKey() } });
+  const pickStats = useGetPickHistoryStats();
 
   const data = summary.data;
+  const ps = pickStats.data;
   const lastRefreshed = data?.lastRefreshed ? formatDistanceToNow(new Date(data.lastRefreshed), { addSuffix: true }) : null;
 
   return (
@@ -131,14 +133,23 @@ export default function Dashboard() {
 
       {/* Stats */}
       {summary.isLoading ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {[...Array(3)].map((_, i) => <div key={i} className="bg-card border border-card-border rounded-lg p-4 h-24 animate-pulse" />)}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[...Array(4)].map((_, i) => <div key={i} className="bg-card border border-card-border rounded-lg p-4 h-24 animate-pulse" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard label="Live Games" value={data?.liveGamesCount ?? 0} icon={Activity} color="bg-red-500/10 text-red-400" />
           <StatCard label="Upcoming" value={data?.upcomingGamesCount ?? 0} sub="today's slate" icon={Calendar} color="bg-blue-500/10 text-blue-400" />
           <StatCard label="Total Games" value={data?.totalGames ?? 0} sub="across all sports" icon={BarChart2} color="bg-primary/10 text-primary" />
+          <Link href="/picks">
+            <StatCard
+              label="Pick Record"
+              value={ps && (ps.wins + ps.losses) > 0 ? `${ps.wins}W-${ps.losses}L` : "—"}
+              sub={ps?.winRate != null ? `${(ps.winRate * 100).toFixed(0)}% win rate` : "Track picks →"}
+              icon={Trophy}
+              color="bg-amber-500/10 text-amber-400"
+            />
+          </Link>
         </div>
       )}
 

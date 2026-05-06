@@ -14,6 +14,7 @@ import {
   X,
   LogOut,
   ChevronRight,
+  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { href: "/props", label: "Player Props", icon: Users },
   { href: "/arb", label: "Arb Finder", icon: Zap },
   { href: "/games", label: "Games", icon: Activity },
+  { href: "/picks", label: "Pick History", icon: Star },
   { href: "/tracker", label: "Bet Tracker", icon: BookOpen },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

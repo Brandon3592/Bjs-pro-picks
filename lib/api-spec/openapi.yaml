@@ -26,6 +26,8 @@ tags:
     description: Dashboard summary data
   - name: alerts
     description: Push alert subscriptions
+  - name: pick-history
+    description: AI pick performance history
 
 paths:
   /ai-picks:
@@ -582,6 +584,88 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AlertSubscription"
+
+  /pick-history:
+    get:
+      operationId: getPickHistory
+      tags: [pick-history]
+      summary: Get AI pick performance history (last 30 days)
+      responses:
+        "200":
+          description: List of tracked AI picks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PickHistoryEntry"
+    post:
+      operationId: logPick
+      tags: [pick-history]
+      summary: Log an AI pick for performance tracking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogPickBody"
+      responses:
+        "201":
+          description: Pick logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickHistoryEntry"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /pick-history/stats:
+    get:
+      operationId: getPickHistoryStats
+      tags: [pick-history]
+      summary: Get W/L/ROI stats for tracked AI picks
+      responses:
+        "200":
+          description: Pick performance stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickHistoryStats"
+
+  /pick-history/{pickId}:
+    patch:
+      operationId: updatePickResult
+      tags: [pick-history]
+      summary: Update the result of a tracked pick
+      parameters:
+        - name: pickId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePickResultBody"
+      responses:
+        "200":
+          description: Updated pick
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickHistoryEntry"
+        "404":
+          description: Pick not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   schemas:
@@ -1440,3 +1524,109 @@ components:
         isAI:
           type: boolean
       required: [summary, generatedAt, isAI]
+
+    PickHistoryEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        sport:
+          type: string
+        gameId:
+          type: string
+          nullable: true
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        pick:
+          type: string
+        player:
+          type: string
+          nullable: true
+        bookmaker:
+          type: string
+        odds:
+          type: integer
+        confidence:
+          type: integer
+        reasoning:
+          type: string
+          nullable: true
+        betType:
+          type: string
+        gameStartTime:
+          type: string
+          format: date-time
+        result:
+          type: string
+          enum: [pending, win, loss]
+        profit:
+          type: number
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, sport, homeTeam, awayTeam, pick, bookmaker, odds, confidence, betType, gameStartTime, result, createdAt]
+
+    LogPickBody:
+      type: object
+      properties:
+        sport:
+          type: string
+        gameId:
+          type: string
+          nullable: true
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        pick:
+          type: string
+        player:
+          type: string
+          nullable: true
+        bookmaker:
+          type: string
+        odds:
+          type: integer
+        confidence:
+          type: integer
+        reasoning:
+          type: string
+          nullable: true
+        betType:
+          type: string
+          default: moneyline
+        gameStartTime:
+          type: string
+      required: [sport, homeTeam, awayTeam, pick, bookmaker, odds, confidence, gameStartTime]
+
+    UpdatePickResultBody:
+      type: object
+      properties:
+        result:
+          type: string
+          enum: [win, loss, pending]
+        profit:
+          type: number
+          nullable: true
+      required: [result]
+
+    PickHistoryStats:
+      type: object
+      properties:
+        wins:
+          type: integer
+        losses:
+          type: integer
+        pending:
+          type: integer
+        total:
+          type: integer
+        winRate:
+          type: number
+          nullable: true
+        totalProfit:
+          type: number
+      required: [wins, losses, pending, total, totalProfit]

@@ -12,7 +12,8 @@ export function initWebPush() {
     logger.warn("VAPID keys not set — push notifications disabled");
     return;
   }
-  webpush.setVapidDetails("mailto:alerts@edgefinder.app", publicKey, privateKey);
+  const subject = process.env.VAPID_SUBJECT ?? "mailto:alerts@edgefinder.app";
+  webpush.setVapidDetails(subject, publicKey, privateKey);
   initialized = true;
   logger.info("Web push initialized");
 }

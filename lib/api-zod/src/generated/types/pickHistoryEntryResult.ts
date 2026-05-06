@@ -6,11 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type TrackedBetResult =
-  (typeof TrackedBetResult)[keyof typeof TrackedBetResult];
+export type PickHistoryEntryResult =
+  (typeof PickHistoryEntryResult)[keyof typeof PickHistoryEntryResult];
 
-export const TrackedBetResult = {
+export const PickHistoryEntryResult = {
+  pending: "pending",
   win: "win",
   loss: "loss",
-  pending: "pending",
 } as const;
