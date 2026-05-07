@@ -3,6 +3,7 @@ import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY
 import { fetchMlbLineupNames } from "../lib/mlb-lineups";
 import { fetchNbaOut, fetchNhlOut } from "../lib/sport-lineups";
 import { americanToDecimal, decimalToAmerican } from "../lib/model";
+import { buildSteamMap, scoreProps, buildWeatherPenaltySet } from "../lib/pick-scoring";
 import type { OddsEvent, PropEvent } from "../lib/odds-api";
 
 const router = Router();
@@ -863,12 +864,16 @@ router.get("/ai-picks", async (req, res) => {
     // for the existing generic parlays.
     const rawProps = await fetchRealPropsForAI(allOddsRaw);
 
-    // Fetch all sport lineup/injury data in parallel — filter out unavailable players
-    // from every prop-based parlay in one pass before any builder runs.
-    const [mlbLineups, nbaOut, nhlOut] = await Promise.all([
-      fetchMlbLineupNames(), // MLB: whitelist confirmed starters; null = lineups not posted yet
-      fetchNbaOut(),          // NBA: blacklist OUT players
-      fetchNhlOut(),          // NHL: blacklist OUT players
+    // Fetch lineup/injury data, steam map, and weather penalties in parallel.
+    const allEventsFlat = allOddsRaw.flatMap(({ sport, events }) =>
+      events.map((ev) => ({ sport, ev })),
+    );
+    const [mlbLineups, nbaOut, nhlOut, steamMap, weatherPenaltyGameIds] = await Promise.all([
+      fetchMlbLineupNames(),                      // MLB: whitelist confirmed starters
+      fetchNbaOut(),                              // NBA: blacklist OUT players
+      fetchNhlOut(),                              // NHL: blacklist OUT players
+      buildSteamMap(),                            // Line movement signal from DB
+      buildWeatherPenaltySet(allEventsFlat),      // MLB outdoor Over penalty
     ]);
 
     const realProps = rawProps.filter((p) => {
@@ -1045,37 +1050,108 @@ router.get("/ai-picks", async (req, res) => {
       return null;
     }
 
+    // ── Score-sorted game leg pools ───────────────────────────────────────────
+    // Build a score map for every game outcome so we can sort by composite quality.
+    // Score = book count + de-vig edge + steam signal + context bonus.
+    type GameScore = { score: number; steamScore: number };
+    const gameScoreMap = new Map<string, GameScore>(); // key: `${gameId}::${outcomeName}`
+
+    for (const { sport: sportLabel, events } of allOdds) {
+      for (const ev of events) {
+        const t = new Date(ev.commence_time).getTime();
+        if (t <= nowMs || t > todayCutoffMs) continue;
+
+        // Count books offering h2h
+        const bookCount = ev.bookmakers.filter((b) => b.markets.some((m) => m.key === "h2h")).length;
+        // Require at least 3 books for any pick — ensures real price discovery
+        if (bookCount < 3) continue;
+
+        // Collect all prices per outcome across books
+        const byOutcome = new Map<string, number[]>();
+        for (const bk of ev.bookmakers) {
+          const h2h = bk.markets.find((m) => m.key === "h2h");
+          if (!h2h) continue;
+          for (const out of h2h.outcomes) {
+            if (!byOutcome.has(out.name)) byOutcome.set(out.name, []);
+            byOutcome.get(out.name)!.push(out.price);
+          }
+        }
+
+        const outcomes = [...byOutcome.keys()];
+        if (outcomes.length < 2) continue;
+
+        // De-vig: average implied prob → normalize
+        const avgImpl = outcomes.map((name) => {
+          const prices = byOutcome.get(name)!;
+          const avg = prices.reduce((s, p) => s + (p > 0 ? 100 / (p + 100) : Math.abs(p) / (Math.abs(p) + 100)), 0) / prices.length;
+          return { name, avg };
+        });
+        const totalImpl = avgImpl.reduce((s, o) => s + o.avg, 0);
+
+        for (const { name, avg } of avgImpl) {
+          const consensusP = avg / totalImpl;
+          const prices = byOutcome.get(name)!;
+          const bestOdds = Math.max(...prices);
+          const implP = bestOdds > 0 ? 100 / (bestOdds + 100) : Math.abs(bestOdds) / (Math.abs(bestOdds) + 100);
+          const edge = (consensusP - implP) * 100;
+
+          // Score components
+          const bookScore = Math.min(25, bookCount * 4);
+          const edgeScore = Math.min(30, Math.max(0, edge * 10));
+          const steamKey = `${ev.id}::${name}`;
+          const steamEntry = steamMap?.get(steamKey);
+          const steamScore = steamEntry?.direction === "steam" ? steamEntry.score : 0;
+          const contextScore = bookCount >= 5 ? 15 : bookCount >= 4 ? 10 : 5;
+
+          gameScoreMap.set(`${ev.id}::${name}`, {
+            score: bookScore + edgeScore + steamScore + contextScore,
+            steamScore,
+          });
+        }
+      }
+    }
+
+    function getGameScore(gameId: string, outcomeName: string): number {
+      return gameScoreMap.get(`${gameId}::${outcomeName}`)?.score ?? 0;
+    }
+
     // ── FAVORITE game leg pool (used for safe, game, mix, cross-sport parlays) ──
-    // Picks the FAVORITE side of each game — the most likely winner. Never underdogs here.
     const gameLegPool: AIPickLeg[] = [];
     for (const { sport: sportLabel, events } of allOdds) {
       for (const ev of events) {
         const t = new Date(ev.commence_time).getTime();
-        if (t <= nowMs || t > todayCutoffMs) continue; // today's games only
+        if (t <= nowMs || t > todayCutoffMs) continue;
+        // Skip games with fewer than 3 books (same threshold as scoring above)
+        const bookCount = ev.bookmakers.filter((b) => b.markets.some((m) => m.key === "h2h")).length;
+        if (bookCount < 3) continue;
         const leg = eventToFavoriteLeg(ev, sportLabel);
         if (leg) gameLegPool.push(leg);
       }
     }
+    // Sort by composite score — highest quality picks first
+    gameLegPool.sort((a, b) => getGameScore(b.gameId, b.pick) - getGameScore(a.gameId, a.pick));
 
     // ── UNDERDOG game leg pool (used exclusively for lotto parlays) ──
-    // Picks the highest-priced / plus-money side — intentional for high-upside lotto picks.
     const underdogLegPool: AIPickLeg[] = [];
     for (const { sport: sportLabel, events } of allOdds) {
       for (const ev of events) {
         const t = new Date(ev.commence_time).getTime();
-        if (t <= nowMs || t > todayCutoffMs) continue; // today's games only
+        if (t <= nowMs || t > todayCutoffMs) continue;
         const leg = eventToLeg(ev, sportLabel);
         if (leg) underdogLegPool.push(leg);
       }
     }
 
     // ── SMART prop pool (safe/game/mix/props parlays) ──
-    // Picks the FAVORITE side of each prop (most negative odds = more likely to hit).
+    // Score-sorted: lineup-confirmed, no-injury, steam-backed props rise to top.
     const seenSmartPropPlayers = new Set<string>();
-    const propPool: AIPickLeg[] = filteredProps
-      .filter((p) => Math.min(p.minOverOdds, p.underOdds) <= -130) // must have a clear favorite side
-      .sort((a, b) => Math.min(a.minOverOdds, a.underOdds) - Math.min(b.minOverOdds, b.underOdds)) // most negative first
-      .map(propToFavoriteLeg)
+    const rawSmartProps = filteredProps
+      .filter((p) => Math.min(p.minOverOdds, p.underOdds) <= -130) // must have clear favorite side
+      .map(propToFavoriteLeg);
+    const scoredSmartProps = scoreProps(
+      rawSmartProps, steamMap, mlbLineups, nbaOut ?? nhlOut, weatherPenaltyGameIds,
+    );
+    const propPool: AIPickLeg[] = scoredSmartProps
       .filter((l) => {
         if (!l.player || seenSmartPropPlayers.has(l.player)) return false;
         seenSmartPropPlayers.add(l.player!);
@@ -1083,20 +1159,22 @@ router.get("/ai-picks", async (req, res) => {
       });
 
     // ── LOTTO prop pool (lotto parlays only) ──
-    // Picks the highest-odds (plus-money) side — intentional upside hunting.
-    // Cap at +600 per leg: keeps parlays exciting without going into the billions.
+    // Score-sorted within the plus-money range: best-context legs first, capped at +600.
     const LOTTO_MAX_ODDS = 600;
     const seenLottoPropPlayers = new Set<string>();
-    const lottoPropPool: AIPickLeg[] = filteredProps
+    const rawLottoProps = filteredProps
       .filter((p) => {
         const best = Math.max(p.overOdds, p.underOdds);
         return best >= -160 && best <= LOTTO_MAX_ODDS;
       })
-      .sort((a, b) => Math.max(b.overOdds, b.underOdds) - Math.max(a.overOdds, a.underOdds))
       .map(propToLeg)
+      .filter((l) => l.odds <= LOTTO_MAX_ODDS);
+    const scoredLottoProps = scoreProps(
+      rawLottoProps, steamMap, mlbLineups, nbaOut ?? nhlOut, weatherPenaltyGameIds,
+    );
+    const lottoPropPool: AIPickLeg[] = scoredLottoProps
       .filter((l) => {
         if (!l.player || seenLottoPropPlayers.has(l.player)) return false;
-        if (l.odds > LOTTO_MAX_ODDS) return false;
         seenLottoPropPlayers.add(l.player!);
         return true;
       });
