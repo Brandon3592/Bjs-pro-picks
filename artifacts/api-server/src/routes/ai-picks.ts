@@ -1070,13 +1070,19 @@ router.get("/ai-picks", async (req, res) => {
 
     // ── LOTTO prop pool (lotto parlays only) ──
     // Picks the highest-odds (plus-money) side — intentional upside hunting.
+    // Cap at +600 per leg: keeps parlays exciting without going into the billions.
+    const LOTTO_MAX_ODDS = 600;
     const seenLottoPropPlayers = new Set<string>();
     const lottoPropPool: AIPickLeg[] = filteredProps
-      .filter((p) => Math.max(p.overOdds, p.underOdds) >= -160)
+      .filter((p) => {
+        const best = Math.max(p.overOdds, p.underOdds);
+        return best >= -160 && best <= LOTTO_MAX_ODDS;
+      })
       .sort((a, b) => Math.max(b.overOdds, b.underOdds) - Math.max(a.overOdds, a.underOdds))
       .map(propToLeg)
       .filter((l) => {
         if (!l.player || seenLottoPropPlayers.has(l.player)) return false;
+        if (l.odds > LOTTO_MAX_ODDS) return false;
         seenLottoPropPlayers.add(l.player!);
         return true;
       });

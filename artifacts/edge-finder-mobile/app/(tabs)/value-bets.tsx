@@ -23,12 +23,18 @@ import type { AIPick, AIParlay, AIPickLeg, AILadderParlay } from "@workspace/api
 
 // ─── Sport tabs ──────────────────────────────────────────────────────────────
 
+// NFL season runs Sept–Feb. Hide the tab during the off-season.
+const NFL_SEASON_ACTIVE = (() => {
+  const m = new Date().getMonth() + 1; // 1-indexed
+  return m >= 9 || m <= 2;
+})();
+
 const SPORT_TABS = [
   { key: "all", label: "All Sports", icon: "🌐" },
   { key: "NBA",  label: "NBA",       icon: "🏀" },
   { key: "MLB",  label: "MLB",       icon: "⚾" },
   { key: "NHL",  label: "NHL",       icon: "🏒" },
-  { key: "NFL",  label: "NFL",       icon: "🏈" },
+  ...(NFL_SEASON_ACTIVE ? [{ key: "NFL" as const, label: "NFL", icon: "🏈" }] : []),
 ] as const;
 
 type SportKey = typeof SPORT_TABS[number]["key"];
