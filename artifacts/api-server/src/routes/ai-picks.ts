@@ -1600,8 +1600,9 @@ router.get("/ai-picks", async (req, res) => {
       isAI: false,
     };
 
-    // Expire cache at whichever comes first: next game tip-off (+ 30s buffer) or normal TTL.
-    // This ensures once a game starts, the next request drops it from picks automatically.
+    // Cache until the next game starts (+ 30s so it's definitely in progress), or until
+    // end of today if no more games are scheduled. This keeps parlays stable all day —
+    // they only regenerate when a game tips off and those legs are no longer bettable.
     let nextGameStartMs = Infinity;
     for (const { events } of allOdds) {
       for (const ev of events) {
@@ -1611,8 +1612,9 @@ router.get("/ai-picks", async (req, res) => {
         }
       }
     }
-    const ttlFromNextGame = nextGameStartMs === Infinity ? Infinity : (nextGameStartMs - Date.now() + 30_000);
-    const effectiveTTL = Math.min(CACHE_TTL, ttlFromNextGame);
+    const effectiveTTL = nextGameStartMs === Infinity
+      ? Math.max(60_000, todayCutoffMs - Date.now()) // no more games today — cache until midnight ET
+      : Math.max(60_000, nextGameStartMs - Date.now() + 30_000); // expire when next game starts
 
     picksCacheMap.set(cacheKey, { data: result, expiresAt: Date.now() + effectiveTTL });
     return res.json(result);
