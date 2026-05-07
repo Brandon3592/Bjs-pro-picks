@@ -124,40 +124,41 @@ export default function PropsScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.gameScroll}
-          style={[styles.gameScrollBg, { borderBottomColor: colors.border }]}
-        >
-          {games.map((g) => {
-            const active = activeGame === g.id;
-            return (
-              <TouchableOpacity
-                key={g.id}
-                style={[
-                  styles.gameChip,
-                  {
-                    backgroundColor: active ? colors.primary : colors.muted,
-                    borderColor: active ? colors.primary : colors.border,
-                  },
-                ]}
-                onPress={() => setSelectedGame(g.id)}
-                activeOpacity={0.75}
-              >
-                <Text
+        <View style={[styles.gameScrollBg, { borderBottomColor: colors.border }]}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.gameScroll}
+          >
+            {games.map((g) => {
+              const active = activeGame === g.id;
+              return (
+                <TouchableOpacity
+                  key={g.id}
                   style={[
-                    styles.gameChipText,
-                    { color: active ? colors.primaryForeground : colors.foreground },
+                    styles.gameChip,
+                    {
+                      backgroundColor: active ? colors.primary : colors.muted,
+                      borderColor: active ? colors.primary : colors.border,
+                    },
                   ]}
-                  numberOfLines={1}
+                  onPress={() => setSelectedGame(g.id)}
+                  activeOpacity={0.75}
                 >
-                  {g.awayTeam} @ {g.homeTeam}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+                  <Text
+                    style={[
+                      styles.gameChipText,
+                      { color: active ? colors.primaryForeground : colors.foreground },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {g.awayTeam} @ {g.homeTeam}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
       )}
 
       {/* Market filter */}
@@ -282,10 +283,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   noGamesText: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  gameScrollBg: { borderBottomWidth: StyleSheet.hairlineWidth, height: 56 },
+  gameScrollBg: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 10,
+  },
   gameScroll: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
     gap: 8,
     flexDirection: "row",
     alignItems: "center",
