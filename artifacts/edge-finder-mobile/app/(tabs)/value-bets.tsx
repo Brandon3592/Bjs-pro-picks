@@ -45,6 +45,11 @@ function fmtOdds(o: number) {
   return o > 0 ? `+${o}` : `${o}`;
 }
 
+function impliedProb(odds: number): string {
+  const p = odds > 0 ? 100 / (100 + odds) : Math.abs(odds) / (Math.abs(odds) + 100);
+  return `${(p * 100).toFixed(0)}%`;
+}
+
 function combinedOddsPayoutStr(odds: number): string {
   const decimal = odds > 0 ? odds / 100 + 1 : 100 / Math.abs(odds) + 1;
   const payout = ((decimal - 1) * 100).toFixed(0);
@@ -164,6 +169,11 @@ function LockCard({
           <Text style={[styles.lockOdds, { color: isPositive ? "#22c55e" : colors.foreground }]}>
             {fmtOdds(pick.odds)}
           </Text>
+          {pick.edge > 0 && (
+            <View style={lockStyles.edgeBadge}>
+              <Text style={lockStyles.edgeBadgeText}>+{(pick.edge * 100).toFixed(1)}% edge</Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -179,10 +189,9 @@ function LockCard({
       {expanded && (
         <View style={[styles.reasoning, { borderTopColor: colors.border }]}>
           <View style={styles.reasoningHeader}>
-            <Feather name="activity" size={13} color={GOLD} />
-            <Text style={[styles.reasoningLabel, { color: GOLD }]}>AI Analysis</Text>
+            <Feather name="cpu" size={13} color={GOLD} />
+            <Text style={[styles.reasoningLabel, { color: GOLD }]}>Model Analysis</Text>
           </View>
-          <Text style={[styles.reasoningText, { color: colors.foreground }]}>{pick.reasoning}</Text>
           {pick.tags?.length > 0 && (
             <View style={styles.tagsRow}>
               {pick.tags.map((tag) => (
@@ -192,6 +201,16 @@ function LockCard({
               ))}
             </View>
           )}
+          <View style={{ gap: 5 }}>
+            {pick.reasoning.split(/\.\s+/).filter((s) => s.trim().length > 6).map((sentence, i) => (
+              <View key={i} style={{ flexDirection: "row", gap: 7, alignItems: "flex-start" }}>
+                <Text style={{ color: GOLD, fontSize: 14, lineHeight: 19 }}>·</Text>
+                <Text style={[styles.reasoningText, { color: colors.foreground, flex: 1 }]}>
+                  {sentence.replace(/\.$/, "")}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
       )}
 
@@ -275,7 +294,12 @@ function ParlayCard({
                   : leg.pick}
               </Text>
             </View>
-            <Text style={[styles.legOdds, { color: accent }]}>{fmtOdds(leg.odds)}</Text>
+            <View style={{ alignItems: "flex-end", gap: 2 }}>
+              <Text style={[styles.legOdds, { color: accent }]}>{fmtOdds(leg.odds)}</Text>
+              <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: "#6b7280" }}>
+                {impliedProb(leg.odds)} impl.
+              </Text>
+            </View>
           </View>
         ))}
       </View>
@@ -676,8 +700,8 @@ export default function AiPicksScreen() {
         ]}
         refreshControl={
           <RefreshControl
-            refreshing={isFetching && !isLoading}
-            onRefresh={refetch}
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
             tintColor={colors.primary}
           />
         }
@@ -1245,6 +1269,26 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   tabLabelActive: { fontFamily: "Inter_700Bold" },
+});
+
+// ─── Lock card extra styles ───────────────────────────────────────────────────
+
+const lockStyles = StyleSheet.create({
+  edgeBadge: {
+    backgroundColor: "#22c55e18",
+    borderWidth: 1,
+    borderColor: "#22c55e44",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginTop: 5,
+    alignItems: "center",
+  },
+  edgeBadgeText: {
+    color: "#22c55e",
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+  },
 });
 
 // ─── Ladder-specific styles ───────────────────────────────────────────────────

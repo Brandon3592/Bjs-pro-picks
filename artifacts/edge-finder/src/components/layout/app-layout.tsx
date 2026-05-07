@@ -15,38 +15,44 @@ import {
   LogOut,
   ChevronRight,
   Star,
+  CalendarCheck,
+  Dices,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
+  { href: "/today", label: "Today's Picks", icon: CalendarCheck, highlight: true },
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/all-markets", label: "All Markets", icon: Globe },
   { href: "/props", label: "Player Props", icon: Users },
-  { href: "/arb", label: "Arb Finder", icon: Zap },
+  { href: "/arb", label: "Arb Finder", icon: Dices },
   { href: "/games", label: "Games", icon: Activity },
+  { href: "/all-markets", label: "All Markets", icon: Globe },
   { href: "/picks", label: "Pick History", icon: Star },
   { href: "/tracker", label: "Bet Tracker", icon: BookOpen },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-function NavLink({ href, label, icon: Icon, onClick }: { href: string; label: string; icon: React.ElementType; onClick?: () => void }) {
+function NavLink({ href, label, icon: Icon, highlight, onClick }: { href: string; label: string; icon: React.ElementType; highlight?: boolean; onClick?: () => void }) {
   const [location] = useLocation();
   const isActive = location === href;
   return (
     <Link href={href} onClick={onClick}>
       <div
-        data-testid={`nav-${label.toLowerCase().replace(" ", "-")}`}
+        data-testid={`nav-${label.toLowerCase().replace(/\s/g, "-")}`}
         className={cn(
           "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer group",
           isActive
             ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : highlight
+            ? "text-primary bg-primary/8 hover:bg-primary/15"
             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         )}
       >
-        <Icon className={cn("h-4 w-4 flex-shrink-0", isActive ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-accent-foreground")} />
+        <Icon className={cn("h-4 w-4 flex-shrink-0", isActive || highlight ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-accent-foreground")} />
         <span className="flex-1">{label}</span>
+        {highlight && !isActive && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/25 leading-none">NEW</span>}
         {isActive && <ChevronRight className="h-3 w-3 text-primary" />}
       </div>
     </Link>
