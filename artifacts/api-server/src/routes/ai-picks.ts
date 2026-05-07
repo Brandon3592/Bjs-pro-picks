@@ -3,7 +3,7 @@ import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY
 import { fetchMlbLineupNames } from "../lib/mlb-lineups";
 import { fetchNbaOut, fetchNhlOut } from "../lib/sport-lineups";
 import { americanToDecimal, decimalToAmerican } from "../lib/model";
-import { buildSteamMap, scoreProps, buildWeatherPenaltySet } from "../lib/pick-scoring";
+import { buildSteamMap, scoreProps, buildWeatherPenaltySet, type MatchupContext } from "../lib/pick-scoring";
 import { getEloWinProb, warmEloCache } from "../lib/elo-model";
 import type { OddsEvent, PropEvent } from "../lib/odds-api";
 
@@ -1153,6 +1153,29 @@ router.get("/ai-picks", async (req, res) => {
       return gameScoreMap.get(`${gameId}::${outcomeName}`)?.eloEdgePct ?? null;
     }
 
+    // ── Matchup context map — used by scoreProps for ALL prop picks ───────────
+    // Keyed by gameId. Carries Elo edge per side and MLB pitcher info so that
+    // every prop leg can be scored against the game's model-derived context.
+    const matchupContextMap = new Map<string, MatchupContext>();
+    for (const { events } of allOdds) {
+      for (const ev of events) {
+        const t = new Date(ev.commence_time).getTime();
+        if (t <= nowMs || t > todayCutoffMs) continue;
+        const homeResult = eloMap.get(`${ev.id}::${ev.home_team}`);
+        const awayResult = eloMap.get(`${ev.id}::${ev.away_team}`);
+        matchupContextMap.set(ev.id, {
+          homeEloEdgePct:   getEloEdge(ev.id, ev.home_team),
+          awayEloEdgePct:   getEloEdge(ev.id, ev.away_team),
+          homeModelProb:    homeResult?.modelProb ?? null,
+          awayModelProb:    awayResult?.modelProb ?? null,
+          homePitcherEra:   homeResult?.homePitcher?.era ?? null,
+          awayPitcherEra:   homeResult?.awayPitcher?.era ?? null,
+          homePitcherName:  homeResult?.homePitcher?.name ?? null,
+          awayPitcherName:  homeResult?.awayPitcher?.name ?? null,
+        });
+      }
+    }
+
     // ── FAVORITE game leg pool (used for safe, game, mix, cross-sport parlays) ──
     const gameLegPool: AIPickLeg[] = [];
     for (const { sport: sportLabel, events } of allOdds) {
@@ -1187,7 +1210,7 @@ router.get("/ai-picks", async (req, res) => {
       .filter((p) => Math.min(p.minOverOdds, p.underOdds) <= -130) // must have clear favorite side
       .map(propToFavoriteLeg);
     const scoredSmartProps = scoreProps(
-      rawSmartProps, steamMap, mlbLineups, nbaOut ?? nhlOut, weatherPenaltyGameIds,
+      rawSmartProps, steamMap, mlbLineups, nbaOut ?? nhlOut, weatherPenaltyGameIds, matchupContextMap,
     );
     const propPool: AIPickLeg[] = scoredSmartProps
       .filter((l) => {
@@ -1208,7 +1231,7 @@ router.get("/ai-picks", async (req, res) => {
       .map(propToLeg)
       .filter((l) => l.odds <= LOTTO_MAX_ODDS);
     const scoredLottoProps = scoreProps(
-      rawLottoProps, steamMap, mlbLineups, nbaOut ?? nhlOut, weatherPenaltyGameIds,
+      rawLottoProps, steamMap, mlbLineups, nbaOut ?? nhlOut, weatherPenaltyGameIds, matchupContextMap,
     );
     const lottoPropPool: AIPickLeg[] = scoredLottoProps
       .filter((l) => {

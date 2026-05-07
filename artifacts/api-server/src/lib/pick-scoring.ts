@@ -228,6 +228,31 @@ export function scoreGameLegs(
   return results.sort((a, b) => b.score - a.score);
 }
 
+// ─── Matchup context (from Elo model) ────────────────────────────────────────
+
+/**
+ * Per-game context derived from the Elo model.
+ * Built in ai-picks.ts from the eloMap and passed into scoreProps.
+ */
+export interface MatchupContext {
+  /** Model edge for the home team vs book implied (positive = home undervalued) */
+  homeEloEdgePct: number | null;
+  /** Model edge for the away team vs book implied */
+  awayEloEdgePct: number | null;
+  /** Home team model win probability (0–1) */
+  homeModelProb: number | null;
+  /** Away team model win probability (0–1) */
+  awayModelProb: number | null;
+  /** MLB: home starting pitcher ERA (null = TBD / non-MLB) */
+  homePitcherEra: number | null;
+  /** MLB: away starting pitcher ERA */
+  awayPitcherEra: number | null;
+  /** MLB: home starting pitcher name (for prop matching) */
+  homePitcherName: string | null;
+  /** MLB: away starting pitcher name */
+  awayPitcherName: string | null;
+}
+
 // ─── Prop scoring ─────────────────────────────────────────────────────────────
 
 export interface ScoredProp {
@@ -246,14 +271,20 @@ export interface ScoredProp {
   injuryFlagged: boolean;
 }
 
+function normPropName(s: string): string {
+  return s.toLowerCase().trim().replace(/\s+/g, " ");
+}
+
 /**
- * Score each CompactProp.  High score = worth including in parlays.
+ * Score each prop leg. High score = worth including in parlays.
  *
- * @param props       Raw CompactProp list (already injury/lineup-filtered)
- * @param steamMap    Steam map (may be null)
- * @param lineupSet   Set of confirmed starters (MLB) — null = not posted yet
- * @param injurySet   Set of OUT players (NBA/NHL) — null = unknown
- * @param weatherPenaltyGameIds  Set of gameIds where weather hurts Overs (MLB outdoor)
+ * Score components:
+ *   Liquidity       0–20  tighter juice = more books pricing this line
+ *   Edge            0–25  implied prob premium on the chosen side
+ *   Steam           0–15  sharp line movement in this game
+ *   Lineup/Injury   0–25  confirmed starter, no OUT flag
+ *   Weather        −15    MLB outdoor Over in heavy wind/rain
+ *   Matchup (Elo)  −15→+20  team model edge, pitcher ERA matchup
  */
 export function scoreProps(
   props: import("../routes/ai-picks").AIPickLeg[],
@@ -261,34 +292,122 @@ export function scoreProps(
   lineupSet: Set<string> | null,
   injurySet: Set<string> | null,
   weatherPenaltyGameIds: Set<string>,
+  matchupContextMap?: Map<string, MatchupContext> | null,
 ): (import("../routes/ai-picks").AIPickLeg & { score: number })[] {
   return props.map((leg) => {
-    // Book count signal — we don't have raw book count per prop in AIPickLeg,
-    // so we proxy with odds: tighter odds (closer to -110) = more liquid = more books
+    // ── Liquidity ──────────────────────────────────────────────────────────
     const absOdds = Math.abs(leg.odds);
     const liquidityScore = absOdds <= 120 ? 20 : absOdds <= 150 ? 14 : absOdds <= 200 ? 8 : 3;
 
-    // Edge — proxy: smaller odds = consensus, bigger plus = more upside but less certain
-    // For smart/favorite legs (negative odds), reward tighter juice
+    // ── Edge ───────────────────────────────────────────────────────────────
     const edgeScore = leg.odds < 0
       ? Math.min(25, Math.max(0, (Math.abs(leg.odds) - 100) / 8))
       : Math.min(15, Math.max(0, 20 - leg.odds / 20));
 
-    // Steam for props — key: gameId::player (props don't have outcome-level steam in h2h map)
-    // Use game-level steam as a proxy (if the game has sharp action, props may too)
-    const steamKey = `${leg.gameId}::${leg.player ?? ""}`;
+    // ── Steam ──────────────────────────────────────────────────────────────
+    const steamKey   = `${leg.gameId}::${leg.player ?? ""}`;
     const steamEntry = steamMap?.get(steamKey);
     const steamScore = steamEntry ? Math.min(15, steamEntry.score) : 0;
 
-    // Context: confirmed in lineup = +15, injury-free = +10
-    const inLineup = lineupSet ? (lineupSet.has(leg.player ?? "") ? 15 : 0) : 8; // 8 = unknown (partial credit)
+    // ── Lineup / Injury ────────────────────────────────────────────────────
+    const inLineup = lineupSet ? (lineupSet.has(leg.player ?? "") ? 15 : 0) : 8;
     const noInjury = injurySet ? (injurySet.has(leg.player ?? "") ? -15 : 10) : 5;
 
-    // Weather penalty: MLB outdoor Over props in heavy weather
-    const isOver = leg.pick.includes("Over");
+    // ── Weather ────────────────────────────────────────────────────────────
+    const isOver        = leg.pick.includes("Over");
     const weatherPenalty = weatherPenaltyGameIds.has(leg.gameId) && isOver ? -15 : 0;
 
-    const score = Math.max(0, liquidityScore + edgeScore + steamScore + inLineup + noInjury + weatherPenalty);
+    // ── Elo matchup context ────────────────────────────────────────────────
+    let matchupBonus   = 0;
+    let matchupPenalty = 0;
+
+    const ctx = matchupContextMap?.get(leg.gameId);
+    if (ctx) {
+      const playerName = normPropName(leg.player ?? "");
+      const sport      = leg.sport?.toUpperCase() ?? "";
+
+      // Determine which side this player is on, if possible.
+      // For MLB pitchers we can match by name; for all others we use game-level signals.
+      const isHomePitcher = ctx.homePitcherName
+        ? normPropName(ctx.homePitcherName).includes(playerName) || playerName.includes(normPropName(ctx.homePitcherName))
+        : false;
+      const isAwayPitcher = ctx.awayPitcherName
+        ? normPropName(ctx.awayPitcherName).includes(playerName) || playerName.includes(normPropName(ctx.awayPitcherName))
+        : false;
+
+      // ── 1. Team model edge ─────────────────────────────────────────────
+      // If one team has a big model edge, their offensive players are likely to
+      // produce more (favourable scoring environment). Over props get a bonus.
+      // Without knowing the player's team we use the absolute largest edge as a
+      // game-level signal — a dominant team creates high-variance scoring.
+      const homeEdge = ctx.homeEloEdgePct ?? 0;
+      const awayEdge = ctx.awayEloEdgePct ?? 0;
+      const maxAbsEdge = Math.max(Math.abs(homeEdge), Math.abs(awayEdge));
+
+      if (isOver) {
+        if (maxAbsEdge >= 10) matchupBonus += 12;      // one team heavily favoured → scoring lopsided
+        else if (maxAbsEdge >= 5) matchupBonus += 6;   // moderate edge → moderate boost
+      } else {
+        // Under bets benefit from close, low-scoring games (small edge = tight matchup)
+        if (maxAbsEdge <= 3) matchupBonus += 5;
+      }
+
+      // ── 2. MLB pitcher quality signals ────────────────────────────────
+      if (sport === "MLB") {
+        const isPitcherStrikeoutProp =
+          leg.pick.toLowerCase().includes("strikeout") ||
+          (leg.betType === "player_prop" && (isHomePitcher || isAwayPitcher));
+
+        const isBatterProp = !isPitcherStrikeoutProp;
+
+        if (isPitcherStrikeoutProp) {
+          // Pitcher's own ERA predicts strikeout performance.
+          // Pitching against a weaker team (large home model edge for opponent) also helps.
+          const pitcherEra = isHomePitcher ? ctx.homePitcherEra
+                           : isAwayPitcher ? ctx.awayPitcherEra
+                           : null;
+
+          if (pitcherEra !== null && isOver) {
+            if (pitcherEra < 3.00) matchupBonus  += 15;  // elite ace — strikeout Over is golden
+            else if (pitcherEra < 3.50) matchupBonus += 10;
+            else if (pitcherEra < 4.00) matchupBonus += 5;
+            else if (pitcherEra > 5.00) matchupPenalty += 10; // struggling pitcher
+          }
+          if (pitcherEra !== null && !isOver) {
+            // Under on strikeouts for a struggling pitcher
+            if (pitcherEra > 5.00) matchupBonus += 8;
+          }
+        }
+
+        if (isBatterProp && isOver) {
+          // Batter Overs are hurt by facing an ace pitcher.
+          // We don't know which team the batter is on, so if either pitcher is an ace
+          // there's a risk — full penalty if both are aces, half if just one.
+          const homeIsAce = ctx.homePitcherEra !== null && ctx.homePitcherEra < 3.50;
+          const awayIsAce = ctx.awayPitcherEra !== null && ctx.awayPitcherEra < 3.50;
+          if (homeIsAce && awayIsAce) matchupPenalty += 14; // pitcher's duel — batters suffer
+          else if (homeIsAce || awayIsAce) matchupPenalty += 7;
+
+          // Bonus if we know the opposing pitcher is hittable (high ERA)
+          const homeIsBad = ctx.homePitcherEra !== null && ctx.homePitcherEra > 5.00;
+          const awayIsBad = ctx.awayPitcherEra !== null && ctx.awayPitcherEra > 5.00;
+          if (homeIsBad || awayIsBad) matchupBonus += 8; // someone is getting shelled today
+        }
+      }
+
+      // ── 3. NBA / NHL: large model edge → favoured team players get Over boost ─
+      if ((sport === "NBA" || sport === "NHL") && isOver) {
+        // A team with a big Elo edge is expected to outscore their opponent —
+        // their key players should hit Overs. Same caveats as above (team unknown).
+        if (maxAbsEdge >= 8) matchupBonus += 8;
+        else if (maxAbsEdge >= 4) matchupBonus += 4;
+      }
+    }
+
+    const score = Math.max(0,
+      liquidityScore + edgeScore + steamScore + inLineup + noInjury
+      + weatherPenalty + matchupBonus - matchupPenalty,
+    );
     return { ...leg, score };
   }).sort((a, b) => b.score - a.score);
 }
