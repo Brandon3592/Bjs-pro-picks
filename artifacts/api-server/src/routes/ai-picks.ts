@@ -4,6 +4,7 @@ import { fetchMlbLineupNames } from "../lib/mlb-lineups";
 import { fetchNbaOut, fetchNhlOut } from "../lib/sport-lineups";
 import { americanToDecimal, decimalToAmerican } from "../lib/model";
 import { buildSteamMap, scoreProps, buildWeatherPenaltySet } from "../lib/pick-scoring";
+import { getEloWinProb, warmEloCache } from "../lib/elo-model";
 import type { OddsEvent, PropEvent } from "../lib/odds-api";
 
 const router = Router();
@@ -868,12 +869,14 @@ router.get("/ai-picks", async (req, res) => {
     const allEventsFlat = allOddsRaw.flatMap(({ sport, events }) =>
       events.map((ev) => ({ sport, ev })),
     );
+    const activeSports = allOddsRaw.map((s) => s.sport);
     const [mlbLineups, nbaOut, nhlOut, steamMap, weatherPenaltyGameIds] = await Promise.all([
       fetchMlbLineupNames(),                      // MLB: whitelist confirmed starters
       fetchNbaOut(),                              // NBA: blacklist OUT players
       fetchNhlOut(),                              // NHL: blacklist OUT players
       buildSteamMap(),                            // Line movement signal from DB
       buildWeatherPenaltySet(allEventsFlat),      // MLB outdoor Over penalty
+      warmEloCache(activeSports),                 // pre-warm ESPN + pitcher cache (fire & forget)
     ]);
 
     const realProps = rawProps.filter((p) => {
@@ -1050,10 +1053,34 @@ router.get("/ai-picks", async (req, res) => {
       return null;
     }
 
+    // ── Elo model — build win-prob for every today-game outcome in parallel ──
+    // Key: `${gameId}::${teamName}` → EloLookupResult | null
+    type EloMap = Map<string, import("../lib/elo-model").EloLookupResult | null>;
+    const eloMap: EloMap = new Map();
+
+    {
+      const eloPairs: { key: string; homeTeam: string; awayTeam: string; sport: string; team: string }[] = [];
+      for (const { sport: sportLabel, events } of allOdds) {
+        for (const ev of events) {
+          const t = new Date(ev.commence_time).getTime();
+          if (t <= nowMs || t > todayCutoffMs) continue;
+          eloPairs.push({ key: `${ev.id}::${ev.home_team}`, homeTeam: ev.home_team, awayTeam: ev.away_team, sport: sportLabel, team: ev.home_team });
+          eloPairs.push({ key: `${ev.id}::${ev.away_team}`, homeTeam: ev.home_team, awayTeam: ev.away_team, sport: sportLabel, team: ev.away_team });
+        }
+      }
+      const eloResults = await Promise.all(
+        eloPairs.map(({ homeTeam, awayTeam, sport, team }) =>
+          getEloWinProb(homeTeam, awayTeam, sport, team).catch(() => null),
+        ),
+      );
+      for (let i = 0; i < eloPairs.length; i++) {
+        eloMap.set(eloPairs[i].key, eloResults[i]);
+      }
+    }
+
     // ── Score-sorted game leg pools ───────────────────────────────────────────
-    // Build a score map for every game outcome so we can sort by composite quality.
-    // Score = book count + de-vig edge + steam signal + context bonus.
-    type GameScore = { score: number; steamScore: number };
+    // Score = book count + de-vig edge + Elo model edge + steam signal + context bonus.
+    type GameScore = { score: number; steamScore: number; eloEdgePct: number | null };
     const gameScoreMap = new Map<string, GameScore>(); // key: `${gameId}::${outcomeName}`
 
     for (const { sport: sportLabel, events } of allOdds) {
@@ -1061,12 +1088,9 @@ router.get("/ai-picks", async (req, res) => {
         const t = new Date(ev.commence_time).getTime();
         if (t <= nowMs || t > todayCutoffMs) continue;
 
-        // Count books offering h2h
         const bookCount = ev.bookmakers.filter((b) => b.markets.some((m) => m.key === "h2h")).length;
-        // Require at least 3 books for any pick — ensures real price discovery
         if (bookCount < 3) continue;
 
-        // Collect all prices per outcome across books
         const byOutcome = new Map<string, number[]>();
         for (const bk of ev.bookmakers) {
           const h2h = bk.markets.find((m) => m.key === "h2h");
@@ -1080,7 +1104,6 @@ router.get("/ai-picks", async (req, res) => {
         const outcomes = [...byOutcome.keys()];
         if (outcomes.length < 2) continue;
 
-        // De-vig: average implied prob → normalize
         const avgImpl = outcomes.map((name) => {
           const prices = byOutcome.get(name)!;
           const avg = prices.reduce((s, p) => s + (p > 0 ? 100 / (p + 100) : Math.abs(p) / (Math.abs(p) + 100)), 0) / prices.length;
@@ -1093,19 +1116,31 @@ router.get("/ai-picks", async (req, res) => {
           const prices = byOutcome.get(name)!;
           const bestOdds = Math.max(...prices);
           const implP = bestOdds > 0 ? 100 / (bestOdds + 100) : Math.abs(bestOdds) / (Math.abs(bestOdds) + 100);
-          const edge = (consensusP - implP) * 100;
+          const bookDeVigEdge = (consensusP - implP) * 100;
 
-          // Score components
-          const bookScore = Math.min(25, bookCount * 4);
-          const edgeScore = Math.min(30, Math.max(0, edge * 10));
-          const steamKey = `${ev.id}::${name}`;
-          const steamEntry = steamMap?.get(steamKey);
-          const steamScore = steamEntry?.direction === "steam" ? steamEntry.score : 0;
+          // ── Elo model edge ──
+          // Difference between our model's win probability and the book's implied probability.
+          // Positive = model thinks the pick is undervalued by the books.
+          const eloResult = eloMap.get(`${ev.id}::${name}`);
+          const eloEdgePct = eloResult
+            ? (eloResult.modelProb - implP) * 100
+            : null;
+          // Score: 0–35 pts — 2 pts per 1% of model edge, floor at 0
+          const eloScore = eloEdgePct != null
+            ? Math.min(35, Math.max(0, eloEdgePct * 2))
+            : 0;
+
+          const bookScore    = Math.min(25, bookCount * 4);
+          const edgeScore    = Math.min(25, Math.max(0, bookDeVigEdge * 10));
+          const steamKey     = `${ev.id}::${name}`;
+          const steamEntry   = steamMap?.get(steamKey);
+          const steamScore   = steamEntry?.direction === "steam" ? steamEntry.score : 0;
           const contextScore = bookCount >= 5 ? 15 : bookCount >= 4 ? 10 : 5;
 
           gameScoreMap.set(`${ev.id}::${name}`, {
-            score: bookScore + edgeScore + steamScore + contextScore,
+            score: bookScore + edgeScore + eloScore + steamScore + contextScore,
             steamScore,
+            eloEdgePct: eloEdgePct != null ? Math.round(eloEdgePct * 10) / 10 : null,
           });
         }
       }
@@ -1113,6 +1148,9 @@ router.get("/ai-picks", async (req, res) => {
 
     function getGameScore(gameId: string, outcomeName: string): number {
       return gameScoreMap.get(`${gameId}::${outcomeName}`)?.score ?? 0;
+    }
+    function getEloEdge(gameId: string, outcomeName: string): number | null {
+      return gameScoreMap.get(`${gameId}::${outcomeName}`)?.eloEdgePct ?? null;
     }
 
     // ── FAVORITE game leg pool (used for safe, game, mix, cross-sport parlays) ──
@@ -1186,20 +1224,67 @@ router.get("/ai-picks", async (req, res) => {
       return res.json(fallback);
     }
 
-    // ── LOCK OF THE DAY: most-liquid game's FAVORITE (most bookmakers = best consensus) ──
-    // Pick the upcoming game with the most bookmakers, then take the FAVORITE side — never an underdog.
+    // ── LOCK OF THE DAY: highest composite score (Elo model edge + books + steam) ──
+    // gameLegPool is already sorted by composite score desc — pick the top leg.
+    // Then fetch the full Elo reasoning to populate the Lock reasoning text.
     let lockLeg: AIPickLeg = gameLegPool[0] ?? propPool[0];
-    let maxBooks = 0;
-    for (const { sport: sportLabel, events } of allOdds) {
-      for (const ev of events) {
-        const evT = new Date(ev.commence_time).getTime();
-        if (evT <= nowMs || evT > todayCutoffMs) continue; // today only
-        const h2hBooks = ev.bookmakers.filter((b) => b.markets.some((m) => m.key === "h2h")).length;
-        if (h2hBooks > maxBooks) {
-          const leg = eventToFavoriteLeg(ev, sportLabel);
-          if (leg) { lockLeg = leg; maxBooks = h2hBooks; }
+    let lockEloResult: import("../lib/elo-model").EloLookupResult | null = null;
+    let lockBookCount = 0;
+
+    if (lockLeg) {
+      // Count books for the lock game
+      for (const { events } of allOdds) {
+        const ev = events.find((e) => e.id === lockLeg.gameId);
+        if (ev) {
+          lockBookCount = ev.bookmakers.filter((b) => b.markets.some((m) => m.key === "h2h")).length;
+          break;
         }
       }
+      lockEloResult = eloMap.get(`${lockLeg.gameId}::${lockLeg.pick}`) ?? null;
+    }
+
+    // Model edge for the lock pick
+    const lockEloEdgePct = getEloEdge(lockLeg?.gameId ?? "", lockLeg?.pick ?? "");
+    // Book-implied probability for the lock pick
+    const lockOdds = lockLeg?.odds ?? -110;
+    const lockImpliedPct = lockOdds > 0
+      ? 100 / (lockOdds + 100) * 100
+      : Math.abs(lockOdds) / (Math.abs(lockOdds) + 100) * 100;
+    const lockModelPct = lockEloResult
+      ? Math.round(lockEloResult.modelProb * 1000) / 10
+      : null;
+
+    // Confidence: scale from 65 (no Elo) to 88 (strong Elo edge + many books)
+    const lockConfidence = (() => {
+      let c = 65;
+      if (lockBookCount >= 5) c += 5;
+      if (lockBookCount >= 8) c += 3;
+      if (lockEloResult?.confidence === "high") c += 5;
+      if (lockEloEdgePct != null && lockEloEdgePct > 3) c += 5;
+      if (lockEloEdgePct != null && lockEloEdgePct > 7) c += 5;
+      const steamEntry = steamMap?.get(`${lockLeg?.gameId}::${lockLeg?.pick}`);
+      if (steamEntry?.direction === "steam") c += 5;
+      return Math.min(88, c);
+    })();
+
+    // Build reasoning text from Elo model output
+    const lockReasoningParts: string[] = [];
+    if (lockEloResult) {
+      lockReasoningParts.push(lockEloResult.reasoning);
+      if (lockEloEdgePct != null) {
+        const edgeWord = lockEloEdgePct > 0 ? "undervalued" : "overvalued";
+        lockReasoningParts.push(
+          `Model win probability ${lockModelPct}% vs book implied ${lockImpliedPct.toFixed(1)}% — ` +
+          `${Math.abs(lockEloEdgePct).toFixed(1)}% ${edgeWord} by the books.`,
+        );
+      }
+    } else {
+      lockReasoningParts.push(
+        `Top-ranked pick across ${lockBookCount} bookmakers. Widest market coverage provides the sharpest consensus pricing.`,
+      );
+    }
+    if (lockBookCount > 0) {
+      lockReasoningParts.push(`Priced across ${lockBookCount} books.`);
     }
 
     const lockOfTheDay: AIPick = {
@@ -1214,10 +1299,10 @@ router.get("/ai-picks", async (req, res) => {
       player: lockLeg.player ?? null,
       bookmaker: lockLeg.bookmaker,
       odds: lockLeg.odds,
-      confidence: 72,
-      edge: 0,
-      reasoning: `Best line available across ${maxBooks} bookmakers today. Widest market coverage means the sharpest consensus on this game.`,
-      tags: [lockLeg.betType, "top pick"],
+      confidence: lockConfidence,
+      edge: lockEloEdgePct ?? 0,
+      reasoning: lockReasoningParts.join(" "),
+      tags: [lockLeg.betType, "top pick", ...(lockEloResult ? ["elo model"] : [])],
     };
 
     // Normalize sport labels (API keys like "basketball_nba" → display label "NBA")
