@@ -1600,7 +1600,21 @@ router.get("/ai-picks", async (req, res) => {
       isAI: false,
     };
 
-    picksCacheMap.set(cacheKey, { data: result, expiresAt: Date.now() + CACHE_TTL });
+    // Expire cache at whichever comes first: next game tip-off (+ 30s buffer) or normal TTL.
+    // This ensures once a game starts, the next request drops it from picks automatically.
+    let nextGameStartMs = Infinity;
+    for (const { events } of allOdds) {
+      for (const ev of events) {
+        const t = new Date(ev.commence_time).getTime();
+        if (t > nowMs && t <= todayCutoffMs) {
+          nextGameStartMs = Math.min(nextGameStartMs, t);
+        }
+      }
+    }
+    const ttlFromNextGame = nextGameStartMs === Infinity ? Infinity : (nextGameStartMs - Date.now() + 30_000);
+    const effectiveTTL = Math.min(CACHE_TTL, ttlFromNextGame);
+
+    picksCacheMap.set(cacheKey, { data: result, expiresAt: Date.now() + effectiveTTL });
     return res.json(result);
 
   } catch (err) {
