@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { hasApiKey, fetchAllSportOdds } from "../lib/odds-api";
 import { gameStatus } from "../lib/model";
+import { fetchWeather } from "../lib/weather";
 
 const router = Router();
 
@@ -40,6 +41,7 @@ router.get("/dashboard/summary", async (_req, res) => {
   type TopGame = {
     id: string; sport: string; homeTeam: string; awayTeam: string;
     startTime: string; bookCount: number;
+    weather?: { temp: number; windSpeed: number; condition: string } | null;
   };
   const topGamesPool: TopGame[] = [];
 
@@ -71,9 +73,24 @@ router.get("/dashboard/summary", async (_req, res) => {
     }
   }
 
-  const topGames = topGamesPool
+  const topGamesSorted = topGamesPool
     .sort((a, b) => b.bookCount - a.bookCount || new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
     .slice(0, 6);
+
+  // Fetch weather in parallel for outdoor NFL/MLB games
+  const topGames = await Promise.all(
+    topGamesSorted.map(async (g) => {
+      if (g.sport === "NFL" || g.sport === "MLB") {
+        try {
+          const w = await fetchWeather(g.homeTeam);
+          return { ...g, weather: w ? { temp: w.temp, windSpeed: w.windSpeed, condition: w.condition } : null };
+        } catch {
+          return { ...g, weather: null };
+        }
+      }
+      return { ...g, weather: null };
+    })
+  );
 
   const sportBreakdown = Object.entries(sportStats)
     .filter(([, s]) => s.games > 0)

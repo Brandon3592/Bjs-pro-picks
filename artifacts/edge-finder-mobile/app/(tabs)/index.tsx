@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import {
   useGetDashboardSummary,
   useGetLineMovements,
+  useGetPickHistoryStats,
   type LineMovement,
 } from "@workspace/api-client-react";
 import React, { useState } from "react";
@@ -56,7 +57,34 @@ const secStyles = StyleSheet.create({
   label: { fontSize: 15, fontFamily: "Inter_600SemiBold", letterSpacing: -0.2 },
 });
 
-type TopGame = { id: string; sport: string; homeTeam: string; awayTeam: string; startTime: string; bookCount: number };
+type TopGame = {
+  id: string; sport: string; homeTeam: string; awayTeam: string;
+  startTime: string; bookCount: number;
+  weather?: { temp: number; windSpeed: number; condition: string } | null;
+};
+
+function WeatherBadge({ weather }: { weather: NonNullable<TopGame["weather"]> }) {
+  const colors = useColors();
+  const isWindy = weather.windSpeed >= 15;
+  const badgeColor = isWindy ? "#f59e0b" : colors.mutedForeground;
+  return (
+    <View style={[weatherStyles.badge, { borderColor: badgeColor + "44", backgroundColor: badgeColor + "12" }]}>
+      <Feather name={isWindy ? "wind" : "cloud"} size={9} color={badgeColor} />
+      <Text style={[weatherStyles.text, { color: badgeColor }]}>
+        {Math.round(weather.temp)}°F{isWindy ? ` · ${Math.round(weather.windSpeed)}mph wind` : ""}
+      </Text>
+    </View>
+  );
+}
+
+const weatherStyles = StyleSheet.create({
+  badge: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: 8, borderWidth: 1,
+  },
+  text: { fontSize: 9, fontFamily: "Inter_500Medium" },
+});
 
 function TopGameRow({ game, onTrack }: { game: TopGame; onTrack: () => void }) {
   const colors = useColors();
@@ -74,6 +102,7 @@ function TopGameRow({ game, onTrack }: { game: TopGame; onTrack: () => void }) {
         <Text style={[styles.topBetSub, { color: colors.mutedForeground }]} numberOfLines={1}>
           {game.sport} · {formatTime(game.startTime)} · {game.bookCount} books
         </Text>
+        {game.weather && <WeatherBadge weather={game.weather} />}
       </View>
       <View style={styles.topBetRight}>
         <View style={[styles.trackPill, { borderColor: colors.border }]}>
@@ -119,15 +148,21 @@ export default function DashboardScreen() {
 
   const summaryQ = useGetDashboardSummary();
   const movementsQ = useGetLineMovements({ hours: 6, limit: 30 });
+  const pickStatsQ = useGetPickHistoryStats();
 
   const isRefreshing = summaryQ.isFetching || movementsQ.isFetching;
   const summary = summaryQ.data;
   const movements = movementsQ.data ?? [];
   const topGames: TopGame[] = (summary as any)?.topGames ?? [];
+  const ps = pickStatsQ.data;
+  const pickRecord = ps && (ps.wins + ps.losses) > 0
+    ? `${ps.wins}W-${ps.losses}L`
+    : "—";
 
   const onRefresh = () => {
     summaryQ.refetch();
     movementsQ.refetch();
+    pickStatsQ.refetch();
   };
 
   return (
@@ -143,7 +178,8 @@ export default function DashboardScreen() {
       <View style={styles.statsRow}>
         <StatPill label="Live" value={(summary as any)?.liveGamesCount ?? 0} />
         <StatPill label="Upcoming" value={(summary as any)?.upcomingGamesCount ?? 0} />
-        <StatPill label="Total Games" value={(summary as any)?.totalGames ?? 0} accent />
+        <StatPill label="Total" value={(summary as any)?.totalGames ?? 0} accent />
+        <StatPill label="Record" value={pickRecord} accent={ps != null && (ps.wins + ps.losses) > 0} />
       </View>
 
       {/* Today's Top Games */}
