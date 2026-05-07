@@ -111,11 +111,21 @@ const SPORT_PROP_MARKETS: Record<string, string[]> = {
   americanfootball_nfl: ["player_pass_yds", "player_rush_yds", "player_reception_yds", "player_anytime_td"],
 };
 
+/** End of today in US Eastern Time (EDT = UTC-4). Prevents tomorrow's games from appearing. */
+function endOfTodayEasternMs(): number {
+  const nowET = new Date(Date.now() - 4 * 3600_000); // shift UTC → EDT
+  const endET = new Date(Date.UTC(
+    nowET.getUTCFullYear(), nowET.getUTCMonth(), nowET.getUTCDate(),
+    23, 59, 59, 999,
+  ));
+  return endET.getTime() + 4 * 3600_000; // shift EDT → UTC
+}
+
 async function fetchRealPropsForAI(
   allOdds: { sport: string; events: OddsEvent[] }[],
 ): Promise<CompactProp[]> {
   const now = Date.now();
-  const cutoff = now + 48 * 3600_000;
+  const cutoff = endOfTodayEasternMs();
 
   // Build one fetch per game (all games, all sports — no caps)
   const fetches: Promise<CompactProp[]>[] = [];
@@ -944,6 +954,7 @@ router.get("/ai-picks", async (req, res) => {
     }
 
     const nowMs = Date.now();
+    const todayCutoffMs = endOfTodayEasternMs(); // no games after midnight ET tonight
 
     // Convert any OddsEvent into a game leg using the best available line across bookmakers.
     // Prefers h2h (moneyline) — picks the better-priced team (underdog / higher odds). Falls back to totals Over.
@@ -1037,7 +1048,7 @@ router.get("/ai-picks", async (req, res) => {
     for (const { sport: sportLabel, events } of allOdds) {
       for (const ev of events) {
         const t = new Date(ev.commence_time).getTime();
-        if (t <= nowMs) continue;
+        if (t <= nowMs || t > todayCutoffMs) continue; // today's games only
         const leg = eventToFavoriteLeg(ev, sportLabel);
         if (leg) gameLegPool.push(leg);
       }
@@ -1049,7 +1060,7 @@ router.get("/ai-picks", async (req, res) => {
     for (const { sport: sportLabel, events } of allOdds) {
       for (const ev of events) {
         const t = new Date(ev.commence_time).getTime();
-        if (t <= nowMs) continue;
+        if (t <= nowMs || t > todayCutoffMs) continue; // today's games only
         const leg = eventToLeg(ev, sportLabel);
         if (leg) underdogLegPool.push(leg);
       }
@@ -1100,7 +1111,8 @@ router.get("/ai-picks", async (req, res) => {
     let maxBooks = 0;
     for (const { sport: sportLabel, events } of allOdds) {
       for (const ev of events) {
-        if (new Date(ev.commence_time).getTime() <= nowMs) continue;
+        const evT = new Date(ev.commence_time).getTime();
+        if (evT <= nowMs || evT > todayCutoffMs) continue; // today only
         const h2hBooks = ev.bookmakers.filter((b) => b.markets.some((m) => m.key === "h2h")).length;
         if (h2hBooks > maxBooks) {
           const leg = eventToFavoriteLeg(ev, sportLabel);
