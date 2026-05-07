@@ -179,11 +179,14 @@ function parsePropEvent(
         if (o.name === "Over") pairMap.get(key)!.over = o.price;
         else pairMap.get(key)!.under = o.price;
       }
+      // Markets where only the Over is widely offered — treat as Over-only.
+      const overOnlyMarket = market.key === "batter_hits";
+
       for (const [key, pair] of pairMap) {
         // HR props (and some other markets) only post the Over side — accept solo-Over entries.
         // Give them a large positive sentinel underOdds so direction logic always picks "Over".
         if (pair.over == null) continue;
-        if (pair.under == null) pair.under = 9999;
+        if (pair.under == null || overOnlyMarket) pair.under = 9999;
         const existing = byKey.get(key);
         if (!existing) {
           byKey.set(key, {

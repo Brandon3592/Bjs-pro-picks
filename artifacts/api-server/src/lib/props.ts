@@ -189,6 +189,9 @@ function findAltEdges(
   return edges;
 }
 
+// Markets where only the Over side is widely offered — suppress Under rows.
+const OVER_ONLY_MARKETS = new Set(["batter_hits"]);
+
 // ─── Main entry point ─────────────────────────────────────────────────────────
 
 export function findPropEdges(
@@ -205,11 +208,16 @@ export function findPropEdges(
     const marketLabel = getMarketLabel(sport, marketKey);
     const isAlt = marketKey.endsWith("_alternate");
 
-    if (isAlt) {
-      edges.push(...findAltEdges(event, marketKey, marketLabel));
-    } else {
-      edges.push(...findStandardEdges(event, marketKey, marketLabel));
-    }
+    const raw = isAlt
+      ? findAltEdges(event, marketKey, marketLabel)
+      : findStandardEdges(event, marketKey, marketLabel);
+
+    // Drop Under side for markets not widely offered on sportsbooks
+    const filtered = OVER_ONLY_MARKETS.has(marketKey)
+      ? raw.filter((e) => e.side === "Over")
+      : raw;
+
+    edges.push(...filtered);
   }
 
   return edges.sort((a, b) => b.edge - a.edge);
