@@ -6,7 +6,7 @@ import { americanToDecimal, decimalToAmerican } from "../lib/model";
 import { buildSteamMap, scoreProps, buildWeatherPenaltySet, type MatchupContext } from "../lib/pick-scoring";
 import { getEloWinProb, warmEloCache } from "../lib/elo-model";
 import type { OddsEvent, PropEvent } from "../lib/odds-api";
-import { db, dailyLaddersTable } from "@workspace/db";
+import { db, dailyLaddersTable, dailyPicksTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 const router = Router();
@@ -273,6 +273,47 @@ async function saveLadderToDb(sport: string, ladder: AILadderParlay): Promise<vo
       .values({ sport, date: todayEasternDate(), ladderJson: ladder as any })
       .onConflictDoNothing(); // If another request raced us, keep the first one
   } catch { /* ignore — ladder will still be used in-memory for this request */ }
+}
+
+// ── Daily picks DB persistence ────────────────────────────────────────────────
+// Locks, parlays, and every other pick are generated ONCE per sport per day.
+// They never change mid-day — no matter how many times the server restarts or
+// the cache expires. The force-refresh endpoint explicitly deletes the DB row
+// to allow a fresh generation on the next request.
+
+async function loadPicksFromDb(sport: string): Promise<AIPicksResponse | null> {
+  try {
+    const rows = await db
+      .select()
+      .from(dailyPicksTable)
+      .where(and(eq(dailyPicksTable.sport, sport), eq(dailyPicksTable.date, todayEasternDate())))
+      .limit(1);
+    if (rows.length > 0) return rows[0].picksJson as AIPicksResponse;
+  } catch { /* ignore DB errors — fall through to generate */ }
+  return null;
+}
+
+async function savePicksToDb(sport: string, picks: AIPicksResponse): Promise<void> {
+  try {
+    await db
+      .insert(dailyPicksTable)
+      .values({ sport, date: todayEasternDate(), picksJson: picks as any })
+      .onConflictDoNothing(); // first-write wins — keeps picks stable if two requests race
+  } catch { /* ignore — picks still served from this request's memory */ }
+}
+
+async function deletePicksFromDb(sport: string | null): Promise<void> {
+  try {
+    if (sport && sport !== "all") {
+      await db
+        .delete(dailyPicksTable)
+        .where(and(eq(dailyPicksTable.sport, sport), eq(dailyPicksTable.date, todayEasternDate())));
+    } else {
+      await db
+        .delete(dailyPicksTable)
+        .where(eq(dailyPicksTable.date, todayEasternDate()));
+    }
+  } catch { /* ignore */ }
 }
 
 // Label → API key for sports that have player props in our system.
@@ -892,6 +933,14 @@ router.get("/ai-picks", async (req, res) => {
   const cached = picksCacheMap.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) {
     return res.json(cached.data);
+  }
+
+  // Check DB for today's persisted picks — generated once, stable all day.
+  const dbPicks = await loadPicksFromDb(cacheKey);
+  if (dbPicks) {
+    // Refresh the in-memory cache so subsequent requests don't hit the DB every time.
+    picksCacheMap.set(cacheKey, { data: dbPicks, expiresAt: Date.now() + CACHE_TTL });
+    return res.json(dbPicks);
   }
 
   try {
@@ -1943,6 +1992,8 @@ router.get("/ai-picks", async (req, res) => {
       : Math.max(60_000, nextGameStartMs - Date.now() + 30_000); // expire when next game starts
 
     picksCacheMap.set(cacheKey, { data: result, expiresAt: Date.now() + effectiveTTL });
+    // Persist to DB — picks are now locked for the rest of the calendar day.
+    void savePicksToDb(cacheKey, result);
     return res.json(result);
 
   } catch (err) {
@@ -1953,14 +2004,18 @@ router.get("/ai-picks", async (req, res) => {
   }
 });
 
-// Force refresh — clears all sport caches or just one if ?sport= provided
-router.post("/ai-picks/refresh", (req, res) => {
+// Force refresh — clears both in-memory cache AND today's DB row so fresh picks
+// are generated on the next request. Only use when you explicitly want new picks.
+router.post("/ai-picks/refresh", async (req, res) => {
   const sport = typeof req.query.sport === "string" ? req.query.sport.toUpperCase() : null;
-  if (sport && sport !== "ALL") {
-    picksCacheMap.delete(sport);
+  const sportKey = sport && sport !== "ALL" ? sport : null;
+  if (sportKey) {
+    picksCacheMap.delete(sportKey);
   } else {
     picksCacheMap.clear();
   }
+  // Also remove today's DB row(s) so next request generates fresh picks.
+  await deletePicksFromDb(sportKey);
   return res.json({ ok: true });
 });
 

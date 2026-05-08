@@ -53,3 +53,17 @@ export const dailyLaddersTable = pgTable("daily_ladders", {
 ]);
 
 export type DailyLadder = typeof dailyLaddersTable.$inferSelect;
+
+// Full picks response per sport per calendar date — generated once, stable all day.
+// Force-refresh deletes the row so a fresh generation is triggered on the next request.
+export const dailyPicksTable = pgTable("daily_picks", {
+  id: serial("id").primaryKey(),
+  sport: text("sport").notNull(),       // "all", "NBA", "MLB", "Soccer", etc.
+  date: text("date").notNull(),          // "YYYY-MM-DD" in US/Eastern
+  picksJson: jsonb("picks_json").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("idx_daily_picks_sport_date").on(t.sport, t.date),
+]);
+
+export type DailyPicks = typeof dailyPicksTable.$inferSelect;
