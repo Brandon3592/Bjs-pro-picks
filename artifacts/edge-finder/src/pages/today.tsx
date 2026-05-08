@@ -171,12 +171,6 @@ function LockCard({ pick }: { pick: AIPick }) {
           <p className={cn("text-4xl font-bold font-mono tabular-nums", pick.odds > 0 ? "text-green-400" : "text-foreground")}>
             {fmtOdds(pick.odds)}
           </p>
-          {pick.edge > 0 && (
-            <div className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-500/10 border border-green-500/30">
-              <TrendingUp className="h-3 w-3 text-green-400" />
-              <span className="text-xs font-bold text-green-400">+{(pick.edge * 100).toFixed(1)}% edge</span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -615,6 +609,9 @@ export default function TodayPage() {
   const nflLadder = (allData?.nflLadder ?? null) as AILadderParlay | null;
   const isAI = allData?.isAI ?? false;
 
+  // True when the API returned no picks for this sport (no qualifying games today)
+  const noPicksForSport = !isAllTab && !isLoading && !lock && !safeParlay && !lottoParlay && !gameParlay;
+
   const activeLadder =
     selectedSport === "all" ? allLadder :
     selectedSport === "NBA" ? nbaLadder :
@@ -712,6 +709,10 @@ export default function TodayPage() {
             <EmptyCard>NFL ladder available during the season (September–February).</EmptyCard>
           </div>
         </div>
+      ) : noPicksForSport ? (
+        <EmptyCard>
+          No {selectedSport} picks available today — either no games are on the board or market coverage is too thin. Check back later or switch to another sport.
+        </EmptyCard>
       ) : (
         <div className="space-y-8">
           {/* Lock of the Day */}

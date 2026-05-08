@@ -1243,7 +1243,7 @@ router.get("/ai-picks", async (req, res) => {
         if (t <= nowMs || t > todayCutoffMs) continue;
 
         const bookCount = ev.bookmakers.filter((b) => b.markets.some((m) => m.key === "h2h")).length;
-        if (bookCount < 3) continue;
+        if (bookCount < minBooks(sportLabel)) continue;
 
         const byOutcome = new Map<string, number[]>();
         for (const bk of ev.bookmakers) {
@@ -1331,14 +1331,18 @@ router.get("/ai-picks", async (req, res) => {
     }
 
     // ── FAVORITE game leg pool (used for safe, game, mix, cross-sport parlays) ──
+    // US sports require 3+ books for reliable consensus; international sports
+    // (Soccer, MMA, Boxing, etc.) often have only 1–2 books in the feed so we
+    // lower the threshold to 1 so their games aren't silently filtered out.
+    const US_SPORTS = new Set(["NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF", "WNBA"]);
+    const minBooks = (sportLabel: string) => US_SPORTS.has(sportLabel) ? 3 : 1;
     const gameLegPool: AIPickLeg[] = [];
     for (const { sport: sportLabel, events } of allOdds) {
       for (const ev of events) {
         const t = new Date(ev.commence_time).getTime();
         if (t <= nowMs || t > todayCutoffMs) continue;
-        // Skip games with fewer than 3 books (same threshold as scoring above)
         const bookCount = ev.bookmakers.filter((b) => b.markets.some((m) => m.key === "h2h")).length;
-        if (bookCount < 3) continue;
+        if (bookCount < minBooks(sportLabel)) continue;
         const leg = eventToFavoriteLeg(ev, sportLabel);
         if (leg) gameLegPool.push(leg);
       }
@@ -1396,8 +1400,27 @@ router.get("/ai-picks", async (req, res) => {
         return true;
       });
 
-    // If there are no real bets at all, fall back to mock data
+    // If there are no real bets at all for the "all" tab, fall back to mock data.
+    // For sport-specific tabs (Soccer, MMA, etc.) never use the NBA mock fallback —
+    // return null picks with a message instead so no wrong-sport data is shown.
     if (gameLegPool.length === 0 && propPool.length === 0) {
+      if (cacheKey !== "all") {
+        const emptyResult: AIPicksResponse = {
+          lockOfTheDay: null, safeParlay: null, lottoParlay: null,
+          gameParlayOfTheDay: null, propParlayOfTheDay: null, mixParlayOfTheDay: null,
+          allSafeParlay: null, allLottoParlay: null, allGameParlay: null,
+          allPropsParlay: null, allMixParlay: null,
+          hrParlay: null, goalScorerParlay: null, threePtParlay: null, tdParlay: null,
+          allLadder: null, nbaLadder: null, mlbLadder: null, nhlLadder: null, nflLadder: null,
+          summary: `No ${cacheKey} games on the board with enough market coverage today.`,
+          generatedAt: new Date().toISOString(),
+          isAI: false,
+          activeSports: activeSports as string[],
+        };
+        void savePicksToDb(cacheKey, emptyResult);
+        picksCacheMap.set(cacheKey, { data: emptyResult, expiresAt: Date.now() + 5 * 60_000 });
+        return res.json(emptyResult);
+      }
       const fallback = buildFallbackPicks();
       picksCacheMap.set(cacheKey, { data: fallback, expiresAt: Date.now() + 5 * 60_000 });
       return res.json(fallback);

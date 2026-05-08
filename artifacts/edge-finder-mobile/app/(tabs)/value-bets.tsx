@@ -186,11 +186,6 @@ function LockCard({
           <Text style={[styles.lockOdds, { color: isPositive ? "#22c55e" : colors.foreground }]}>
             {fmtOdds(pick.odds)}
           </Text>
-          {pick.edge > 0 && (
-            <View style={lockStyles.edgeBadge}>
-              <Text style={lockStyles.edgeBadgeText}>+{(pick.edge * 100).toFixed(1)}% edge</Text>
-            </View>
-          )}
         </View>
       </View>
 
