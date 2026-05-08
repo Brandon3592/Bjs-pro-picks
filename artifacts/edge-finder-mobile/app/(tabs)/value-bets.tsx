@@ -719,6 +719,11 @@ export default function AiPicksScreen() {
   const ladderSportIcon = sportIconMap[selectedSport] ?? "🏆";
   const ladderSportLabel = selectedSport === "all" ? "All Sports" : selectedSport;
 
+  // Sports that support player props and have a Daily Ladder
+  const PROPS_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL"]);
+  const hasSportProps  = PROPS_SPORTS.has(selectedSport);
+  const hasSportLadder = activeLadder !== null;
+
   // Build the tab list dynamically — show only sports with games today.
   // While loading, fall back to the 4 core US sports.
   const activeSports = (allData as any)?.activeSports as string[] | undefined;
@@ -962,36 +967,40 @@ export default function AiPicksScreen() {
                   )}
                 </View>
 
-                {/* ── Player Props Parlay — every tab ── */}
-                <View style={styles.section}>
-                  <SectionHeader icon="🎯" label="Player Props Parlay" sublabel="All player performance props" accent="#f97316" />
-                  {(propParlay?.legs?.length ?? 0) > 0 ? (
-                    <ParlayCard parlay={propParlay!} accent="#f97316"
-                      onBet={(leg) => openBet({ ...leg, pick: `${propParlay!.name} (props parlay)`, odds: propParlay!.combinedOdds })}
-                      onLog={() => logParlay(propParlay!)} />
-                  ) : (
-                    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No props parlay — pull to refresh.</Text>
-                    </View>
-                  )}
-                </View>
+                {/* ── Player Props Parlay — only for sports with prop markets ── */}
+                {hasSportProps && (
+                  <View style={styles.section}>
+                    <SectionHeader icon="🎯" label="Player Props Parlay" sublabel="All player performance props" accent="#f97316" />
+                    {(propParlay?.legs?.length ?? 0) > 0 ? (
+                      <ParlayCard parlay={propParlay!} accent="#f97316"
+                        onBet={(leg) => openBet({ ...leg, pick: `${propParlay!.name} (props parlay)`, odds: propParlay!.combinedOdds })}
+                        onLog={() => logParlay(propParlay!)} />
+                    ) : (
+                      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No props parlay — pull to refresh.</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
 
-                {/* ── Mix Parlay — every tab ── */}
-                <View style={styles.section}>
-                  <SectionHeader icon="🔀" label="Mix Parlay" sublabel="Game bets + player props combined" accent="#14b8a6" />
-                  {(mixParlay?.legs?.length ?? 0) > 0 ? (
-                    <ParlayCard parlay={mixParlay!} accent="#14b8a6"
-                      onBet={(leg) => openBet({ ...leg, pick: `${mixParlay!.name} (mix parlay)`, odds: mixParlay!.combinedOdds })}
-                      onLog={() => logParlay(mixParlay!)} />
-                  ) : (
-                    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No mix parlay — pull to refresh.</Text>
-                    </View>
-                  )}
-                </View>
+                {/* ── Mix Parlay — only for sports with prop markets ── */}
+                {hasSportProps && (
+                  <View style={styles.section}>
+                    <SectionHeader icon="🔀" label="Mix Parlay" sublabel="Game bets + player props combined" accent="#14b8a6" />
+                    {(mixParlay?.legs?.length ?? 0) > 0 ? (
+                      <ParlayCard parlay={mixParlay!} accent="#14b8a6"
+                        onBet={(leg) => openBet({ ...leg, pick: `${mixParlay!.name} (mix parlay)`, odds: mixParlay!.combinedOdds })}
+                        onLog={() => logParlay(mixParlay!)} />
+                    ) : (
+                      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No mix parlay — pull to refresh.</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
 
-                {/* ── Sport-specific prop parlay — sport tabs only ── */}
-                {selectedSport !== "all" && (
+                {/* ── Sport-specific prop parlay — prop-enabled sports only ── */}
+                {hasSportProps && selectedSport !== "all" && (
                   <>
                     <View style={[styles.dividerSection, { borderTopColor: colors.border }]}>
                       <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>{selectedSport} PROP PARLAYS</Text>
@@ -1061,37 +1070,41 @@ export default function AiPicksScreen() {
               </>
             ) : null}
 
-            {/* ── Daily Ladder — every tab ── */}
-            <View style={[styles.dividerSection, { borderTopColor: colors.border }]}>
-              <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>DAILY LADDER · $10 → $10K</Text>
-            </View>
-
-            <View style={styles.section}>
-              <SectionHeader
-                icon={ladderSportIcon}
-                label={`${ladderSportLabel} Daily Ladder`}
-                sublabel="Win today's bet → roll winnings to tomorrow"
-                accent={LADDER_ACCENT}
-              />
-              {activeLadder && (activeLadder.steps?.length ?? 0) >= 1 ? (
-                <DailyLadderCard
-                  parlay={activeLadder}
-                  progress={ladderProgress}
-                  onBet={(leg) => openBet({ ...leg })}
-                  onLog={() => logLadder(activeLadder)}
-                  onSettle={handleSettle}
-                  isSettling={isSettling}
-                />
-              ) : (
-                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>
-                    {selectedSport === "NFL" && !NFL_SEASON_ACTIVE
-                      ? "NFL ladder available during the season (September–February)."
-                      : `No ${ladderSportLabel} ladder today — pull to refresh.`}
-                  </Text>
+            {/* ── Daily Ladder — only for sports that have a ladder (NBA/MLB/NHL/NFL/All) ── */}
+            {hasSportLadder && (
+              <>
+                <View style={[styles.dividerSection, { borderTopColor: colors.border }]}>
+                  <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>DAILY LADDER · $10 → $10K</Text>
                 </View>
-              )}
-            </View>
+
+                <View style={styles.section}>
+                  <SectionHeader
+                    icon={ladderSportIcon}
+                    label={`${ladderSportLabel} Daily Ladder`}
+                    sublabel="Win today's bet → roll winnings to tomorrow"
+                    accent={LADDER_ACCENT}
+                  />
+                  {(activeLadder!.steps?.length ?? 0) >= 1 ? (
+                    <DailyLadderCard
+                      parlay={activeLadder!}
+                      progress={ladderProgress}
+                      onBet={(leg) => openBet({ ...leg })}
+                      onLog={() => logLadder(activeLadder!)}
+                      onSettle={handleSettle}
+                      isSettling={isSettling}
+                    />
+                  ) : (
+                    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>
+                        {selectedSport === "NFL" && !NFL_SEASON_ACTIVE
+                          ? "NFL ladder available during the season (September–February)."
+                          : `No ${ladderSportLabel} ladder today — pull to refresh.`}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </>
+            )}
           </>
         )}
       </ScrollView>

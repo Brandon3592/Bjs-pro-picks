@@ -643,6 +643,11 @@ export default function TodayPage() {
 
   const isNflOffSeason = selectedSport === "NFL" && !NFL_SEASON_ACTIVE;
 
+  // Sports that support player props and have a Daily Ladder
+  const PROPS_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL"]);
+  const hasSportProps  = PROPS_SPORTS.has(selectedSport);
+  const hasSportLadder = activeLadder !== null;
+
   // Build the tab list dynamically — show only sports with games today.
   // While loading, fall back to the 4 core US sports.
   const activeSports = (allData as any)?.activeSports as string[] | undefined;
@@ -757,26 +762,30 @@ export default function TodayPage() {
             }
           </div>
 
-          {/* Props Parlay */}
-          <div>
-            <SectionHeader icon={Target} label="Player Props Parlay" sublabel="All player performance props" accent="#f97316" />
-            {(propParlay?.legs?.length ?? 0) > 0
-              ? <ParlayCard parlay={propParlay!} accent="#f97316" />
-              : <EmptyCard>No props parlay — try refreshing.</EmptyCard>
-            }
-          </div>
+          {/* Props Parlay — only for sports with player prop markets */}
+          {hasSportProps && (
+            <div>
+              <SectionHeader icon={Target} label="Player Props Parlay" sublabel="All player performance props" accent="#f97316" />
+              {(propParlay?.legs?.length ?? 0) > 0
+                ? <ParlayCard parlay={propParlay!} accent="#f97316" />
+                : <EmptyCard>No props parlay — try refreshing.</EmptyCard>
+              }
+            </div>
+          )}
 
-          {/* Mix Parlay */}
-          <div>
-            <SectionHeader icon={Shuffle} label="Mix Parlay" sublabel="Game bets + player props combined" accent="#14b8a6" />
-            {(mixParlay?.legs?.length ?? 0) > 0
-              ? <ParlayCard parlay={mixParlay!} accent="#14b8a6" />
-              : <EmptyCard>No mix parlay — try refreshing.</EmptyCard>
-            }
-          </div>
+          {/* Mix Parlay — only for sports with player prop markets */}
+          {hasSportProps && (
+            <div>
+              <SectionHeader icon={Shuffle} label="Mix Parlay" sublabel="Game bets + player props combined" accent="#14b8a6" />
+              {(mixParlay?.legs?.length ?? 0) > 0
+                ? <ParlayCard parlay={mixParlay!} accent="#14b8a6" />
+                : <EmptyCard>No mix parlay — try refreshing.</EmptyCard>
+              }
+            </div>
+          )}
 
-          {/* Sport-specific prop parlays */}
-          {selectedSport !== "all" && (
+          {/* Sport-specific prop parlays — only for prop-enabled sports */}
+          {hasSportProps && selectedSport !== "all" && (
             <>
               <Divider label={`${selectedSport} PROP PARLAYS`} />
 
@@ -822,28 +831,32 @@ export default function TodayPage() {
             </>
           )}
 
-          {/* Daily Ladder */}
-          <Divider label="DAILY LADDER · $10 → $10K" />
-          <div>
-            <SectionHeader icon={TrendingUp} label={`${ladderSportLabel} Daily Ladder`} sublabel="Win today's bet → roll winnings to tomorrow" accent={LADDER_ACCENT} />
-            {activeLadder && (activeLadder.steps?.length ?? 0) >= 1
-              ? (
-                <DailyLadderCard
-                  parlay={activeLadder}
-                  progress={ladderProgress}
-                  onSettle={handleSettle}
-                  isSettling={isSettling}
-                />
-              )
-              : (
-                <EmptyCard>
-                  {selectedSport === "NFL" && !NFL_SEASON_ACTIVE
-                    ? "NFL ladder available during the season (September–February)."
-                    : `No ${ladderSportLabel} ladder today — try refreshing.`}
-                </EmptyCard>
-              )
-            }
-          </div>
+          {/* Daily Ladder — only for sports that have a ladder (NBA/MLB/NHL/NFL/All) */}
+          {hasSportLadder && (
+            <>
+              <Divider label="DAILY LADDER · $10 → $10K" />
+              <div>
+                <SectionHeader icon={TrendingUp} label={`${ladderSportLabel} Daily Ladder`} sublabel="Win today's bet → roll winnings to tomorrow" accent={LADDER_ACCENT} />
+                {(activeLadder!.steps?.length ?? 0) >= 1
+                  ? (
+                    <DailyLadderCard
+                      parlay={activeLadder!}
+                      progress={ladderProgress}
+                      onSettle={handleSettle}
+                      isSettling={isSettling}
+                    />
+                  )
+                  : (
+                    <EmptyCard>
+                      {selectedSport === "NFL" && !NFL_SEASON_ACTIVE
+                        ? "NFL ladder available during the season (September–February)."
+                        : `No ${ladderSportLabel} ladder today — try refreshing.`}
+                    </EmptyCard>
+                  )
+                }
+              </div>
+            </>
+          )}
         </div>
       )}
 
