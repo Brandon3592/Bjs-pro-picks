@@ -873,28 +873,11 @@ export default function AiPicksScreen() {
           </>
         ) : (
           <>
-            {/* ── Lock of the Day — every tab ── */}
-            <View style={styles.section}>
-              <SectionHeader icon="🔒" label="Lock of the Day" sublabel="Highest confidence single pick" accent="#f59e0b" />
-              {lock ? (
-                <LockCard
-                  pick={lock}
-                  onTrack={() => openTrack(lock)}
-                  onLog={() => setQuickAdd({ matchup: `${lock.awayTeam} @ ${lock.homeTeam}`, pick: lock.pick, bookmaker: lock.bookmaker, odds: lock.odds })}
-                  onBet={() => openBet({ ...lock, sport: lock.sport })}
-                />
-              ) : (
-                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No lock available — pull to refresh.</Text>
-                </View>
-              )}
-            </View>
-
             {selectedSport === "NFL" && !NFL_SEASON_ACTIVE ? (
-              /* ── NFL off-season: single message replaces all parlay sections ── */
+              /* ── NFL off-season: replace everything with a single message ── */
               <>
                 <View style={[styles.dividerSection, { borderTopColor: colors.border }]}>
-                  <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>NFL PARLAYS</Text>
+                  <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>NFL PICKS</Text>
                 </View>
                 <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border, marginHorizontal: 16 }]}>
                   <Text style={[styles.emptyCardText, { color: colors.mutedForeground, textAlign: "center" }]}>
@@ -903,6 +886,27 @@ export default function AiPicksScreen() {
                 </View>
               </>
             ) : (
+              <>
+                {/* ── Lock of the Day ── */}
+                <View style={styles.section}>
+                  <SectionHeader icon="🔒" label="Lock of the Day" sublabel="Highest confidence single pick" accent="#f59e0b" />
+                  {lock ? (
+                    <LockCard
+                      pick={lock}
+                      onTrack={() => openTrack(lock)}
+                      onLog={() => setQuickAdd({ matchup: `${lock.awayTeam} @ ${lock.homeTeam}`, pick: lock.pick, bookmaker: lock.bookmaker, odds: lock.odds })}
+                      onBet={() => openBet({ ...lock, sport: lock.sport })}
+                    />
+                  ) : (
+                    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No lock available — pull to refresh.</Text>
+                    </View>
+                  )}
+                </View>
+              </>
+            )}
+
+            {selectedSport !== "NFL" || NFL_SEASON_ACTIVE ? (
               <>
                 {/* ── Safe Parlay — every tab ── */}
                 <View style={styles.section}>
@@ -1043,7 +1047,7 @@ export default function AiPicksScreen() {
                   </>
                 )}
               </>
-            )}
+            ) : null}
 
             {/* ── Daily Ladder — every tab ── */}
             <View style={[styles.dividerSection, { borderTopColor: colors.border }]}>
