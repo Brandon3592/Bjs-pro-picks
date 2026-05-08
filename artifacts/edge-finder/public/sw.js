@@ -5,15 +5,15 @@ self.addEventListener("push", (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: "EdgeFinder Alert", body: event.data.text() };
+    payload = { title: "BJ's Pro Picks Alert", body: event.data.text() };
   }
 
-  const title = payload.title ?? "EdgeFinder Alert";
+  const title = payload.title ?? "BJ's Pro Picks Alert";
   const options = {
     body: payload.body ?? "",
     icon: "/favicon.svg",
     badge: "/favicon.svg",
-    tag: payload.tag ?? "edgefinder",
+    tag: payload.tag ?? "bjspropicks",
     data: payload.data ?? {},
     requireInteraction: false,
     vibrate: [200, 100, 200],
