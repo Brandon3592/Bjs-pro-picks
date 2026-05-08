@@ -9,12 +9,44 @@ export const SPORT_KEYS: Record<string, string> = {
   NHL: "icehockey_nhl",
 };
 
-export const SPORT_FROM_KEY: Record<string, string> = {
-  americanfootball_nfl: "NFL",
-  basketball_nba: "NBA",
-  baseball_mlb: "MLB",
-  icehockey_nhl: "NHL",
+// Maps every supported Odds API sport key → the display label used in the tab UI.
+// Soccer leagues all collapse into one "Soccer" tab; combat sports are separate.
+export const SPORT_API_TO_LABEL: Record<string, string> = {
+  // US Major Sports
+  americanfootball_nfl:               "NFL",
+  basketball_nba:                     "NBA",
+  baseball_mlb:                       "MLB",
+  icehockey_nhl:                      "NHL",
+  // US College
+  basketball_ncaab:                   "NCAAB",
+  americanfootball_ncaaf:             "NCAAF",
+  basketball_wnba:                    "WNBA",
+  // Soccer — all leagues share one tab
+  soccer_epl:                         "Soccer",
+  soccer_spain_la_liga:               "Soccer",
+  soccer_germany_bundesliga:          "Soccer",
+  soccer_italy_serie_a:               "Soccer",
+  soccer_france_ligue_one:            "Soccer",
+  soccer_uefa_champs_league:          "Soccer",
+  soccer_uefa_europa_league:          "Soccer",
+  soccer_usa_mls:                     "Soccer",
+  soccer_mexico_ligamx:               "Soccer",
+  soccer_efl_champ:                   "Soccer",
+  soccer_netherlands_eredivisie:      "Soccer",
+  soccer_portugal_primeira_liga:      "Soccer",
+  soccer_turkey_super_league:         "Soccer",
+  soccer_brazil_campeonato:           "Soccer",
+  soccer_argentina_primera_division:  "Soccer",
+  soccer_belgium_first_div:           "Soccer",
+  soccer_conmebol_copa_libertadores:  "Soccer",
+  soccer_conmebol_copa_sudamericana:  "Soccer",
+  // Combat
+  mma_mixed_martial_arts:             "MMA",
+  boxing_boxing:                      "Boxing",
 };
+
+// Reverse map: API key → display label (for legacy code that uses SPORT_FROM_KEY)
+export const SPORT_FROM_KEY: Record<string, string> = { ...SPORT_API_TO_LABEL };
 
 export const BOOKMAKER_DISPLAY: Record<string, string> = {
   draftkings: "DraftKings",
@@ -153,14 +185,37 @@ export async function fetchScoresForSport(sportKey: string): Promise<ScoreEvent[
   });
 }
 
+// Fetch the Odds API sport catalog to find which sport keys are currently active
+// (have events in the near future). Result is cached like any other API call.
+async function fetchActiveSportApiKeys(): Promise<Set<string>> {
+  interface SportInfo { key: string; active: boolean; }
+  const sports = await fetchWithKey<SportInfo[]>("/sports");
+  if (!sports) return new Set(Object.keys(SPORT_API_TO_LABEL)); // fallback: try all
+  return new Set(sports.filter((s) => s.active).map((s) => s.key));
+}
+
 export async function fetchAllSportOdds(): Promise<{ sport: string; events: OddsEvent[] }[]> {
+  // Step 1: find which sports are active (1 API call, cached 5 min)
+  const activeApiKeys = await fetchActiveSportApiKeys();
+
+  // Step 2: fetch odds only for sports in our supported list that are active
+  const toFetch = Object.keys(SPORT_API_TO_LABEL).filter((k) => activeApiKeys.has(k));
   const results = await Promise.all(
-    Object.entries(SPORT_KEYS).map(async ([sport, key]) => {
-      const events = await fetchOddsForSport(key);
-      return { sport, events: events ?? [] };
-    })
+    toFetch.map(async (apiKey) => ({
+      label: SPORT_API_TO_LABEL[apiKey] as string,
+      events: (await fetchOddsForSport(apiKey)) ?? [],
+    })),
   );
-  return results;
+
+  // Step 3: group by display label (multiple soccer leagues → one "Soccer" entry)
+  const grouped = new Map<string, OddsEvent[]>();
+  for (const { label, events } of results) {
+    if (!events.length) continue;
+    const existing = grouped.get(label) ?? [];
+    grouped.set(label, [...existing, ...events]);
+  }
+
+  return [...grouped.entries()].map(([sport, events]) => ({ sport, events }));
 }
 
 // ─── Player props ─────────────────────────────────────────────────────────────

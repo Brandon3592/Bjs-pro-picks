@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, hasApiKey } from "../lib/odds-api";
+import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, SPORT_API_TO_LABEL, hasApiKey } from "../lib/odds-api";
 import { fetchMlbLineupNames } from "../lib/mlb-lineups";
 import { fetchNbaOut, fetchNhlOut } from "../lib/sport-lineups";
 import { americanToDecimal, decimalToAmerican } from "../lib/model";
@@ -245,12 +245,21 @@ function parsePropEvent(
 const picksCacheMap = new Map<string, { data: AIPicksResponse; expiresAt: number }>();
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
+// Label → API key for sports that have player props in our system.
+// Sports NOT in this map (Soccer, MMA, Boxing, NCAAB, NCAAF, WNBA) get no props.
 const SPORT_LABEL: Record<string, string> = {
   NBA: "basketball_nba",
   MLB: "baseball_mlb",
   NHL: "icehockey_nhl",
   NFL: "americanfootball_nfl",
 };
+
+// lowercase label → canonical label (e.g. "soccer" → "Soccer", "mma" → "MMA")
+// Built from the unique values of SPORT_API_TO_LABEL so it stays in sync automatically.
+const LABEL_LOWER_MAP: Record<string, string> = {};
+for (const label of Object.values(SPORT_API_TO_LABEL)) {
+  LABEL_LOWER_MAP[label.toLowerCase()] = label;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -845,7 +854,10 @@ router.get("/ai-picks", async (req, res) => {
   const sportRaw = typeof req.query.sport === "string" ? req.query.sport.toLowerCase() : "all";
   // Convert API key ("basketball_nba") → label key ("NBA"); keep "all" as-is
   // allOddsRaw uses label keys ("NBA","MLB"…) so the cache key must also be a label key
-  const cacheKey = sportRaw === "all" ? "all" : (SPORT_FROM_KEY[sportRaw] ?? sportRaw.toUpperCase());
+  // Resolve to canonical label: API key → label, OR lowercase label → label, OR uppercase fallback
+  const cacheKey = sportRaw === "all"
+    ? "all"
+    : (SPORT_FROM_KEY[sportRaw] ?? LABEL_LOWER_MAP[sportRaw] ?? sportRaw.toUpperCase());
 
   const cached = picksCacheMap.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) {
@@ -915,9 +927,12 @@ router.get("/ai-picks", async (req, res) => {
       return true;
     });
 
-    const filteredProps = sportApiKey
-      ? realProps.filter((p) => p.sport === sportApiKey)
-      : realProps;
+    // Sports not in SPORT_LABEL have no props (Soccer, MMA, NCAAB, etc.) → empty
+    const filteredProps = cacheKey === "all"
+      ? realProps
+      : sportApiKey
+        ? realProps.filter((p) => p.sport === sportApiKey)
+        : [];
 
     // ─── Deterministic pick builder — no AI, 100% real data ──────────────────
 
@@ -1348,12 +1363,10 @@ router.get("/ai-picks", async (req, res) => {
     };
 
     // Normalize sport labels (API keys like "basketball_nba" → display label "NBA")
-    const SPORT_KEY_TO_LABEL: Record<string, string> = {
-      basketball_nba: "NBA", baseball_mlb: "MLB",
-      icehockey_nhl: "NHL", americanfootball_nfl: "NFL",
-    };
     function normSport(s: string): string {
-      return SPORT_KEY_TO_LABEL[s] ?? SPORT_FROM_KEY[s] ?? s.toUpperCase();
+      // If already a display label (no underscores), return as-is
+      if (!s.includes("_")) return s;
+      return SPORT_API_TO_LABEL[s] ?? SPORT_FROM_KEY[s] ?? s.toUpperCase();
     }
 
     // ── Group legs & props by sport (keep parlays sport-pure) ────────────────
@@ -1457,9 +1470,23 @@ router.get("/ai-picks", async (req, res) => {
           result.push(leg);
         }
       }
+      // For prop-less sports (Soccer, MMA, etc.) also pad from the regular game leg pool
+      if (result.length < 5) {
+        for (const leg of (legsBySport.get(lottoSportLabel) ?? []).slice().sort((a, b) => b.odds - a.odds)) {
+          if (result.length >= 5) break;
+          const key = leg.player ?? leg.pick;
+          if (seenKeys.has(key)) continue;
+          seenKeys.add(key);
+          result.push(leg);
+        }
+      }
       return result;
     })();
-    const lottoParlay: AIParlay | null = lottoLegs.length >= 5 ? {
+    // Sports with props require 5 legs; prop-less sports (Soccer, MMA, etc.) need only 3
+    const hasSportProps = (lottoPropsBySport.get(lottoSportLabel)?.length ?? 0) > 0
+      || (propsBySport.get(lottoSportLabel)?.length ?? 0) > 0;
+    const lottoMinLegs = hasSportProps ? 5 : 3;
+    const lottoParlay: AIParlay | null = lottoLegs.length >= lottoMinLegs ? {
       id: "lotto-1",
       name: `${lottoSportLabel} ${lottoLegs.length}-Leg Lotto`,
       legs: lottoLegs,
@@ -1848,6 +1875,13 @@ router.get("/ai-picks", async (req, res) => {
       summary,
       generatedAt: new Date().toISOString(),
       isAI: false,
+      // Which sport tabs have games within today's cutoff — used by frontend to render tabs dynamically
+      activeSports: allOddsRaw
+        .filter(({ events }) => events.some((ev) => {
+          const t = new Date(ev.commence_time).getTime();
+          return t > nowMs && t <= todayCutoffMs;
+        }))
+        .map(({ sport }) => sport),
     };
 
     // Cache until the next game starts (+ 30s so it's definitely in progress), or until

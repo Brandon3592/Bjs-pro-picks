@@ -31,13 +31,20 @@ import type { AIPick, AIParlay, AIPickLeg, AILadderParlay } from "@workspace/api
 
 // ─── Sport tabs ──────────────────────────────────────────────────────────────
 
-const SPORT_TABS = [
-  { key: "all", label: "All Sports", icon: "🌐" },
-  { key: "NBA",  label: "NBA",       icon: "🏀" },
-  { key: "MLB",  label: "MLB",       icon: "⚾" },
-  { key: "NHL",  label: "NHL",       icon: "🏒" },
-  { key: "NFL",  label: "NFL",       icon: "🏈" },
-] as const;
+// Ordered list of all possible sport tabs. Only those returned in activeSports are shown.
+const ALL_POSSIBLE_TABS = [
+  { key: "all",    label: "All Sports", icon: "🌐" },
+  { key: "NBA",    label: "NBA",        icon: "🏀" },
+  { key: "MLB",    label: "MLB",        icon: "⚾" },
+  { key: "NHL",    label: "NHL",        icon: "🏒" },
+  { key: "NFL",    label: "NFL",        icon: "🏈" },
+  { key: "NCAAB",  label: "NCAAB",     icon: "🎓" },
+  { key: "NCAAF",  label: "NCAAF",     icon: "🎓" },
+  { key: "WNBA",   label: "WNBA",      icon: "🏀" },
+  { key: "Soccer", label: "Soccer",    icon: "⚽" },
+  { key: "MMA",    label: "MMA",       icon: "🥊" },
+  { key: "Boxing", label: "Boxing",    icon: "🥊" },
+];
 
 // NFL season: Sept (9) through Feb (2). Show content ~2 weeks before kickoff (mid-Aug).
 const NFL_SEASON_ACTIVE = (() => {
@@ -45,7 +52,7 @@ const NFL_SEASON_ACTIVE = (() => {
   return m >= 8 || m <= 2;
 })();
 
-type SportKey = typeof SPORT_TABS[number]["key"];
+type SportKey = string;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -703,16 +710,21 @@ export default function AiPicksScreen() {
     selectedSport === "MLB" ? mlbLadder :
     selectedSport === "NHL" ? nhlLadder :
     selectedSport === "NFL" ? nflLadder :
-    null;
+    null; // new sports (Soccer, MMA, NCAAB, etc.) don't have ladders yet
 
-  const ladderSportIcon =
-    selectedSport === "all" ? "🏆" :
-    selectedSport === "NBA" ? "🏀" :
-    selectedSport === "MLB" ? "⚾" :
-    selectedSport === "NHL" ? "🏒" :
-    selectedSport === "NFL" ? "🏈" : "🏆";
-
+  const sportIconMap: Record<string, string> = {
+    all: "🏆", NBA: "🏀", MLB: "⚾", NHL: "🏒", NFL: "🏈",
+    NCAAB: "🎓", NCAAF: "🎓", WNBA: "🏀", Soccer: "⚽", MMA: "🥊", Boxing: "🥊",
+  };
+  const ladderSportIcon = sportIconMap[selectedSport] ?? "🏆";
   const ladderSportLabel = selectedSport === "all" ? "All Sports" : selectedSport;
+
+  // Build the tab list dynamically — show only sports with games today.
+  // While loading, fall back to the 4 core US sports.
+  const activeSports = (allData as any)?.activeSports as string[] | undefined;
+  const sportTabs = activeSports
+    ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || activeSports.includes(t.key))
+    : ALL_POSSIBLE_TABS.filter((t) => ["all", "NBA", "MLB", "NHL", "NFL"].includes(t.key));
 
   function openTrack(pick: AIPick) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -779,7 +791,7 @@ export default function AiPicksScreen() {
       {/* ── Sport tab bar ── */}
       <View style={[styles.tabBarWrapper, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <FlatList
-          data={SPORT_TABS}
+          data={sportTabs}
           horizontal
           showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => item.key}

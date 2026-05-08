@@ -24,15 +24,22 @@ const NFL_SEASON_ACTIVE = (() => {
   return m >= 8 || m <= 2;
 })();
 
-const SPORT_TABS = [
-  { key: "all", label: "All Sports", emoji: "🌐" },
-  { key: "NBA",  label: "NBA",       emoji: "🏀" },
-  { key: "MLB",  label: "MLB",       emoji: "⚾" },
-  { key: "NHL",  label: "NHL",       emoji: "🏒" },
-  { key: "NFL",  label: "NFL",       emoji: "🏈" },
-] as const;
+// Ordered list of all possible sport tabs — shown only when that sport is active today
+const ALL_POSSIBLE_TABS = [
+  { key: "all",    label: "All Sports", emoji: "🌐" },
+  { key: "NBA",    label: "NBA",        emoji: "🏀" },
+  { key: "MLB",    label: "MLB",        emoji: "⚾" },
+  { key: "NHL",    label: "NHL",        emoji: "🏒" },
+  { key: "NFL",    label: "NFL",        emoji: "🏈" },
+  { key: "NCAAB",  label: "NCAAB",     emoji: "🎓" },
+  { key: "NCAAF",  label: "NCAAF",     emoji: "🎓" },
+  { key: "WNBA",   label: "WNBA",      emoji: "🏀" },
+  { key: "Soccer", label: "Soccer",    emoji: "⚽" },
+  { key: "MMA",    label: "MMA",       emoji: "🥊" },
+  { key: "Boxing", label: "Boxing",    emoji: "🥊" },
+];
 
-type SportKey = typeof SPORT_TABS[number]["key"];
+type SportKey = string;
 
 const LADDER_ACCENT = "#10b981";
 
@@ -628,12 +635,20 @@ export default function TodayPage() {
     selectedSport === "NBA" ? nbaLadder :
     selectedSport === "MLB" ? mlbLadder :
     selectedSport === "NHL" ? nhlLadder :
-    selectedSport === "NFL" ? nflLadder : null;
+    selectedSport === "NFL" ? nflLadder :
+    null; // new sports (Soccer, MMA, NCAAB, etc.) don't have ladders yet
 
   const ladderSportLabel =
     selectedSport === "all" ? "All Sports" : selectedSport;
 
   const isNflOffSeason = selectedSport === "NFL" && !NFL_SEASON_ACTIVE;
+
+  // Build the tab list dynamically — show only sports with games today.
+  // While loading, fall back to the 4 core US sports.
+  const activeSports = (allData as any)?.activeSports as string[] | undefined;
+  const sportTabs = activeSports
+    ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || activeSports.includes(t.key))
+    : ALL_POSSIBLE_TABS.filter((t) => ["all", "NBA", "MLB", "NHL", "NFL"].includes(t.key));
 
   return (
     <div className="p-4 md:p-6 space-y-5 pb-20 md:pb-8">
@@ -657,9 +672,9 @@ export default function TodayPage() {
         </button>
       </div>
 
-      {/* Sport tabs */}
+      {/* Sport tabs — dynamically shown based on what's active today */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {SPORT_TABS.map((tab) => (
+        {sportTabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setSelectedSport(tab.key)}
