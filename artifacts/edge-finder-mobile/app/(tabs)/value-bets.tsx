@@ -612,13 +612,40 @@ export default function AiPicksScreen() {
     preferredBookmaker?: string;
   } | null>(null);
 
-  // Always fetch all-sports data — sport tabs are client-side filters only.
-  // This prevents the server fallback bug where sport-specific requests return
-  // the same mock data when a sport has no active games.
-  const { data, isLoading, isFetching, refetch } = useGetAiPicks(
+  // All-sports data — cross-sport parlays for the All Sports tab
+  const {
+    data: allData,
+    isLoading: allLoading,
+    isFetching: allFetching,
+    refetch: refetchAll,
+  } = useGetAiPicks(
     undefined,
     { query: { staleTime: 15 * 60_000, gcTime: 15 * 60_000, refetchOnMount: true, refetchOnWindowFocus: false } as any },
   );
+
+  // Sport-specific data — fetched lazily when a sport tab is active
+  const {
+    data: sportData,
+    isLoading: sportLoading,
+    isFetching: sportFetching,
+    refetch: refetchSport,
+  } = useGetAiPicks(
+    selectedSport !== "all" ? { sport: selectedSport } : undefined,
+    {
+      query: {
+        enabled: selectedSport !== "all",
+        staleTime: 15 * 60_000,
+        gcTime: 15 * 60_000,
+        refetchOnMount: true,
+        refetchOnWindowFocus: false,
+      } as any,
+    },
+  );
+
+  const isLoading = selectedSport === "all" ? allLoading : (allLoading || sportLoading);
+  const isFetching = selectedSport === "all" ? allFetching : (allFetching || sportFetching);
+  function refetch() { refetchAll(); if (selectedSport !== "all") refetchSport(); }
+
   const { mutate: doRefresh, isPending: isRefreshing } = useRefreshAiPicks();
   const queryClient = useQueryClient();
 
@@ -647,25 +674,28 @@ export default function AiPicksScreen() {
     );
   }
 
-  const lock = data?.lockOfTheDay ?? null;
-  // All-sports generic parlays (shown on the All Sports tab)
-  const safeParlay = data?.safeParlay ?? null;
-  const lottoParlay = data?.lottoParlay ?? null;
-  const gameParlay = data?.gameParlayOfTheDay ?? null;
-  const propParlay = data?.propParlayOfTheDay ?? null;
-  const mixParlay = data?.mixParlayOfTheDay ?? null;
-  // Sport-specific prop parlays (each shown only on its sport tab)
-  const hrParlay = data?.hrParlay ?? null;
-  const goalScorerParlay = data?.goalScorerParlay ?? null;
-  const threePtParlay = data?.threePtParlay ?? null;
-  const tdParlay = data?.tdParlay ?? null;
-  // Sport-specific ladders
-  const allLadder = (data?.allLadder ?? null) as AILadderParlay | null;
-  const nbaLadder = (data?.nbaLadder ?? null) as AILadderParlay | null;
-  const mlbLadder = (data?.mlbLadder ?? null) as AILadderParlay | null;
-  const nhlLadder = (data?.nhlLadder ?? null) as AILadderParlay | null;
-  const nflLadder = (data?.nflLadder ?? null) as AILadderParlay | null;
-  const isAI = data?.isAI ?? false;
+  // All Sports tab uses cross-sport all* parlays; sport tabs use sport-filtered parlays
+  const isAllTab = selectedSport === "all";
+  const lock = isAllTab ? (allData?.lockOfTheDay ?? null) : (sportData?.lockOfTheDay ?? null);
+  const safeParlay  = isAllTab ? (allData?.allSafeParlay  ?? null) : (sportData?.safeParlay          ?? null);
+  const lottoParlay = isAllTab ? (allData?.allLottoParlay  ?? null) : (sportData?.lottoParlay         ?? null);
+  const gameParlay  = isAllTab ? (allData?.allGameParlay   ?? null) : (sportData?.gameParlayOfTheDay  ?? null);
+  const propParlay  = isAllTab ? (allData?.allPropsParlay  ?? null) : (sportData?.propParlayOfTheDay  ?? null);
+  const mixParlay   = isAllTab ? (allData?.allMixParlay    ?? null) : (sportData?.mixParlayOfTheDay   ?? null);
+
+  // Sport-specific prop parlays come from the sport tab's own response
+  const hrParlay         = sportData?.hrParlay         ?? allData?.hrParlay         ?? null;
+  const goalScorerParlay = sportData?.goalScorerParlay ?? allData?.goalScorerParlay ?? null;
+  const threePtParlay    = sportData?.threePtParlay    ?? allData?.threePtParlay    ?? null;
+  const tdParlay         = sportData?.tdParlay         ?? allData?.tdParlay         ?? null;
+
+  // Ladders — allData has all sport-specific ladders pre-computed
+  const allLadder = (allData?.allLadder ?? null) as AILadderParlay | null;
+  const nbaLadder = (allData?.nbaLadder ?? null) as AILadderParlay | null;
+  const mlbLadder = (allData?.mlbLadder ?? null) as AILadderParlay | null;
+  const nhlLadder = (allData?.nhlLadder ?? null) as AILadderParlay | null;
+  const nflLadder = (allData?.nflLadder ?? null) as AILadderParlay | null;
+  const isAI = allData?.isAI ?? false;
 
   const activeLadder =
     selectedSport === "all" ? allLadder :
@@ -797,7 +827,7 @@ export default function AiPicksScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Summary banner */}
-        {data?.summary ? (
+        {allData?.summary ? (
           <View style={[styles.summaryBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.summaryLeft}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -810,14 +840,14 @@ export default function AiPicksScreen() {
                     {isAI ? "AI Generated" : "Model Picks"}
                   </Text>
                 </View>
-                {data.generatedAt ? (
+                {allData.generatedAt ? (
                   <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
-                    Updated {new Date(data.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                    Updated {new Date(allData.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                   </Text>
                 ) : null}
               </View>
               <Text style={[styles.summaryText, { color: colors.mutedForeground }]} numberOfLines={3}>
-                {data.summary}
+                {allData.summary}
               </Text>
             </View>
             <TouchableOpacity
