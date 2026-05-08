@@ -1419,14 +1419,27 @@ router.get("/ai-picks", async (req, res) => {
     } : null;
 
     // ── LOTTO PARLAY: 5 high-odds legs, same sport ────────────────────────────
-    // Uses the underdog pool — intentionally hunting plus-money upside
-    const lottoSportEntry = [...underdogLegsBySport.entries()]
-      .sort((a, b) => {
-        // Prefer the sport with the most plus-money legs
-        const aPlus = a[1].filter((l) => l.odds > 0).length;
-        const bPlus = b[1].filter((l) => l.odds > 0).length;
-        return bPlus - aPlus || b[1].length - a[1].length;
-      })[0] ?? null;
+    // Uses the underdog pool — intentionally hunting plus-money upside.
+    // When a sport filter is active, use that sport's pool directly so the lotto
+    // parlay is sport-specific (NBA/NHL must not default to MLB's richer pool).
+    const lottoSportEntry: [string, AIPickLeg[]] | null = (() => {
+      if (cacheKey !== "all") {
+        // Sport-filtered request — pick directly from the requested sport's pools
+        const sportLabel = normSport(cacheKey);
+        const legs = underdogLegsBySport.get(sportLabel) ?? [];
+        const props = lottoPropsBySport.get(sportLabel) ?? [];
+        if (legs.length + props.length >= 2) return [sportLabel, legs];
+        // Fallback: use props pool even if game underdog pool is thin
+        return props.length >= 2 ? [sportLabel, []] : null;
+      }
+      // All-sports: pick whichever sport has the most plus-money underdog legs
+      return [...underdogLegsBySport.entries()]
+        .sort((a, b) => {
+          const aPlus = a[1].filter((l) => l.odds > 0).length;
+          const bPlus = b[1].filter((l) => l.odds > 0).length;
+          return bPlus - aPlus || b[1].length - a[1].length;
+        })[0] ?? null;
+    })();
     const lottoSportLabel = lottoSportEntry?.[0] ?? "";
     const lottoSportProps = lottoPropsBySport.get(lottoSportLabel) ?? [];
     // Deduplicate lotto game pool by team name so doubleheaders don't surface the same team twice
@@ -1440,7 +1453,7 @@ router.get("/ai-picks", async (req, res) => {
         return true;
       });
     const lottoLegs = pickUnique([...lottoGamePoolDeduped, ...lottoSportProps], 5);
-    const lottoParlay: AIParlay | null = lottoLegs.length >= 3 ? {
+    const lottoParlay: AIParlay | null = lottoLegs.length >= 2 ? {
       id: "lotto-1",
       name: `${lottoSportLabel} ${lottoLegs.length}-Leg Lotto`,
       legs: lottoLegs,
@@ -1463,16 +1476,20 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `Real bookmaker lines for these ${propSportLabel} player performance props, sourced directly from the best available odds across major sportsbooks.`,
     } : null;
 
-    // ── MIX PARLAY: 2 game bets + 2 props, same sport ────────────────────────
-    const mixSportEntry = sortedSports.find(([s, legs]) => legs.length >= 2 && (propsBySport.get(s)?.length ?? 0) >= 1)
+    // ── MIX PARLAY: game bets + props combined — any ratio ───────────────────
+    // "Mixed" means at least 1 game leg AND 1 prop leg; the ratio is flexible.
+    // Prefer a 2+2 split, but accept 1+1 or 1+3 — whatever the slate supports.
+    const mixSportEntry = sortedSports.find(([s, legs]) => legs.length >= 1 && (propsBySport.get(s)?.length ?? 0) >= 1)
       ?? sortedSports[0] ?? null;
     const mixSportLabel = mixSportEntry?.[0] ?? "";
     const mixSportProps = propsBySport.get(mixSportLabel) ?? [];
     const mixGameLegs = mixSportEntry ? pickUnique(mixSportEntry[1], 2) : [];
-    const mixGameIds = new Set(mixGameLegs.map((l) => l.gameId));
-    const mixPropLegs = mixSportProps.filter((l) => !mixGameIds.has(l.gameId)).slice(0, 2);
+    const mixPropLegs = mixSportProps.slice(0, Math.max(1, 4 - mixGameLegs.length));
     const mixLegs = [...mixGameLegs, ...mixPropLegs];
-    const mixParlayOfTheDay: AIParlay | null = mixLegs.length >= 3 ? {
+    // Must have at least 1 of each type to qualify as "mixed"
+    const hasMixGame = mixGameLegs.length >= 1;
+    const hasMixProp = mixPropLegs.length >= 1;
+    const mixParlayOfTheDay: AIParlay | null = mixLegs.length >= 2 && hasMixGame && hasMixProp ? {
       id: "mix-1",
       name: `${mixSportLabel} Mix ${mixLegs.length}-Legger`,
       legs: mixLegs,
