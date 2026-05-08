@@ -86,6 +86,7 @@ export interface AIPicksResponse {
   summary: string;
   generatedAt: string;
   isAI: boolean;
+  activeSports: string[];
 }
 
 // ─── Props helper ─────────────────────────────────────────────────────────────
@@ -1232,6 +1233,10 @@ router.get("/ai-picks", async (req, res) => {
       }
     }
 
+    // ── Book-count threshold — US sports need 3+ books; international need only 1 ──
+    const US_SPORTS = new Set(["NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF", "WNBA"]);
+    const minBooks = (sportLabel: string) => US_SPORTS.has(sportLabel) ? 3 : 1;
+
     // ── Score-sorted game leg pools ───────────────────────────────────────────
     // Score = book count + de-vig edge + Elo model edge + steam signal + context bonus.
     type GameScore = { score: number; steamScore: number; eloEdgePct: number | null };
@@ -1331,11 +1336,6 @@ router.get("/ai-picks", async (req, res) => {
     }
 
     // ── FAVORITE game leg pool (used for safe, game, mix, cross-sport parlays) ──
-    // US sports require 3+ books for reliable consensus; international sports
-    // (Soccer, MMA, Boxing, etc.) often have only 1–2 books in the feed so we
-    // lower the threshold to 1 so their games aren't silently filtered out.
-    const US_SPORTS = new Set(["NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF", "WNBA"]);
-    const minBooks = (sportLabel: string) => US_SPORTS.has(sportLabel) ? 3 : 1;
     const gameLegPool: AIPickLeg[] = [];
     for (const { sport: sportLabel, events } of allOdds) {
       for (const ev of events) {
@@ -2028,11 +2028,15 @@ router.get("/ai-picks", async (req, res) => {
       summary,
       generatedAt: new Date().toISOString(),
       isAI: false,
-      // Which sport tabs have games within today's cutoff — used by frontend to render tabs dynamically
+      // Which sport tabs have qualifying games today — only include a sport if at least
+      // one of its games is in the betting window AND has enough bookmakers to build a leg.
+      // This prevents tabs like Soccer from appearing when games exist but have no h2h markets.
       activeSports: allOddsRaw
-        .filter(({ events }) => events.some((ev) => {
+        .filter(({ sport, events }) => events.some((ev) => {
           const t = new Date(ev.commence_time).getTime();
-          return t > nowMs && t <= todayCutoffMs;
+          if (t <= nowMs || t > todayCutoffMs) return false;
+          const bookCount = ev.bookmakers.filter((b) => b.markets.some((m) => m.key === "h2h")).length;
+          return bookCount >= minBooks(sport);
         }))
         .map(({ sport }) => sport),
     };
