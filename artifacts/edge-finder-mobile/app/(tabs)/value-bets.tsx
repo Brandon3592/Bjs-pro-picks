@@ -194,13 +194,6 @@ function LockCard({
         </View>
       </View>
 
-      {/* Confidence bar */}
-      <View style={styles.confRow}>
-        <View style={[styles.confBar, { backgroundColor: colors.border }]}>
-          <View style={[styles.confFill, { backgroundColor: confColor, width: `${pick.confidence}%` as any }]} />
-        </View>
-        <Text style={[styles.confLabel, { color: confColor }]}>{pick.confidence}% confidence</Text>
-      </View>
 
       {/* AI Reasoning */}
       {expanded && (
@@ -330,13 +323,6 @@ function ParlayCard({
         ))}
       </View>
 
-      {/* Confidence */}
-      <View style={styles.confRow}>
-        <View style={[styles.confBar, { backgroundColor: colors.border }]}>
-          <View style={[styles.confFill, { backgroundColor: confColor, width: `${parlay.confidence}%` as any }]} />
-        </View>
-        <Text style={[styles.confLabel, { color: confColor }]}>{parlay.confidence}% confidence</Text>
-      </View>
 
       {/* Reasoning (expanded) */}
       {expanded && (

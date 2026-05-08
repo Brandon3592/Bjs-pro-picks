@@ -180,15 +180,6 @@ function LockCard({ pick }: { pick: AIPick }) {
         </div>
       </div>
 
-      {/* Confidence bar */}
-      <div className="flex items-center gap-3 px-5 pb-3">
-        <div className="flex-1 h-2 rounded-full bg-border overflow-hidden">
-          <div className={cn("h-full rounded-full transition-all", confidenceBg(pick.confidence))} style={{ width: `${pick.confidence}%` }} />
-        </div>
-        <span className={cn("text-xs font-bold tabular-nums", confidenceColor(pick.confidence))}>
-          {pick.confidence}% confidence
-        </span>
-      </div>
 
       {/* Model Analysis */}
       <div className="border-t border-border mx-4 pt-3 pb-4">
@@ -307,15 +298,9 @@ function ParlayCard({ parlay, accent }: { parlay: AIParlay; accent: string }) {
         ))}
       </div>
 
-      {/* Confidence + reasoning toggle */}
+      {/* Reasoning toggle */}
       <div className="px-4 py-2.5 border-t border-border">
         <div className="flex items-center gap-3">
-          <div className="flex-1 h-1.5 rounded-full bg-border overflow-hidden">
-            <div className={cn("h-full rounded-full", confidenceBg(parlay.confidence))} style={{ width: `${parlay.confidence}%` }} />
-          </div>
-          <span className={cn("text-xs font-bold tabular-nums", confidenceColor(parlay.confidence))}>
-            {parlay.confidence}%
-          </span>
           <button onClick={() => setOpen((v) => !v)} className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1">
             {open ? "Hide ▲" : "Why? ▼"}
           </button>
