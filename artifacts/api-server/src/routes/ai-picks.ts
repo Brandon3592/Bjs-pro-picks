@@ -1237,16 +1237,18 @@ router.get("/ai-picks", async (req, res) => {
       });
 
     // ── LOTTO prop pool (lotto parlays only) ──
-    // Score-sorted within the plus-money range: best-context legs first, capped at +600.
+    // Includes any prop where the better side is not a huge lock (> -300).
+    // Sorted by odds descending so plus-money legs come first, capped at +600.
     const LOTTO_MAX_ODDS = 600;
     const seenLottoPropPlayers = new Set<string>();
     const rawLottoProps = filteredProps
       .filter((p) => {
         const best = Math.max(p.overOdds, p.underOdds);
-        return best >= -160 && best <= LOTTO_MAX_ODDS;
+        return best >= -300 && best <= LOTTO_MAX_ODDS;
       })
       .map(propToLeg)
-      .filter((l) => l.odds <= LOTTO_MAX_ODDS);
+      .filter((l) => l.odds <= LOTTO_MAX_ODDS)
+      .sort((a, b) => b.odds - a.odds);
     const scoredLottoProps = scoreProps(
       rawLottoProps, steamMap, mlbLineups, nbaOut ?? nhlOut, weatherPenaltyGameIds, matchupContextMap,
     );
@@ -1452,8 +1454,22 @@ router.get("/ai-picks", async (req, res) => {
         if (teamKey) seenLottoTeams.add(teamKey);
         return true;
       });
-    const lottoLegs = pickUnique([...lottoGamePoolDeduped, ...lottoSportProps], 5);
-    const lottoParlay: AIParlay | null = lottoLegs.length >= 2 ? {
+    const lottoLegs = (() => {
+      const combined = pickUnique([...lottoGamePoolDeduped, ...lottoSportProps], 5);
+      if (combined.length >= 5) return combined;
+      // Pad to 5 using regular sport props sorted by highest odds (most lotto-friendly first)
+      const seenPlayers = new Set(combined.map((l) => l.player).filter(Boolean) as string[]);
+      const padLegs = (propsBySport.get(lottoSportLabel) ?? [])
+        .filter((l) => l.player && !seenPlayers.has(l.player))
+        .sort((a, b) => b.odds - a.odds);
+      for (const leg of padLegs) {
+        if (combined.length >= 5) break;
+        seenPlayers.add(leg.player!);
+        combined.push(leg);
+      }
+      return combined;
+    })();
+    const lottoParlay: AIParlay | null = lottoLegs.length >= 5 ? {
       id: "lotto-1",
       name: `${lottoSportLabel} ${lottoLegs.length}-Leg Lotto`,
       legs: lottoLegs,
