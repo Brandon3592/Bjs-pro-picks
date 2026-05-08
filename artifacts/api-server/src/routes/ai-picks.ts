@@ -278,8 +278,38 @@ async function saveLadderToDb(sport: string, ladder: AILadderParlay): Promise<vo
 // ── Daily picks DB persistence ────────────────────────────────────────────────
 // Locks, parlays, and every other pick are generated ONCE per sport per day.
 // They never change mid-day — no matter how many times the server restarts or
-// the cache expires. The force-refresh endpoint explicitly deletes the DB row
-// to allow a fresh generation on the next request.
+// the cache expires. The ONLY exception: if a game that appears in a pick has
+// already started (startTime < now), the picks are considered stale and are
+// regenerated so no started-game legs remain on the board.
+// Ladders are intentionally excluded from this staleness check — they are a
+// 1-bet-per-day product and never change regardless of game starts.
+
+// Returns true if any non-ladder pick leg references a game that has already started.
+function picksAreStale(picks: AIPicksResponse): boolean {
+  const now = Date.now();
+  const parlayFields: Array<keyof AIPicksResponse> = [
+    "safeParlay", "lottoParlay", "gameParlayOfTheDay", "propParlayOfTheDay",
+    "mixParlayOfTheDay", "allSafeParlay", "allLottoParlay", "allGameParlay",
+    "allPropsParlay", "allMixParlay", "hrParlay", "goalScorerParlay",
+    "threePtParlay", "tdParlay",
+  ];
+
+  // Check the lock of the day
+  if (picks.lockOfTheDay && new Date(picks.lockOfTheDay.startTime).getTime() <= now) {
+    return true;
+  }
+
+  // Check every parlay's legs
+  for (const field of parlayFields) {
+    const parlay = picks[field] as AIParlay | null;
+    if (!parlay) continue;
+    for (const leg of parlay.legs) {
+      if (new Date(leg.startTime).getTime() <= now) return true;
+    }
+  }
+
+  return false;
+}
 
 async function loadPicksFromDb(sport: string): Promise<AIPicksResponse | null> {
   try {
@@ -288,7 +318,20 @@ async function loadPicksFromDb(sport: string): Promise<AIPicksResponse | null> {
       .from(dailyPicksTable)
       .where(and(eq(dailyPicksTable.sport, sport), eq(dailyPicksTable.date, todayEasternDate())))
       .limit(1);
-    if (rows.length > 0) return rows[0].picksJson as AIPicksResponse;
+    if (rows.length === 0) return null;
+
+    const picks = rows[0].picksJson as AIPicksResponse;
+
+    // If any leg's game has already started, invalidate and regenerate.
+    if (picksAreStale(picks)) {
+      // Delete the stale row — next request will generate fresh picks without started games.
+      await db
+        .delete(dailyPicksTable)
+        .where(and(eq(dailyPicksTable.sport, sport), eq(dailyPicksTable.date, todayEasternDate())));
+      return null;
+    }
+
+    return picks;
   } catch { /* ignore DB errors — fall through to generate */ }
   return null;
 }
