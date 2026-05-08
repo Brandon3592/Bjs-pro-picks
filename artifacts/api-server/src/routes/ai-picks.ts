@@ -1523,8 +1523,16 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `High-upside player prop parlay pulling the best-odds prop legs from each sport — one standout from NBA, MLB, and NHL. Small stake, big potential payout.`,
     } : null;
 
-    // allGameParlay: intentionally null on All Sports — when the game pool is small it duplicates Safe Parlay
-    const allGameParlay: AIParlay | null = null;
+    // allGameParlay: cross-sport plus-money/underdog game picks — distinct from allSafeParlay (favorites)
+    const allGameCrossLegs = buildCrossSportLegs(underdogLegsBySport, 4);
+    const allGameParlay: AIParlay | null = allGameCrossLegs.length >= 2 ? {
+      id: "all-game-1",
+      name: `${allGameCrossLegs.length}-Leg Cross-Sport Value Game Parlay`,
+      legs: allGameCrossLegs,
+      combinedOdds: calcCombinedOdds(allGameCrossLegs),
+      confidence: Math.max(16, Math.round(34 - allGameCrossLegs.length * 3)),
+      reasoning: `Plus-money and value game picks drawn from across today's full slate — moneylines, spreads, and totals with underdog value across ${[...new Set(allGameCrossLegs.map(l => normSport(l.sport)))].join(', ')}.`,
+    } : null;
 
     const allPropsCrossLegs = buildCrossSportLegs(propsBySport, 4);
     const allPropsParlay: AIParlay | null = allPropsCrossLegs.length >= 2 ? {
