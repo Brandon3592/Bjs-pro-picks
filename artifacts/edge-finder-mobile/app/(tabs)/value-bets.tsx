@@ -843,115 +843,100 @@ export default function AiPicksScreen() {
           </>
         ) : (
           <>
-            {/* ══ ALL SPORTS TAB ══ Lock + 5 multi-sport parlays */}
-            {selectedSport === "all" && (
-              <>
-                {/* ── Lock of the Day ── */}
-                <View style={styles.section}>
-                  <SectionHeader
-                    icon="🔒"
-                    label="Lock of the Day"
-                    sublabel="Highest confidence single pick"
-                    accent="#f59e0b"
-                  />
-                  {lock ? (
-                    <LockCard
-                      pick={lock}
-                      onTrack={() => openTrack(lock)}
-                      onLog={() => setQuickAdd({ matchup: `${lock.awayTeam} @ ${lock.homeTeam}`, pick: lock.pick, bookmaker: lock.bookmaker, odds: lock.odds })}
-                      onBet={() => openBet({ ...lock, sport: lock.sport })}
-                    />
-                  ) : (
-                    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>
-                        No lock available — pull to refresh.
-                      </Text>
-                    </View>
-                  )}
+            {/* ── Lock of the Day — every tab ── */}
+            <View style={styles.section}>
+              <SectionHeader icon="🔒" label="Lock of the Day" sublabel="Highest confidence single pick" accent="#f59e0b" />
+              {lock ? (
+                <LockCard
+                  pick={lock}
+                  onTrack={() => openTrack(lock)}
+                  onLog={() => setQuickAdd({ matchup: `${lock.awayTeam} @ ${lock.homeTeam}`, pick: lock.pick, bookmaker: lock.bookmaker, odds: lock.odds })}
+                  onBet={() => openBet({ ...lock, sport: lock.sport })}
+                />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No lock available — pull to refresh.</Text>
                 </View>
+              )}
+            </View>
 
-                {/* ── Safe Parlay ── */}
-                <View style={styles.section}>
-                  <SectionHeader icon="⚡" label="Safe Parlay of the Day" sublabel="2–3 legs, solid value (+175 to +500)" accent="#22c55e" />
-                  {(safeParlay?.legs?.length ?? 0) > 0 ? (
-                    <ParlayCard parlay={safeParlay!} accent="#22c55e"
-                      onBet={(leg) => openBet({ ...leg, pick: `${safeParlay!.name} (safe parlay)`, odds: safeParlay!.combinedOdds })}
-                      onLog={() => logParlay(safeParlay!)} />
-                  ) : (
-                    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No safe parlay — pull to refresh.</Text>
-                    </View>
-                  )}
+            {/* ── Safe Parlay — every tab ── */}
+            <View style={styles.section}>
+              <SectionHeader icon="⚡" label="Safe Parlay of the Day" sublabel="2–3 legs, solid value (+175 to +500)" accent="#22c55e" />
+              {(safeParlay?.legs?.length ?? 0) > 0 ? (
+                <ParlayCard parlay={safeParlay!} accent="#22c55e"
+                  onBet={(leg) => openBet({ ...leg, pick: `${safeParlay!.name} (safe parlay)`, odds: safeParlay!.combinedOdds })}
+                  onLog={() => logParlay(safeParlay!)} />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No safe parlay — pull to refresh.</Text>
                 </View>
+              )}
+            </View>
 
-                {/* ── Lotto Parlay ── */}
-                <View style={styles.section}>
-                  <SectionHeader icon="🎰" label="Lotto Parlay of the Day" sublabel="4–6 legs, big payout (+800 to +3000)" accent="#a855f7" />
-                  {(lottoParlay?.legs?.length ?? 0) > 0 ? (
-                    <ParlayCard parlay={lottoParlay!} accent="#a855f7"
-                      onBet={(leg) => openBet({ ...leg, pick: `${lottoParlay!.name} (lotto parlay)`, odds: lottoParlay!.combinedOdds })}
-                      onLog={() => logParlay(lottoParlay!)} />
-                  ) : (
-                    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No lotto parlay — pull to refresh.</Text>
-                    </View>
-                  )}
+            {/* ── Lotto Parlay — every tab ── */}
+            <View style={styles.section}>
+              <SectionHeader icon="🎰" label="Lotto Parlay of the Day" sublabel="4–6 legs, big payout (+800 to +3000)" accent="#a855f7" />
+              {(lottoParlay?.legs?.length ?? 0) > 0 ? (
+                <ParlayCard parlay={lottoParlay!} accent="#a855f7"
+                  onBet={(leg) => openBet({ ...leg, pick: `${lottoParlay!.name} (lotto parlay)`, odds: lottoParlay!.combinedOdds })}
+                  onLog={() => logParlay(lottoParlay!)} />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No lotto parlay — pull to refresh.</Text>
                 </View>
+              )}
+            </View>
 
-                {/* ── Game Picks Parlay ── */}
-                <View style={styles.section}>
-                  <SectionHeader icon="🏆" label="Game Picks Parlay" sublabel="Moneyline, spread & O/U only — no props" accent="#3b82f6" />
-                  {(gameParlay?.legs?.length ?? 0) > 0 ? (
-                    <ParlayCard parlay={gameParlay!} accent="#3b82f6"
-                      onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (game parlay)`, odds: gameParlay!.combinedOdds })}
-                      onLog={() => logParlay(gameParlay!)} />
-                  ) : (
-                    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No game parlay — pull to refresh.</Text>
-                    </View>
-                  )}
+            {/* ── Game Picks Parlay — every tab ── */}
+            <View style={styles.section}>
+              <SectionHeader icon="🏆" label="Game Picks Parlay" sublabel="Moneyline, spread & O/U only — no props" accent="#3b82f6" />
+              {(gameParlay?.legs?.length ?? 0) > 0 ? (
+                <ParlayCard parlay={gameParlay!} accent="#3b82f6"
+                  onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (game parlay)`, odds: gameParlay!.combinedOdds })}
+                  onLog={() => logParlay(gameParlay!)} />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No game parlay — pull to refresh.</Text>
                 </View>
+              )}
+            </View>
 
-                {/* ── Player Props Parlay ── */}
-                <View style={styles.section}>
-                  <SectionHeader icon="🎯" label="Player Props Parlay" sublabel="All player performance props" accent="#f97316" />
-                  {(propParlay?.legs?.length ?? 0) > 0 ? (
-                    <ParlayCard parlay={propParlay!} accent="#f97316"
-                      onBet={(leg) => openBet({ ...leg, pick: `${propParlay!.name} (props parlay)`, odds: propParlay!.combinedOdds })}
-                      onLog={() => logParlay(propParlay!)} />
-                  ) : (
-                    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No props parlay — pull to refresh.</Text>
-                    </View>
-                  )}
+            {/* ── Player Props Parlay — every tab ── */}
+            <View style={styles.section}>
+              <SectionHeader icon="🎯" label="Player Props Parlay" sublabel="All player performance props" accent="#f97316" />
+              {(propParlay?.legs?.length ?? 0) > 0 ? (
+                <ParlayCard parlay={propParlay!} accent="#f97316"
+                  onBet={(leg) => openBet({ ...leg, pick: `${propParlay!.name} (props parlay)`, odds: propParlay!.combinedOdds })}
+                  onLog={() => logParlay(propParlay!)} />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No props parlay — pull to refresh.</Text>
                 </View>
+              )}
+            </View>
 
-                {/* ── Mix Parlay ── */}
-                <View style={styles.section}>
-                  <SectionHeader icon="🔀" label="Mix Parlay" sublabel="Game bets + player props combined" accent="#14b8a6" />
-                  {(mixParlay?.legs?.length ?? 0) > 0 ? (
-                    <ParlayCard parlay={mixParlay!} accent="#14b8a6"
-                      onBet={(leg) => openBet({ ...leg, pick: `${mixParlay!.name} (mix parlay)`, odds: mixParlay!.combinedOdds })}
-                      onLog={() => logParlay(mixParlay!)} />
-                  ) : (
-                    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No mix parlay — pull to refresh.</Text>
-                    </View>
-                  )}
+            {/* ── Mix Parlay — every tab ── */}
+            <View style={styles.section}>
+              <SectionHeader icon="🔀" label="Mix Parlay" sublabel="Game bets + player props combined" accent="#14b8a6" />
+              {(mixParlay?.legs?.length ?? 0) > 0 ? (
+                <ParlayCard parlay={mixParlay!} accent="#14b8a6"
+                  onBet={(leg) => openBet({ ...leg, pick: `${mixParlay!.name} (mix parlay)`, odds: mixParlay!.combinedOdds })}
+                  onLog={() => logParlay(mixParlay!)} />
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No mix parlay — pull to refresh.</Text>
                 </View>
-              </>
-            )}
+              )}
+            </View>
 
-            {/* ══ SPORT-SPECIFIC TABS ══ */}
+            {/* ── Sport-specific parlay — sport tabs only ── */}
             {selectedSport !== "all" && (
               <>
                 <View style={[styles.dividerSection, { borderTopColor: colors.border }]}>
-                  <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>
-                    {selectedSport} PROP PARLAYS
-                  </Text>
+                  <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>{selectedSport} PROP PARLAYS</Text>
                 </View>
 
-                {/* ── NBA 3PT Parlay ── */}
                 {selectedSport === "NBA" && (
                   <View style={styles.section}>
                     <SectionHeader icon="🏀" label="NBA 3-Pointer Parlay" sublabel="Volume shooters from deep" accent="#f97316" />
@@ -967,7 +952,6 @@ export default function AiPicksScreen() {
                   </View>
                 )}
 
-                {/* ── MLB Home Run Parlay ── */}
                 {selectedSport === "MLB" && (
                   <View style={styles.section}>
                     <SectionHeader icon="💣" label="MLB Home Run Parlay" sublabel="Multi-HR bomber parlay · high variance" accent="#3b82f6" />
@@ -983,7 +967,6 @@ export default function AiPicksScreen() {
                   </View>
                 )}
 
-                {/* ── NHL Points Parlay ── */}
                 {selectedSport === "NHL" && (
                   <View style={styles.section}>
                     <SectionHeader icon="🏒" label="NHL Points Parlay" sublabel="Anytime goal or assist combo" accent="#8b5cf6" />
@@ -999,7 +982,6 @@ export default function AiPicksScreen() {
                   </View>
                 )}
 
-                {/* ── NFL TD Parlay — in-season only ── */}
                 {selectedSport === "NFL" && (
                   NFL_SEASON_ACTIVE ? (
                     <View style={styles.section}>
@@ -1017,7 +999,7 @@ export default function AiPicksScreen() {
                   ) : (
                     <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border, marginHorizontal: 16 }]}>
                       <Text style={[styles.emptyCardText, { color: colors.mutedForeground, textAlign: "center" }]}>
-                        🏈 NFL season starts in September.{"\n"}Check back then for picks and parlays.
+                        🏈 NFL season starts in September.{"\n"}Check back then for NFL-specific picks.
                       </Text>
                     </View>
                   )
@@ -1025,7 +1007,7 @@ export default function AiPicksScreen() {
               </>
             )}
 
-            {/* ══ DAILY LADDER — all tabs ══ */}
+            {/* ── Daily Ladder — every tab ── */}
             <View style={[styles.dividerSection, { borderTopColor: colors.border }]}>
               <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>DAILY LADDER · $10 → $10K</Text>
             </View>
@@ -1051,8 +1033,6 @@ export default function AiPicksScreen() {
                   <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>
                     {selectedSport === "NFL" && !NFL_SEASON_ACTIVE
                       ? "NFL ladder available during the season (September–February)."
-                      : selectedSport === "NHL"
-                      ? "No NHL ladder — check back when games are on."
                       : `No ${ladderSportLabel} ladder today — pull to refresh.`}
                   </Text>
                 </View>
