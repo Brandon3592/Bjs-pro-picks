@@ -113,11 +113,11 @@ const SPORT_PROP_MARKETS: Record<string, string[]> = {
   americanfootball_nfl: ["player_pass_yds", "player_rush_yds", "player_reception_yds", "player_anytime_td"],
 };
 
-/** End of today in US Eastern Time (EDT = UTC-4). Prevents tomorrow's games from appearing. */
-function endOfTodayEasternMs(): number {
+/** End of a given day (today + offsetDays) in US Eastern Time (EDT = UTC-4). */
+function endOfDayEasternMs(offsetDays = 0): number {
   const nowET = new Date(Date.now() - 4 * 3600_000); // shift UTC → EDT
   const endET = new Date(Date.UTC(
-    nowET.getUTCFullYear(), nowET.getUTCMonth(), nowET.getUTCDate(),
+    nowET.getUTCFullYear(), nowET.getUTCMonth(), nowET.getUTCDate() + offsetDays,
     23, 59, 59, 999,
   ));
   return endET.getTime() + 4 * 3600_000; // shift EDT → UTC
@@ -125,9 +125,10 @@ function endOfTodayEasternMs(): number {
 
 async function fetchRealPropsForAI(
   allOdds: { sport: string; events: OddsEvent[] }[],
+  cutoffMs: number,
 ): Promise<CompactProp[]> {
   const now = Date.now();
-  const cutoff = endOfTodayEasternMs();
+  const cutoff = cutoffMs;
 
   // Build one fetch per game (all games, all sports — no caps)
   const fetches: Promise<CompactProp[]>[] = [];
@@ -853,6 +854,24 @@ router.get("/ai-picks", async (req, res) => {
   try {
     const allOddsRaw = await fetchAllSportOdds();
 
+    // ── Adaptive cutoff ────────────────────────────────────────────────────────
+    // Use today's games if any are still upcoming; otherwise extend to tomorrow,
+    // then the day after (up to 2 days ahead) so picks are always available even
+    // after all of today's games have started.
+    const nowMs = Date.now();
+    function hasUpcomingGames(cutoff: number): boolean {
+      return allOddsRaw.some(({ events }) =>
+        events.some((ev) => {
+          const t = new Date(ev.commence_time).getTime();
+          return t > nowMs && t <= cutoff;
+        }),
+      );
+    }
+    const todayCutoffMs =
+      hasUpcomingGames(endOfDayEasternMs(0)) ? endOfDayEasternMs(0) :
+      hasUpcomingGames(endOfDayEasternMs(1)) ? endOfDayEasternMs(1) :
+      endOfDayEasternMs(2); // fallback: 2 days ahead
+
     // cacheKey is now a label key ("NBA","MLB"…) matching allOddsRaw[i].sport
     const sportApiKey = cacheKey !== "all" ? SPORT_LABEL[cacheKey] : null;
     const allOdds = cacheKey !== "all"
@@ -863,7 +882,7 @@ router.get("/ai-picks", async (req, res) => {
     // parlay builders (HR, goal scorer, 3PT, TD, ladders) have data regardless of the
     // active sport filter. The filteredProps variable below re-applies the sport filter
     // for the existing generic parlays.
-    const rawProps = await fetchRealPropsForAI(allOddsRaw);
+    const rawProps = await fetchRealPropsForAI(allOddsRaw, todayCutoffMs);
 
     // Fetch lineup/injury data, steam map, and weather penalties in parallel.
     const allEventsFlat = allOddsRaw.flatMap(({ sport, events }) =>
@@ -963,9 +982,6 @@ router.get("/ai-picks", async (req, res) => {
       }
       return result;
     }
-
-    const nowMs = Date.now();
-    const todayCutoffMs = endOfTodayEasternMs(); // no games after midnight ET tonight
 
     // Convert any OddsEvent into a game leg using the best available line across bookmakers.
     // Prefers h2h (moneyline) — picks the better-priced team (underdog / higher odds). Falls back to totals Over.
@@ -1802,7 +1818,7 @@ router.get("/ai-picks", async (req, res) => {
       }
     }
     const effectiveTTL = nextGameStartMs === Infinity
-      ? Math.max(60_000, todayCutoffMs - Date.now()) // no more games today — cache until midnight ET
+      ? Math.max(60_000, Math.min(todayCutoffMs - Date.now(), 30 * 60_000)) // no games in window — recheck in 30 min
       : Math.max(60_000, nextGameStartMs - Date.now() + 30_000); // expire when next game starts
 
     picksCacheMap.set(cacheKey, { data: result, expiresAt: Date.now() + effectiveTTL });
