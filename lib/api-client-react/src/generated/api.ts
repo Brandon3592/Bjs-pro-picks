@@ -36,6 +36,7 @@ import type {
   GetBetsParams,
   GetGameLineHistoryParams,
   GetGamesParams,
+  GetLadderProgressParams,
   GetLineMovementsParams,
   GetOddsParams,
   GetPredictionsParams,
@@ -43,6 +44,8 @@ import type {
   GetPropsParams,
   GetValueBetsParams,
   HealthStatus,
+  LadderProgress,
+  LadderSettleResult,
   LineMovement,
   LogPickBody,
   OddsEntry,
@@ -52,6 +55,7 @@ import type {
   PropEdge,
   PropGame,
   RefreshAiPicks200,
+  SettleLadderBody,
   SportCatalogGroup,
   TrackedBet,
   UpdateBetBody,
@@ -2534,4 +2538,187 @@ export const useUpdatePickResult = <
   TContext
 > => {
   return useMutation(getUpdatePickResultMutationOptions(options));
+};
+
+/**
+ * @summary Get the user's daily ladder progress for a sport
+ */
+export const getGetLadderProgressUrl = (params?: GetLadderProgressParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/ladder-progress?${stringifiedParams}`
+    : `/api/ladder-progress`;
+};
+
+export const getLadderProgress = async (
+  params?: GetLadderProgressParams,
+  options?: RequestInit,
+): Promise<LadderProgress> => {
+  return customFetch<LadderProgress>(getGetLadderProgressUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetLadderProgressQueryKey = (
+  params?: GetLadderProgressParams,
+) => {
+  return [`/api/ladder-progress`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetLadderProgressQueryOptions = <
+  TData = Awaited<ReturnType<typeof getLadderProgress>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetLadderProgressParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLadderProgress>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetLadderProgressQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getLadderProgress>>
+  > = ({ signal }) => getLadderProgress(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getLadderProgress>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetLadderProgressQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getLadderProgress>>
+>;
+export type GetLadderProgressQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the user's daily ladder progress for a sport
+ */
+
+export function useGetLadderProgress<
+  TData = Awaited<ReturnType<typeof getLadderProgress>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetLadderProgressParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLadderProgress>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetLadderProgressQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Mark today's ladder bet as won or lost
+ */
+export const getSettleLadderUrl = () => {
+  return `/api/ladder-progress/settle`;
+};
+
+export const settleLadder = async (
+  settleLadderBody: SettleLadderBody,
+  options?: RequestInit,
+): Promise<LadderSettleResult> => {
+  return customFetch<LadderSettleResult>(getSettleLadderUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(settleLadderBody),
+  });
+};
+
+export const getSettleLadderMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof settleLadder>>,
+    TError,
+    { data: BodyType<SettleLadderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof settleLadder>>,
+  TError,
+  { data: BodyType<SettleLadderBody> },
+  TContext
+> => {
+  const mutationKey = ["settleLadder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof settleLadder>>,
+    { data: BodyType<SettleLadderBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return settleLadder(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SettleLadderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof settleLadder>>
+>;
+export type SettleLadderMutationBody = BodyType<SettleLadderBody>;
+export type SettleLadderMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mark today's ladder bet as won or lost
+ */
+export const useSettleLadder = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof settleLadder>>,
+    TError,
+    { data: BodyType<SettleLadderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof settleLadder>>,
+  TError,
+  { data: BodyType<SettleLadderBody> },
+  TContext
+> => {
+  return useMutation(getSettleLadderMutationOptions(options));
 };

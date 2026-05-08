@@ -631,6 +631,20 @@ export interface PickHistoryStats {
   totalProfit: number;
 }
 
+export interface LadderProgress {
+  currentDay: number;
+  currentStake: number;
+  settled: boolean;
+  result?: string | null;
+}
+
+export interface LadderSettleResult {
+  ok: boolean;
+  currentDay?: number;
+  currentStake?: number;
+  message?: string;
+}
+
 export type GetAiPicksParams = {
   sport?: GetAiPicksSport;
 };
@@ -814,4 +828,25 @@ export type GetLineMovementsParams = {
 
 export type GetGameLineHistoryParams = {
   hours?: number;
+};
+
+export type GetLadderProgressParams = {
+  sport?: GetLadderProgressSport;
+};
+
+export type GetLadderProgressSport =
+  (typeof GetLadderProgressSport)[keyof typeof GetLadderProgressSport];
+
+export const GetLadderProgressSport = {
+  all: "all",
+  NBA: "NBA",
+  MLB: "MLB",
+  NHL: "NHL",
+  NFL: "NFL",
+} as const;
+
+export type SettleLadderBody = {
+  sport: string;
+  won: boolean;
+  payout?: number;
 };

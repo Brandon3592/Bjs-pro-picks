@@ -1229,3 +1229,37 @@ export const UpdatePickResultResponse = zod.object({
   profit: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
+
+/**
+ * @summary Get the user's daily ladder progress for a sport
+ */
+export const getLadderProgressQuerySportDefault = `all`;
+
+export const GetLadderProgressQueryParams = zod.object({
+  sport: zod
+    .enum(["all", "NBA", "MLB", "NHL", "NFL"])
+    .default(getLadderProgressQuerySportDefault),
+});
+
+export const GetLadderProgressResponse = zod.object({
+  currentDay: zod.number(),
+  currentStake: zod.number(),
+  settled: zod.boolean(),
+  result: zod.string().nullish(),
+});
+
+/**
+ * @summary Mark today's ladder bet as won or lost
+ */
+export const SettleLadderBody = zod.object({
+  sport: zod.string(),
+  won: zod.boolean(),
+  payout: zod.number().optional(),
+});
+
+export const SettleLadderResponse = zod.object({
+  ok: zod.boolean(),
+  currentDay: zod.number().optional(),
+  currentStake: zod.number().optional(),
+  message: zod.string().optional(),
+});

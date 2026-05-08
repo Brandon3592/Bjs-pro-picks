@@ -1,4 +1,12 @@
-import { useGetAiPicks, useRefreshAiPicks } from "@workspace/api-client-react";
+import {
+  useGetAiPicks,
+  useRefreshAiPicks,
+  useGetLadderProgress,
+  useSettleLadder,
+  getGetLadderProgressQueryKey,
+  type LadderProgress,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useState } from "react";
@@ -371,12 +379,18 @@ function calcCombinedOdds(legs: AIPickLeg[]): number {
   return net >= 1 ? Math.round(net * 100) : -Math.round(100 / net);
 }
 
-function LadderParlayCard({
+function DailyLadderCard({
   parlay,
+  progress,
   onBet,
+  onSettle,
+  isSettling,
 }: {
   parlay: AILadderParlay;
+  progress: LadderProgress | undefined;
   onBet: (leg: AIPickLeg) => void;
+  onSettle: (won: boolean) => void;
+  isSettling: boolean;
 }) {
   const colors = useColors();
   const [showPlan, setShowPlan] = useState(false);
@@ -386,7 +400,24 @@ function LadderParlayCard({
 
   if (!today || !today.legs?.length) return null;
 
+  const currentDay = progress?.currentDay ?? 1;
+  const currentStake = progress?.currentStake ?? 10;
+  const settled = progress?.settled ?? false;
+  const result = progress?.result ?? null;
+
+  // Compute target win from currentStake × combined decimal odds of today's legs
+  const todayDecimal = today.legs.reduce((acc, l) => {
+    return acc * (l.odds > 0 ? l.odds / 100 + 1 : 100 / Math.abs(l.odds) + 1);
+  }, 1);
+  const targetWin = currentStake * todayDecimal;
   const todayCombined = calcCombinedOdds(today.legs);
+
+  // Day dots 1–10 showing streak progress
+  const TOTAL_DAYS = parlay.totalDays ?? steps.length;
+  const dots = Array.from({ length: TOTAL_DAYS }, (_, i) => i + 1);
+
+  const WON_COLOR = "#22c55e";
+  const LOST_COLOR = "#ef4444";
 
   return (
     <View style={[styles.parlayCard, { backgroundColor: colors.card, borderColor: LADDER_ACCENT + "44" }]}>
@@ -396,9 +427,53 @@ function LadderParlayCard({
           <Text style={[styles.parlayBadgeText, { color: LADDER_ACCENT }]}>Daily Ladder</Text>
         </View>
         <Text style={[ladderStyles.dayLabel, { color: colors.mutedForeground }]}>
-          Day 1 of {parlay.totalDays} · ${parlay.startStake} → ${parlay.targetPayout.toLocaleString()}
+          Day {currentDay} of {TOTAL_DAYS} · ${parlay.startStake} → ${parlay.targetPayout.toLocaleString()}
         </Text>
       </View>
+
+      {/* Streak dots */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={ladderStyles.dotTrack}>
+        <View style={ladderStyles.dotRow}>
+          {dots.map((d) => {
+            const isPast = d < currentDay;
+            const isCurrent = d === currentDay;
+            const bgColor = isPast ? WON_COLOR : isCurrent ? LADDER_ACCENT : colors.border;
+            const textColor = (isPast || isCurrent) ? "#fff" : colors.mutedForeground;
+            return (
+              <View key={d} style={ladderStyles.dotItem}>
+                <View style={[ladderStyles.dot, { backgroundColor: bgColor }]}>
+                  {isPast ? (
+                    <Feather name="check" size={14} color="#fff" />
+                  ) : (
+                    <Text style={[ladderStyles.dotDay, { color: textColor }]}>{d}</Text>
+                  )}
+                </View>
+                <Text style={[ladderStyles.dotAmount, { color: isCurrent ? LADDER_ACCENT : colors.mutedForeground }]}>
+                  {isCurrent ? fmtMoney(targetWin) : ""}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      </ScrollView>
+
+      {/* Result banner — shown after settlement */}
+      {settled && result === "won" && (
+        <View style={[ladderStyles.resultBanner, { backgroundColor: WON_COLOR + "18", borderColor: WON_COLOR + "55" }]}>
+          <Feather name="check-circle" size={16} color={WON_COLOR} />
+          <Text style={[ladderStyles.resultBannerText, { color: WON_COLOR }]}>
+            Won! Day {currentDay} unlocked — roll ${currentStake.toFixed(0)} tomorrow.
+          </Text>
+        </View>
+      )}
+      {settled && result === "lost" && (
+        <View style={[ladderStyles.resultBanner, { backgroundColor: LOST_COLOR + "18", borderColor: LOST_COLOR + "55" }]}>
+          <Feather name="x-circle" size={16} color={LOST_COLOR} />
+          <Text style={[ladderStyles.resultBannerText, { color: LOST_COLOR }]}>
+            Lost. Reset to Day 1 — come back tomorrow with $10.
+          </Text>
+        </View>
+      )}
 
       {/* TODAY'S BET — 2-leg parlay */}
       <View style={[ladderStyles.todayBox, { backgroundColor: LADDER_ACCENT + "12", borderColor: LADDER_ACCENT + "40" }]}>
@@ -424,12 +499,12 @@ function LadderParlayCard({
         <View style={ladderStyles.todayStakeRow}>
           <View style={[ladderStyles.stakeBox, { backgroundColor: colors.background }]}>
             <Text style={[ladderStyles.stakeLabel, { color: colors.mutedForeground }]}>Bet</Text>
-            <Text style={[ladderStyles.stakeValue, { color: colors.foreground }]}>${today.stake.toFixed(0)}</Text>
+            <Text style={[ladderStyles.stakeValue, { color: colors.foreground }]}>${currentStake.toFixed(0)}</Text>
           </View>
           <Feather name="arrow-right" size={16} color={LADDER_ACCENT} />
           <View style={[ladderStyles.stakeBox, { backgroundColor: colors.background }]}>
             <Text style={[ladderStyles.stakeLabel, { color: colors.mutedForeground }]}>Win</Text>
-            <Text style={[ladderStyles.stakeValue, { color: LADDER_ACCENT }]}>${today.targetWin.toFixed(0)}</Text>
+            <Text style={[ladderStyles.stakeValue, { color: LADDER_ACCENT }]}>${targetWin.toFixed(0)}</Text>
           </View>
           <View style={[ladderStyles.oddsBadge, { backgroundColor: LADDER_ACCENT + "22", borderColor: LADDER_ACCENT + "55" }]}>
             <Text style={[ladderStyles.oddsBadgeText, { color: LADDER_ACCENT }]}>{fmtOdds(todayCombined)}</Text>
@@ -445,28 +520,30 @@ function LadderParlayCard({
         </TouchableOpacity>
       </View>
 
-      {/* Day-by-day dot track */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={ladderStyles.dotTrack}>
-        <View style={ladderStyles.dotRow}>
-          {steps.map((step, i) => (
-            <View key={i} style={ladderStyles.dotItem}>
-              <View style={[
-                ladderStyles.dot,
-                i === 0
-                  ? { backgroundColor: LADDER_ACCENT }
-                  : { backgroundColor: colors.border },
-              ]}>
-                <Text style={[ladderStyles.dotDay, { color: i === 0 ? "#fff" : colors.mutedForeground }]}>
-                  {step.day}
-                </Text>
-              </View>
-              <Text style={[ladderStyles.dotAmount, { color: i === 0 ? LADDER_ACCENT : colors.mutedForeground }]}>
-                {fmtMoney(step.targetWin)}
-              </Text>
-            </View>
-          ))}
+      {/* Settlement buttons — only shown if not yet settled today */}
+      {!settled && (
+        <View style={ladderStyles.settleRow}>
+          <Text style={[ladderStyles.settlePrompt, { color: colors.mutedForeground }]}>Did today's bet win?</Text>
+          <View style={ladderStyles.settleBtns}>
+            <TouchableOpacity
+              style={[ladderStyles.settleBtn, { backgroundColor: "#22c55e22", borderColor: "#22c55e66" }]}
+              onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); onSettle(true); }}
+              disabled={isSettling}
+            >
+              <Feather name="check" size={16} color="#22c55e" />
+              <Text style={[ladderStyles.settleBtnText, { color: "#22c55e" }]}>Won</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[ladderStyles.settleBtn, { backgroundColor: "#ef444422", borderColor: "#ef444466" }]}
+              onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); onSettle(false); }}
+              disabled={isSettling}
+            >
+              <Feather name="x" size={16} color="#ef4444" />
+              <Text style={[ladderStyles.settleBtnText, { color: "#ef4444" }]}>Lost</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </ScrollView>
+      )}
 
       {/* Full plan toggle */}
       <TouchableOpacity
@@ -484,17 +561,21 @@ function LadderParlayCard({
           {steps.map((step, i) => {
             const stepLegs = step.legs ?? [];
             const stepCombined = stepLegs.length >= 2 ? calcCombinedOdds(stepLegs) : stepLegs[0]?.odds ?? 0;
+            const isPastStep = step.day < currentDay;
             return (
               <View
                 key={i}
                 style={[
                   ladderStyles.planRow,
                   i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-                  i === 0 && { backgroundColor: LADDER_ACCENT + "08" },
+                  step.day === currentDay && { backgroundColor: LADDER_ACCENT + "08" },
                 ]}
               >
-                <View style={[ladderStyles.stepNum, { backgroundColor: i === 0 ? LADDER_ACCENT : LADDER_ACCENT + "20" }]}>
-                  <Text style={[ladderStyles.stepNumText, { color: i === 0 ? "#fff" : LADDER_ACCENT }]}>{step.day}</Text>
+                <View style={[ladderStyles.stepNum, { backgroundColor: isPastStep ? "#22c55e" : step.day === currentDay ? LADDER_ACCENT : LADDER_ACCENT + "20" }]}>
+                  {isPastStep
+                    ? <Feather name="check" size={12} color="#fff" />
+                    : <Text style={[ladderStyles.stepNumText, { color: step.day === currentDay ? "#fff" : LADDER_ACCENT }]}>{step.day}</Text>
+                  }
                 </View>
                 <View style={[styles.legInfo, { gap: 2 }]}>
                   {stepLegs.map((leg, li) => (
@@ -575,6 +656,32 @@ export default function AiPicksScreen() {
     { query: { staleTime: 15 * 60_000, gcTime: 15 * 60_000, refetchOnMount: true, refetchOnWindowFocus: false } as any },
   );
   const { mutate: doRefresh, isPending: isRefreshing } = useRefreshAiPicks();
+  const queryClient = useQueryClient();
+
+  const { data: ladderProgress, refetch: refetchProgress } = useGetLadderProgress(
+    { sport: selectedSport },
+    { query: { staleTime: 0, refetchOnMount: true, refetchOnWindowFocus: false } as any },
+  );
+  const { mutate: settleLadder, isPending: isSettling } = useSettleLadder();
+
+  function handleSettle(won: boolean) {
+    const step = activeLadder?.steps?.[0];
+    if (!step) return;
+    const stake = ladderProgress?.currentStake ?? 10;
+    const decimal = step.legs.reduce((acc: number, l: AIPickLeg) => {
+      return acc * (l.odds > 0 ? l.odds / 100 + 1 : 100 / Math.abs(l.odds) + 1);
+    }, 1);
+    const payout = parseFloat((stake * decimal).toFixed(2));
+    settleLadder(
+      { data: { sport: selectedSport, won, payout: won ? payout : 0 } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetLadderProgressQueryKey({ sport: selectedSport }) });
+          refetchProgress();
+        },
+      },
+    );
+  }
 
   const lock = data?.lockOfTheDay ?? null;
   // All-sports generic parlays (shown on the All Sports tab)
@@ -991,9 +1098,12 @@ export default function AiPicksScreen() {
                 accent={LADDER_ACCENT}
               />
               {activeLadder && (activeLadder.steps?.length ?? 0) >= 1 ? (
-                <LadderParlayCard
+                <DailyLadderCard
                   parlay={activeLadder}
+                  progress={ladderProgress}
                   onBet={(leg) => openBet({ ...leg })}
+                  onSettle={handleSettle}
+                  isSettling={isSettling}
                 />
               ) : (
                 <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -1465,5 +1575,50 @@ const ladderStyles = StyleSheet.create({
   stepPayout: {
     fontSize: 10,
     fontFamily: "Inter_400Regular",
+  },
+
+  // Result banner
+  resultBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  resultBannerText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    flex: 1,
+  },
+
+  // Settlement buttons
+  settleRow: {
+    marginTop: 14,
+    gap: 8,
+  },
+  settlePrompt: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+  },
+  settleBtns: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  settleBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  settleBtnText: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
   },
 });

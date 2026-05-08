@@ -183,7 +183,8 @@ function parsePropEvent(
         else pairMap.get(key)!.under = o.price;
       }
       // Markets where only the Over is widely offered — treat as Over-only.
-      const overOnlyMarket = market.key === "batter_hits";
+      // batter_total_bases Under is not offered by many books, so always pick Over.
+      const overOnlyMarket = market.key === "batter_hits" || market.key === "batter_total_bases";
 
       for (const [key, pair] of pairMap) {
         // HR props (and some other markets) only post the Over side — accept solo-Over entries.

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, real, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, real, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const aiPickHistoryTable = pgTable("ai_pick_history", {
   id: serial("id").primaryKey(),
@@ -25,3 +25,18 @@ export const aiPickHistoryTable = pgTable("ai_pick_history", {
 
 export type AiPickHistory = typeof aiPickHistoryTable.$inferSelect;
 export type InsertAiPickHistory = typeof aiPickHistoryTable.$inferInsert;
+
+export const ladderProgressTable = pgTable("ladder_progress", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  sport: text("sport").notNull(),
+  currentDay: integer("current_day").notNull().default(1),
+  currentStake: real("current_stake").notNull().default(10),
+  lastSettledDate: text("last_settled_date"),
+  lastResult: text("last_result"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("idx_ladder_user_sport").on(t.userId, t.sport),
+]);
+
+export type LadderProgress = typeof ladderProgressTable.$inferSelect;

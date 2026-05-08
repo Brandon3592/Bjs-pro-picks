@@ -12,11 +12,13 @@ import propsRouter from "./props";
 import allMarketsRouter from "./all-markets";
 import aiPicksRouter from "./ai-picks";
 import pickHistoryRouter from "./pick-history";
+import ladderRouter from "./ladder";
 
 const router: IRouter = Router();
 
 router.use(aiPicksRouter);
 router.use(pickHistoryRouter);
+router.use(ladderRouter);
 router.use(healthRouter);
 router.use(authRouter);
 router.use(gamesRouter);

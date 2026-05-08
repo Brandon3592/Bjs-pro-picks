@@ -667,6 +667,53 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /ladder-progress:
+    get:
+      operationId: getLadderProgress
+      tags: [ai-picks]
+      summary: Get the user's daily ladder progress for a sport
+      parameters:
+        - name: sport
+          in: query
+          schema:
+            type: string
+            enum: [all, NBA, MLB, NHL, NFL]
+            default: all
+      responses:
+        "200":
+          description: Ladder progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LadderProgress"
+
+  /ladder-progress/settle:
+    post:
+      operationId: settleLadder
+      tags: [ai-picks]
+      summary: Mark today's ladder bet as won or lost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sport:
+                  type: string
+                won:
+                  type: boolean
+                payout:
+                  type: number
+              required: [sport, won]
+      responses:
+        "200":
+          description: Settlement result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LadderSettleResult"
+
 components:
   schemas:
     HealthStatus:
@@ -1630,3 +1677,30 @@ components:
         totalProfit:
           type: number
       required: [wins, losses, pending, total, totalProfit]
+
+    LadderProgress:
+      type: object
+      properties:
+        currentDay:
+          type: integer
+        currentStake:
+          type: number
+        settled:
+          type: boolean
+        result:
+          type: string
+          nullable: true
+      required: [currentDay, currentStake, settled]
+
+    LadderSettleResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        currentDay:
+          type: integer
+        currentStake:
+          type: number
+        message:
+          type: string
+      required: [ok]
