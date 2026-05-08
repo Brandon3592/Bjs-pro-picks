@@ -1420,54 +1420,44 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `Pure ${gameSport} game-line parlay — moneylines, spreads, and totals only. Best available lines from today's full ${gameSport} slate.`,
     } : null;
 
-    // ── LOTTO PARLAY: 5 high-odds legs, same sport ────────────────────────────
-    // Uses the underdog pool — intentionally hunting plus-money upside.
-    // When a sport filter is active, use that sport's pool directly so the lotto
-    // parlay is sport-specific (NBA/NHL must not default to MLB's richer pool).
-    const lottoSportEntry: [string, AIPickLeg[]] | null = (() => {
-      if (cacheKey !== "all") {
-        // Sport-filtered request — pick directly from the requested sport's pools
-        const sportLabel = normSport(cacheKey);
-        const legs = underdogLegsBySport.get(sportLabel) ?? [];
-        const props = lottoPropsBySport.get(sportLabel) ?? [];
-        if (legs.length + props.length >= 2) return [sportLabel, legs];
-        // Fallback: use props pool even if game underdog pool is thin
-        return props.length >= 2 ? [sportLabel, []] : null;
-      }
-      // All-sports: pick whichever sport has the most plus-money underdog legs
-      return [...underdogLegsBySport.entries()]
-        .sort((a, b) => {
-          const aPlus = a[1].filter((l) => l.odds > 0).length;
-          const bPlus = b[1].filter((l) => l.odds > 0).length;
-          return bPlus - aPlus || b[1].length - a[1].length;
-        })[0] ?? null;
+    // ── LOTTO PARLAY: best 5 legs — any mix of game underdogs and player props ─
+    // No forced ratio. Game legs and prop legs compete on odds (highest first).
+    // Could be all props, all games, or any combo — whatever the slate produces.
+    const lottoSportLabel = (() => {
+      if (cacheKey !== "all") return normSport(cacheKey);
+      // All-sports: sport with the richest combined lotto pool
+      return [...underdogLegsBySport.keys()].sort((a, b) => {
+        const countA = (underdogLegsBySport.get(a)?.length ?? 0) + (lottoPropsBySport.get(a)?.length ?? 0);
+        const countB = (underdogLegsBySport.get(b)?.length ?? 0) + (lottoPropsBySport.get(b)?.length ?? 0);
+        return countB - countA;
+      })[0] ?? "";
     })();
-    const lottoSportLabel = lottoSportEntry?.[0] ?? "";
-    const lottoSportProps = lottoPropsBySport.get(lottoSportLabel) ?? [];
-    // Deduplicate lotto game pool by team name so doubleheaders don't surface the same team twice
-    const seenLottoTeams = new Set<string>();
-    const lottoGamePoolDeduped = [...(lottoSportEntry?.[1] ?? [])]
-      .sort((a, b) => b.odds - a.odds)
-      .filter((leg) => {
-        const teamKey = leg.player ? null : leg.pick; // game legs: pick = team name
-        if (teamKey && seenLottoTeams.has(teamKey)) return false;
-        if (teamKey) seenLottoTeams.add(teamKey);
-        return true;
-      });
     const lottoLegs = (() => {
-      const combined = pickUnique([...lottoGamePoolDeduped, ...lottoSportProps], 5);
-      if (combined.length >= 5) return combined;
-      // Pad to 5 using regular sport props sorted by highest odds (most lotto-friendly first)
-      const seenPlayers = new Set(combined.map((l) => l.player).filter(Boolean) as string[]);
-      const padLegs = (propsBySport.get(lottoSportLabel) ?? [])
-        .filter((l) => l.player && !seenPlayers.has(l.player))
-        .sort((a, b) => b.odds - a.odds);
-      for (const leg of padLegs) {
-        if (combined.length >= 5) break;
-        seenPlayers.add(leg.player!);
-        combined.push(leg);
+      // Merge game underdog legs + lotto prop legs, sort by odds desc, deduplicate
+      const seenKeys = new Set<string>();
+      const allLottoLegs = [
+        ...(underdogLegsBySport.get(lottoSportLabel) ?? []),
+        ...(lottoPropsBySport.get(lottoSportLabel) ?? []),
+      ].sort((a, b) => b.odds - a.odds);
+      const result: AIPickLeg[] = [];
+      for (const leg of allLottoLegs) {
+        if (result.length >= 5) break;
+        const key = leg.player ?? leg.pick;
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        result.push(leg);
       }
-      return combined;
+      // Pad to 5 with regular props (sorted by best odds) if pool runs short
+      if (result.length < 5) {
+        for (const leg of (propsBySport.get(lottoSportLabel) ?? []).slice().sort((a, b) => b.odds - a.odds)) {
+          if (result.length >= 5) break;
+          const key = leg.player ?? leg.pick;
+          if (seenKeys.has(key)) continue;
+          seenKeys.add(key);
+          result.push(leg);
+        }
+      }
+      return result;
     })();
     const lottoParlay: AIParlay | null = lottoLegs.length >= 5 ? {
       id: "lotto-1",
@@ -1475,7 +1465,7 @@ router.get("/ai-picks", async (req, res) => {
       legs: lottoLegs,
       combinedOdds: calcCombinedOdds(lottoLegs),
       confidence: Math.max(12, Math.round(38 - lottoLegs.length * 3)),
-      reasoning: `High-upside ${lottoSportLabel} parlay mixing value underdogs and player props. Each leg has standalone merit — small stake for a big payout potential.`,
+      reasoning: `High-upside ${lottoSportLabel} parlay — best available underdogs and props combined, sorted by payout potential. Small stake, big upside.`,
     } : null;
 
     // ── PROPS PARLAY: 3-4 props, same sport ──────────────────────────────────
@@ -1492,26 +1482,39 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `Real bookmaker lines for these ${propSportLabel} player performance props, sourced directly from the best available odds across major sportsbooks.`,
     } : null;
 
-    // ── MIX PARLAY: game bets + props combined — any ratio ───────────────────
-    // "Mixed" means at least 1 game leg AND 1 prop leg; the ratio is flexible.
-    // Prefer a 2+2 split, but accept 1+1 or 1+3 — whatever the slate supports.
-    const mixSportEntry = sortedSports.find(([s, legs]) => legs.length >= 1 && (propsBySport.get(s)?.length ?? 0) >= 1)
+    // ── MIX PARLAY: best 3-4 legs — any mix of game bets and player props ─────
+    // No forced ratio. The only rule: must include at least 1 game leg AND 1 prop
+    // leg — otherwise it would just be a props parlay or a game parlay.
+    const mixSportEntry = sortedSports.find(([s]) => (propsBySport.get(s)?.length ?? 0) >= 1)
       ?? sortedSports[0] ?? null;
     const mixSportLabel = mixSportEntry?.[0] ?? "";
-    const mixSportProps = propsBySport.get(mixSportLabel) ?? [];
-    const mixGameLegs = mixSportEntry ? pickUnique(mixSportEntry[1], 2) : [];
-    const mixPropLegs = mixSportProps.slice(0, Math.max(1, 4 - mixGameLegs.length));
-    const mixLegs = [...mixGameLegs, ...mixPropLegs];
-    // Must have at least 1 of each type to qualify as "mixed"
-    const hasMixGame = mixGameLegs.length >= 1;
-    const hasMixProp = mixPropLegs.length >= 1;
-    const mixParlayOfTheDay: AIParlay | null = mixLegs.length >= 2 && hasMixGame && hasMixProp ? {
+    const mixAllGameLegs = mixSportEntry?.[1] ?? [];
+    const mixAllPropLegs = propsBySport.get(mixSportLabel) ?? [];
+    const mixLegs = (() => {
+      // Guarantee at least 1 game + 1 prop to qualify as "mixed", then fill to 4
+      const firstGame = mixAllGameLegs[0];
+      const firstProp = mixAllPropLegs[0];
+      if (!firstGame || !firstProp) return [] as AIPickLeg[];
+      const seenKeys = new Set([firstGame.pick, firstProp.player ?? firstProp.pick]);
+      const result: AIPickLeg[] = [firstGame, firstProp];
+      // Fill remaining spots from whichever pool has the next best leg
+      const remaining = [...mixAllGameLegs.slice(1), ...mixAllPropLegs.slice(1)];
+      for (const leg of remaining) {
+        if (result.length >= 4) break;
+        const key = leg.player ?? leg.pick;
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        result.push(leg);
+      }
+      return result;
+    })();
+    const mixParlayOfTheDay: AIParlay | null = mixLegs.length >= 2 ? {
       id: "mix-1",
       name: `${mixSportLabel} Mix ${mixLegs.length}-Legger`,
       legs: mixLegs,
       combinedOdds: calcCombinedOdds(mixLegs),
       confidence: Math.max(18, Math.round(40 - mixLegs.length * 2)),
-      reasoning: `Blends the strongest ${mixSportLabel} game-line value bets with real player prop lines. Game legs for structure, props for upside.`,
+      reasoning: `Best available ${mixSportLabel} game and prop legs combined — no forced ratio, just the strongest picks across both pools.`,
     } : null;
 
     // ── CROSS-SPORT PARLAYS (All Sports tab) ─────────────────────────────────
