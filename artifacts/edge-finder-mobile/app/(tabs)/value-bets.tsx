@@ -249,10 +249,12 @@ function ParlayCard({
   parlay,
   accent,
   onBet,
+  onLog,
 }: {
   parlay: AIParlay;
   accent: string;
   onBet: (leg: AIPickLeg) => void;
+  onLog: () => void;
 }) {
   const colors = useColors();
   const [expanded, setExpanded] = useState(false);
@@ -348,14 +350,20 @@ function ParlayCard({
           }}
         >
           <Feather name="share-2" size={14} color={accent} />
-          <Text style={[styles.shareBtnText, { color: accent }]}>Share</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.shareBtn, { borderColor: accent + "55", flex: 1 }]}
+          onPress={(e) => { e.stopPropagation?.(); onLog(); }}
+        >
+          <Feather name="plus-circle" size={14} color={accent} />
+          <Text style={[styles.shareBtnText, { color: accent }]}>Log Bet</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionBtnFull, { backgroundColor: accent, flex: 2 }]}
           onPress={(e) => { e.stopPropagation?.(); onBet(parlay.legs[0]); }}
         >
           <Feather name="external-link" size={14} color="#fff" />
-          <Text style={styles.betBtnText}>Place Parlay Bet</Text>
+          <Text style={styles.betBtnText}>Place Bet</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -383,20 +391,20 @@ function DailyLadderCard({
   parlay,
   progress,
   onBet,
+  onLog,
   onSettle,
   isSettling,
 }: {
   parlay: AILadderParlay;
   progress: LadderProgress | undefined;
   onBet: (leg: AIPickLeg) => void;
+  onLog: () => void;
   onSettle: (won: boolean) => void;
   isSettling: boolean;
 }) {
   const colors = useColors();
-  const [showPlan, setShowPlan] = useState(false);
   const steps = parlay.steps ?? [];
   const today = steps[0];
-  const finalStep = steps[steps.length - 1];
 
   if (!today || !today.legs?.length) return null;
 
@@ -545,76 +553,23 @@ function DailyLadderCard({
         </View>
       )}
 
-      {/* Full plan toggle */}
-      <TouchableOpacity
-        style={ladderStyles.planToggle}
-        onPress={() => { Haptics.selectionAsync(); setShowPlan((v) => !v); }}
-      >
-        <Text style={[ladderStyles.planToggleText, { color: colors.mutedForeground }]}>
-          {showPlan ? "Hide" : "See"} full {steps.length}-day plan
-        </Text>
-        <Feather name={showPlan ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
-      </TouchableOpacity>
-
-      {showPlan && (
-        <View style={[ladderStyles.planList, { borderTopColor: colors.border }]}>
-          {steps.map((step, i) => {
-            const stepLegs = step.legs ?? [];
-            const stepCombined = stepLegs.length >= 2 ? calcCombinedOdds(stepLegs) : stepLegs[0]?.odds ?? 0;
-            const isPastStep = step.day < currentDay;
-            return (
-              <View
-                key={i}
-                style={[
-                  ladderStyles.planRow,
-                  i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-                  step.day === currentDay && { backgroundColor: LADDER_ACCENT + "08" },
-                ]}
-              >
-                <View style={[ladderStyles.stepNum, { backgroundColor: isPastStep ? "#22c55e" : step.day === currentDay ? LADDER_ACCENT : LADDER_ACCENT + "20" }]}>
-                  {isPastStep
-                    ? <Feather name="check" size={12} color="#fff" />
-                    : <Text style={[ladderStyles.stepNumText, { color: step.day === currentDay ? "#fff" : LADDER_ACCENT }]}>{step.day}</Text>
-                  }
-                </View>
-                <View style={[styles.legInfo, { gap: 2 }]}>
-                  {stepLegs.map((leg, li) => (
-                    <Text key={li} style={[styles.legPick, { color: li === 0 ? colors.foreground : colors.mutedForeground, fontSize: li === 0 ? 13 : 11 }]} numberOfLines={1}>
-                      {li + 1}. {leg.pick}
-                    </Text>
-                  ))}
-                </View>
-                <View style={ladderStyles.stepRight}>
-                  <Text style={[styles.legOdds, { color: LADDER_ACCENT }]}>{fmtOdds(stepCombined)}</Text>
-                  <Text style={[ladderStyles.stepPayout, { color: colors.mutedForeground }]}>
-                    ${step.stake.toFixed(0)} → {fmtMoney(step.targetWin)}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
-
-          {/* Final payout callout */}
-          <View style={[ladderStyles.finalCallout, { backgroundColor: LADDER_ACCENT + "12", borderColor: LADDER_ACCENT + "30" }]}>
-            <Feather name="target" size={14} color={LADDER_ACCENT} />
-            <Text style={[ladderStyles.finalCalloutText, { color: colors.mutedForeground }]}>
-              Win all {steps.length} days in a row:{" "}
-              <Text style={{ color: LADDER_ACCENT, fontFamily: "Inter_700Bold" }}>
-                {fmtMoney(finalStep?.targetWin ?? 0)}
-              </Text>
-            </Text>
-          </View>
-
-          {/* Reasoning */}
-          <View style={[styles.reasoning, { borderTopColor: colors.border }]}>
-            <View style={styles.reasoningHeader}>
-              <Feather name="info" size={13} color={LADDER_ACCENT} />
-              <Text style={[styles.reasoningLabel, { color: LADDER_ACCENT }]}>How it works</Text>
-            </View>
-            <Text style={[styles.reasoningText, { color: colors.foreground }]}>{parlay.reasoning}</Text>
-          </View>
-        </View>
-      )}
+      {/* Ladder action row */}
+      <View style={[styles.parlayActions, { marginTop: 4 }]}>
+        <TouchableOpacity
+          style={[styles.shareBtn, { borderColor: LADDER_ACCENT + "55", flex: 1 }]}
+          onPress={() => { Haptics.selectionAsync(); onLog(); }}
+        >
+          <Feather name="plus-circle" size={14} color={LADDER_ACCENT} />
+          <Text style={[styles.shareBtnText, { color: LADDER_ACCENT }]}>Log Bet</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionBtnFull, { backgroundColor: LADDER_ACCENT, flex: 2 }]}
+          onPress={() => onBet(today.legs[0])}
+        >
+          <Feather name="external-link" size={14} color="#fff" />
+          <Text style={styles.betBtnText}>Place Bet</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -739,6 +694,34 @@ export default function AiPicksScreen() {
       sport: pick.sport,
       preferredBookmaker: pick.bookmaker,
     });
+  }
+
+  function logParlay(p: AIParlay) {
+    const legSummary = p.legs.map((l, i) =>
+      `${i + 1}. ${l.player ? `${l.player} — ` : ""}${l.pick} (${fmtOdds(l.odds)})`
+    ).join("  |  ");
+    setQuickAdd({
+      matchup: p.name,
+      pick: legSummary,
+      bookmaker: p.legs[0]?.bookmaker ?? "—",
+      odds: p.combinedOdds,
+    });
+  }
+
+  function logLadder(p: AILadderParlay) {
+    const today = p.steps?.[0];
+    if (!today) return;
+    const legSummary = today.legs.map((l, i) =>
+      `${i + 1}. ${l.pick} (${fmtOdds(l.odds)})`
+    ).join("  |  ");
+    const stake = ladderProgress?.currentStake ?? 10;
+    setQuickAdd({
+      matchup: `Daily Ladder — Day ${ladderProgress?.currentDay ?? 1}`,
+      pick: legSummary,
+      bookmaker: today.legs[0]?.bookmaker ?? "—",
+      odds: calcCombinedOdds(today.legs),
+    });
+    void stake; // stake shown in modal after user enters it
   }
 
   function handleRefresh() {
@@ -890,6 +873,7 @@ export default function AiPicksScreen() {
                       parlay={safeParlay!}
                       accent="#22c55e"
                       onBet={(leg) => openBet({ ...leg, pick: `${safeParlay!.name} (safe parlay)`, odds: safeParlay!.combinedOdds })}
+                      onLog={() => logParlay(safeParlay!)}
                     />
                   ) : (
                     <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -911,6 +895,7 @@ export default function AiPicksScreen() {
                       parlay={lottoParlay!}
                       accent="#a855f7"
                       onBet={(leg) => openBet({ ...leg, pick: `${lottoParlay!.name} (lotto parlay)`, odds: lottoParlay!.combinedOdds })}
+                      onLog={() => logParlay(lottoParlay!)}
                     />
                   ) : (
                     <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -932,6 +917,7 @@ export default function AiPicksScreen() {
                       parlay={gameParlay!}
                       accent="#3b82f6"
                       onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (game parlay)`, odds: gameParlay!.combinedOdds })}
+                      onLog={() => logParlay(gameParlay!)}
                     />
                   ) : (
                     <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -953,6 +939,7 @@ export default function AiPicksScreen() {
                       parlay={propParlay!}
                       accent="#f97316"
                       onBet={(leg) => openBet({ ...leg, pick: `${propParlay!.name} (props parlay)`, odds: propParlay!.combinedOdds })}
+                      onLog={() => logParlay(propParlay!)}
                     />
                   ) : (
                     <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -974,6 +961,7 @@ export default function AiPicksScreen() {
                       parlay={mixParlay!}
                       accent="#14b8a6"
                       onBet={(leg) => openBet({ ...leg, pick: `${mixParlay!.name} (mix parlay)`, odds: mixParlay!.combinedOdds })}
+                      onLog={() => logParlay(mixParlay!)}
                     />
                   ) : (
                     <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -1007,6 +995,7 @@ export default function AiPicksScreen() {
                     parlay={hrParlay!}
                     accent="#3b82f6"
                     onBet={(leg) => openBet({ ...leg, pick: `${hrParlay!.name} (HR parlay)`, odds: hrParlay!.combinedOdds })}
+                    onLog={() => logParlay(hrParlay!)}
                   />
                 ) : (
                   <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -1030,6 +1019,7 @@ export default function AiPicksScreen() {
                     parlay={goalScorerParlay!}
                     accent="#8b5cf6"
                     onBet={(leg) => openBet({ ...leg, pick: `${goalScorerParlay!.name} (goal scorer parlay)`, odds: goalScorerParlay!.combinedOdds })}
+                    onLog={() => logParlay(goalScorerParlay!)}
                   />
                 ) : (
                   <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -1053,6 +1043,7 @@ export default function AiPicksScreen() {
                     parlay={threePtParlay!}
                     accent="#f97316"
                     onBet={(leg) => openBet({ ...leg, pick: `${threePtParlay!.name} (3PT parlay)`, odds: threePtParlay!.combinedOdds })}
+                    onLog={() => logParlay(threePtParlay!)}
                   />
                 ) : (
                   <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -1076,6 +1067,7 @@ export default function AiPicksScreen() {
                     parlay={tdParlay!}
                     accent="#22c55e"
                     onBet={(leg) => openBet({ ...leg, pick: `${tdParlay!.name} (TD parlay)`, odds: tdParlay!.combinedOdds })}
+                    onLog={() => logParlay(tdParlay!)}
                   />
                 ) : (
                   <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -1102,6 +1094,7 @@ export default function AiPicksScreen() {
                   parlay={activeLadder}
                   progress={ladderProgress}
                   onBet={(leg) => openBet({ ...leg })}
+                  onLog={() => logLadder(activeLadder)}
                   onSettle={handleSettle}
                   isSettling={isSettling}
                 />
