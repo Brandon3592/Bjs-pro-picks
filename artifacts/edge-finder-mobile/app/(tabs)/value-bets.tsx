@@ -31,18 +31,12 @@ import type { AIPick, AIParlay, AIPickLeg, AILadderParlay } from "@workspace/api
 
 // ─── Sport tabs ──────────────────────────────────────────────────────────────
 
-// NFL season runs Sept–Feb. Hide the tab during the off-season.
-const NFL_SEASON_ACTIVE = (() => {
-  const m = new Date().getMonth() + 1; // 1-indexed
-  return m >= 9 || m <= 2;
-})();
-
 const SPORT_TABS = [
   { key: "all", label: "All Sports", icon: "🌐" },
   { key: "NBA",  label: "NBA",       icon: "🏀" },
   { key: "MLB",  label: "MLB",       icon: "⚾" },
   { key: "NHL",  label: "NHL",       icon: "🏒" },
-  ...(NFL_SEASON_ACTIVE ? [{ key: "NFL" as const, label: "NFL", icon: "🏈" }] : []),
+  { key: "NFL",  label: "NFL",       icon: "🏈" },
 ] as const;
 
 type SportKey = typeof SPORT_TABS[number]["key"];
@@ -843,31 +837,29 @@ export default function AiPicksScreen() {
           </>
         ) : (
           <>
-            {/* ── Lock of the Day — shown on All Sports tab, or sport tab matching lock.sport ── */}
-            {(selectedSport === "all" || lock?.sport === selectedSport) && (
-              <View style={styles.section}>
-                <SectionHeader
-                  icon="🔒"
-                  label="Lock of the Day"
-                  sublabel="Highest confidence single pick"
-                  accent="#f59e0b"
+            {/* ── Lock of the Day — shown on all tabs ── */}
+            <View style={styles.section}>
+              <SectionHeader
+                icon="🔒"
+                label="Lock of the Day"
+                sublabel="Highest confidence single pick"
+                accent="#f59e0b"
+              />
+              {lock ? (
+                <LockCard
+                  pick={lock}
+                  onTrack={() => openTrack(lock)}
+                  onLog={() => setQuickAdd({ matchup: `${lock.awayTeam} @ ${lock.homeTeam}`, pick: lock.pick, bookmaker: lock.bookmaker, odds: lock.odds })}
+                  onBet={() => openBet({ ...lock, sport: lock.sport })}
                 />
-                {lock ? (
-                  <LockCard
-                    pick={lock}
-                    onTrack={() => openTrack(lock)}
-                    onLog={() => setQuickAdd({ matchup: `${lock.awayTeam} @ ${lock.homeTeam}`, pick: lock.pick, bookmaker: lock.bookmaker, odds: lock.odds })}
-                    onBet={() => openBet({ ...lock, sport: lock.sport })}
-                  />
-                ) : (
-                  <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>
-                      No lock available — pull to refresh.
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>
+                    No lock available — pull to refresh.
+                  </Text>
+                </View>
+              )}
+            </View>
 
             {/* ── Generic multi-sport parlays — show on all tabs ── */}
             <>
