@@ -1961,20 +1961,16 @@ router.get("/ai-picks", async (req, res) => {
       return generated;
     }
 
-    // All-sports ladder: pick from the top 2 most active sports today
-    const sportCounts: Record<string, number> = {};
-    for (const p of realProps) { sportCounts[p.sport] = (sportCounts[p.sport] ?? 0) + 1; }
-    const topSportKeys = Object.entries(sportCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 2)
-      .map(([k]) => k);
+    // All-sports ladder: pool candidates from EVERY sport that has props today,
+    // not just the top 2 — so the best legs genuinely come from across all sports.
+    const allPropSportKeys = [...new Set(realProps.map((p) => p.sport))];
 
     const [nbaLadder, mlbLadder, nhlLadder, nflLadder, allLadder] = await Promise.all([
       getOrBuildLadder(["basketball_nba"], "NBA"),
       getOrBuildLadder(["baseball_mlb"], "MLB"),
       getOrBuildLadder(["icehockey_nhl"], "NHL"),
       getOrBuildLadder(["americanfootball_nfl"], "NFL"),
-      topSportKeys.length > 0 ? getOrBuildLadder(topSportKeys, "All Sports") : Promise.resolve(null),
+      allPropSportKeys.length > 0 ? getOrBuildLadder(allPropSportKeys, "All Sports") : Promise.resolve(null),
     ]);
 
     const sportsInPlay = [...new Set([
