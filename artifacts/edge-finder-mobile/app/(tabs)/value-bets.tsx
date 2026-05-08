@@ -131,10 +131,12 @@ const sectionStyles = StyleSheet.create({
 function LockCard({
   pick,
   onTrack,
+  onLog,
   onBet,
 }: {
   pick: AIPick;
   onTrack: () => void;
+  onLog: () => void;
   onBet: () => void;
 }) {
   const colors = useColors();
@@ -230,6 +232,13 @@ function LockCard({
         >
           <Feather name="plus" size={14} color={colors.foreground} />
           <Text style={[styles.actionBtnText, { color: colors.foreground }]}>Track</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionBtn, { borderWidth: 1, borderColor: GOLD + "66" }]}
+          onPress={(e) => { e.stopPropagation?.(); onLog(); }}
+        >
+          <Feather name="plus-circle" size={14} color={GOLD} />
+          <Text style={[styles.actionBtnText, { color: GOLD }]}>Log Bet</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionBtn, { backgroundColor: GOLD }]}
@@ -336,7 +345,7 @@ function ParlayCard({
       {/* Action row */}
       <View style={styles.parlayActions}>
         <TouchableOpacity
-          style={[styles.shareBtn, { borderColor: accent + "55" }]}
+          style={[styles.parlayShareIcon, { borderColor: accent + "55" }]}
           onPress={(e) => {
             e.stopPropagation?.();
             Haptics.selectionAsync();
@@ -359,11 +368,11 @@ function ParlayCard({
           <Text style={[styles.shareBtnText, { color: accent }]}>Log Bet</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.actionBtnFull, { backgroundColor: accent, flex: 2 }]}
+          style={[styles.shareBtn, { backgroundColor: accent, borderColor: accent, flex: 1.5 }]}
           onPress={(e) => { e.stopPropagation?.(); onBet(parlay.legs[0]); }}
         >
           <Feather name="external-link" size={14} color="#fff" />
-          <Text style={styles.betBtnText}>Place Bet</Text>
+          <Text style={[styles.shareBtnText, { color: "#fff" }]}>Place Bet</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -834,33 +843,35 @@ export default function AiPicksScreen() {
           </>
         ) : (
           <>
-            {/* ── Lock of the Day ── */}
-            <View style={styles.section}>
-              <SectionHeader
-                icon="🔒"
-                label="Lock of the Day"
-                sublabel="Highest confidence single pick"
-                accent="#f59e0b"
-              />
-              {lock ? (
-                <LockCard
-                  pick={lock}
-                  onTrack={() => openTrack(lock)}
-                  onBet={() => openBet({ ...lock, sport: lock.sport })}
+            {/* ── Lock of the Day — shown on All Sports tab, or sport tab matching lock.sport ── */}
+            {(selectedSport === "all" || lock?.sport === selectedSport) && (
+              <View style={styles.section}>
+                <SectionHeader
+                  icon="🔒"
+                  label="Lock of the Day"
+                  sublabel="Highest confidence single pick"
+                  accent="#f59e0b"
                 />
-              ) : (
-                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>
-                    No lock available — pull to refresh.
-                  </Text>
-                </View>
-              )}
-            </View>
+                {lock ? (
+                  <LockCard
+                    pick={lock}
+                    onTrack={() => openTrack(lock)}
+                    onLog={() => setQuickAdd({ matchup: `${lock.awayTeam} @ ${lock.homeTeam}`, pick: lock.pick, bookmaker: lock.bookmaker, odds: lock.odds })}
+                    onBet={() => openBet({ ...lock, sport: lock.sport })}
+                  />
+                ) : (
+                  <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>
+                      No lock available — pull to refresh.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
 
-            {/* ── All Sports tab: generic multi-sport parlays ── */}
-            {selectedSport === "all" && (
-              <>
-                {/* ── Safe Parlay ── */}
+            {/* ── Generic multi-sport parlays — show on all tabs ── */}
+            <>
+              {/* ── Safe Parlay ── */}
                 <View style={styles.section}>
                   <SectionHeader
                     icon="⚡"
@@ -969,8 +980,7 @@ export default function AiPicksScreen() {
                     </View>
                   )}
                 </View>
-              </>
-            )}
+            </>
 
             {/* ── Sport tab divider ── */}
             {selectedSport !== "all" && (
@@ -1264,6 +1274,15 @@ const styles = StyleSheet.create({
     marginHorizontal: 14,
     marginTop: 4,
     marginBottom: 14,
+  },
+  parlayShareIcon: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   shareBtn: {
     flex: 1,
