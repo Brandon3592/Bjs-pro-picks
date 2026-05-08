@@ -567,38 +567,28 @@ export default function AiPicksScreen() {
     preferredBookmaker?: string;
   } | null>(null);
 
-  const sportParam = selectedSport === "all" ? undefined : selectedSport;
+  // Always fetch all-sports data — sport tabs are client-side filters only.
+  // This prevents the server fallback bug where sport-specific requests return
+  // the same mock data when a sport has no active games.
   const { data, isLoading, isFetching, refetch } = useGetAiPicks(
-    sportParam ? { sport: sportParam } : undefined,
+    undefined,
     { query: { staleTime: 15 * 60_000, gcTime: 15 * 60_000, refetchOnMount: true, refetchOnWindowFocus: false } as any },
   );
   const { mutate: doRefresh, isPending: isRefreshing } = useRefreshAiPicks();
 
   const lock = data?.lockOfTheDay ?? null;
-  // Sport-specific parlays (used on individual sport tabs)
+  // All-sports generic parlays (shown on the All Sports tab)
   const safeParlay = data?.safeParlay ?? null;
   const lottoParlay = data?.lottoParlay ?? null;
   const gameParlay = data?.gameParlayOfTheDay ?? null;
   const propParlay = data?.propParlayOfTheDay ?? null;
   const mixParlay = data?.mixParlayOfTheDay ?? null;
-  // Cross-sport parlays (used on All Sports tab — one leg per sport)
-  const allSafeParlay = (data as any)?.allSafeParlay ?? null;
-  const allLottoParlay = (data as any)?.allLottoParlay ?? null;
-  const allGameParlay = (data as any)?.allGameParlay ?? null;
-  const allPropsParlay = (data as any)?.allPropsParlay ?? null;
-  const allMixParlay = (data as any)?.allMixParlay ?? null;
-  // Pick the right set based on selected tab
-  const activeParlay = {
-    safe: selectedSport === "all" ? allSafeParlay : safeParlay,
-    lotto: selectedSport === "all" ? allLottoParlay : lottoParlay,
-    game: selectedSport === "all" ? allGameParlay : gameParlay,
-    props: selectedSport === "all" ? allPropsParlay : propParlay,
-    mix: selectedSport === "all" ? allMixParlay : mixParlay,
-  };
+  // Sport-specific prop parlays (each shown only on its sport tab)
   const hrParlay = data?.hrParlay ?? null;
   const goalScorerParlay = data?.goalScorerParlay ?? null;
   const threePtParlay = data?.threePtParlay ?? null;
   const tdParlay = data?.tdParlay ?? null;
+  // Sport-specific ladders
   const allLadder = (data?.allLadder ?? null) as AILadderParlay | null;
   const nbaLadder = (data?.nbaLadder ?? null) as AILadderParlay | null;
   const mlbLadder = (data?.mlbLadder ?? null) as AILadderParlay | null;
@@ -777,8 +767,8 @@ export default function AiPicksScreen() {
               )}
             </View>
 
-            {/* ── Generic parlays — hidden on NFL tab (off-season, no NFL data) ── */}
-            {selectedSport !== "NFL" && (
+            {/* ── All Sports tab: generic multi-sport parlays ── */}
+            {selectedSport === "all" && (
               <>
                 {/* ── Safe Parlay ── */}
                 <View style={styles.section}>
@@ -788,11 +778,11 @@ export default function AiPicksScreen() {
                     sublabel="2–3 legs, solid value (+175 to +500)"
                     accent="#22c55e"
                   />
-                  {(activeParlay.safe?.legs?.length ?? 0) > 0 ? (
+                  {(safeParlay?.legs?.length ?? 0) > 0 ? (
                     <ParlayCard
-                      parlay={activeParlay.safe!}
+                      parlay={safeParlay!}
                       accent="#22c55e"
-                      onBet={(leg) => openBet({ ...leg, pick: `${activeParlay.safe!.name} (safe parlay)`, odds: activeParlay.safe!.combinedOdds })}
+                      onBet={(leg) => openBet({ ...leg, pick: `${safeParlay!.name} (safe parlay)`, odds: safeParlay!.combinedOdds })}
                     />
                   ) : (
                     <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -809,11 +799,11 @@ export default function AiPicksScreen() {
                     sublabel="4–6 legs, big payout (+800 to +3000)"
                     accent="#a855f7"
                   />
-                  {(activeParlay.lotto?.legs?.length ?? 0) > 0 ? (
+                  {(lottoParlay?.legs?.length ?? 0) > 0 ? (
                     <ParlayCard
-                      parlay={activeParlay.lotto!}
+                      parlay={lottoParlay!}
                       accent="#a855f7"
-                      onBet={(leg) => openBet({ ...leg, pick: `${activeParlay.lotto!.name} (lotto parlay)`, odds: activeParlay.lotto!.combinedOdds })}
+                      onBet={(leg) => openBet({ ...leg, pick: `${lottoParlay!.name} (lotto parlay)`, odds: lottoParlay!.combinedOdds })}
                     />
                   ) : (
                     <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -823,27 +813,25 @@ export default function AiPicksScreen() {
                 </View>
 
                 {/* ── Game Picks Parlay ── */}
-                {selectedSport !== "all" && (
-                  <View style={styles.section}>
-                    <SectionHeader
-                      icon="🏆"
-                      label="Game Picks Parlay"
-                      sublabel="Moneyline, spread & O/U only — no props"
+                <View style={styles.section}>
+                  <SectionHeader
+                    icon="🏆"
+                    label="Game Picks Parlay"
+                    sublabel="Moneyline, spread & O/U only — no props"
+                    accent="#3b82f6"
+                  />
+                  {(gameParlay?.legs?.length ?? 0) > 0 ? (
+                    <ParlayCard
+                      parlay={gameParlay!}
                       accent="#3b82f6"
+                      onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (game parlay)`, odds: gameParlay!.combinedOdds })}
                     />
-                    {(activeParlay.game?.legs?.length ?? 0) > 0 ? (
-                      <ParlayCard
-                        parlay={activeParlay.game!}
-                        accent="#3b82f6"
-                        onBet={(leg) => openBet({ ...leg, pick: `${activeParlay.game!.name} (game parlay)`, odds: activeParlay.game!.combinedOdds })}
-                      />
-                    ) : (
-                      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No game parlay — pull to refresh.</Text>
-                      </View>
-                    )}
-                  </View>
-                )}
+                  ) : (
+                    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No game parlay — pull to refresh.</Text>
+                    </View>
+                  )}
+                </View>
 
                 {/* ── Player Props Parlay ── */}
                 <View style={styles.section}>
@@ -853,11 +841,11 @@ export default function AiPicksScreen() {
                     sublabel="All player performance props"
                     accent="#f97316"
                   />
-                  {(activeParlay.props?.legs?.length ?? 0) > 0 ? (
+                  {(propParlay?.legs?.length ?? 0) > 0 ? (
                     <ParlayCard
-                      parlay={activeParlay.props!}
+                      parlay={propParlay!}
                       accent="#f97316"
-                      onBet={(leg) => openBet({ ...leg, pick: `${activeParlay.props!.name} (props parlay)`, odds: activeParlay.props!.combinedOdds })}
+                      onBet={(leg) => openBet({ ...leg, pick: `${propParlay!.name} (props parlay)`, odds: propParlay!.combinedOdds })}
                     />
                   ) : (
                     <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -874,11 +862,11 @@ export default function AiPicksScreen() {
                     sublabel="Game bets + player props combined"
                     accent="#14b8a6"
                   />
-                  {(activeParlay.mix?.legs?.length ?? 0) > 0 ? (
+                  {(mixParlay?.legs?.length ?? 0) > 0 ? (
                     <ParlayCard
-                      parlay={activeParlay.mix!}
+                      parlay={mixParlay!}
                       accent="#14b8a6"
-                      onBet={(leg) => openBet({ ...leg, pick: `${activeParlay.mix!.name} (mix parlay)`, odds: activeParlay.mix!.combinedOdds })}
+                      onBet={(leg) => openBet({ ...leg, pick: `${mixParlay!.name} (mix parlay)`, odds: mixParlay!.combinedOdds })}
                     />
                   ) : (
                     <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -889,10 +877,12 @@ export default function AiPicksScreen() {
               </>
             )}
 
-            {/* ── Divider: Sport-Specific Parlays ── */}
-            {(selectedSport === "MLB" || selectedSport === "NHL" || selectedSport === "NBA" || selectedSport === "NFL") && (
+            {/* ── Sport tab divider ── */}
+            {selectedSport !== "all" && (
               <View style={[styles.dividerSection, { borderTopColor: colors.border }]}>
-                <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>SPORT PROP PARLAYS</Text>
+                <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>
+                  {selectedSport} PROP PARLAYS
+                </Text>
               </View>
             )}
 
