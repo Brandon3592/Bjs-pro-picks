@@ -162,7 +162,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-40 flex">
-        {NAV_ITEMS.slice(0, 4).map((item) => {
+        {[
+          NAV_ITEMS[0], // Today's Picks
+          NAV_ITEMS[1], // Dashboard
+          NAV_ITEMS[2], // Player Props
+          NAV_ITEMS[3], // Arb Finder
+          NAV_ITEMS[7], // Bet Tracker
+        ].map((item) => {
           const Icon = item.icon;
           const isActive = location === item.href;
           return (

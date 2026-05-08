@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import {
   useGetAiPicks,
   useRefreshAiPicks,
@@ -10,8 +11,8 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   RefreshCw, Lock, Zap, Dices, Trophy, Shuffle, Target,
-  TrendingUp, Cpu, Share2, PlusCircle, ExternalLink,
-  Check, X, ArrowRight, ChevronDown, ChevronUp,
+  TrendingUp, Cpu, Share2, ExternalLink,
+  Check, X, ArrowRight, ChevronDown, ChevronUp, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AIPick, AIParlay, AIPickLeg, AILadderParlay } from "@workspace/api-client-react";
@@ -218,12 +219,16 @@ function LockCard({ pick }: { pick: AIPick }) {
 
       {/* Actions */}
       <div className="flex items-center gap-2 px-4 pb-4">
+        <Link href="/tracker" className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors hover:opacity-80" style={{ borderColor: GOLD + "66", color: GOLD }}>
+          <BookOpen className="h-3.5 w-3.5" />
+          Log Bet
+        </Link>
         <a
-          href={`https://www.draftkings.com`}
+          href="https://www.draftkings.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors hover:opacity-80"
-          style={{ borderColor: GOLD + "66", color: GOLD }}
+          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:opacity-80"
+          style={{ backgroundColor: GOLD, color: "#000" }}
         >
           <ExternalLink className="h-3.5 w-3.5" />
           Place Bet
@@ -323,6 +328,14 @@ function ParlayCard({ parlay, accent }: { parlay: AIParlay; accent: string }) {
         >
           <Share2 className="h-3.5 w-3.5" />
         </button>
+        <Link
+          href="/tracker"
+          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors hover:opacity-80"
+          style={{ borderColor: accent + "55", color: accent }}
+        >
+          <BookOpen className="h-3.5 w-3.5" />
+          Log Bet
+        </Link>
         <a
           href="https://www.draftkings.com"
           target="_blank"
