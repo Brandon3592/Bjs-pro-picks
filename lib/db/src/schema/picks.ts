@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, real, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, real, timestamp, index, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
 
 export const aiPickHistoryTable = pgTable("ai_pick_history", {
   id: serial("id").primaryKey(),
@@ -40,3 +40,16 @@ export const ladderProgressTable = pgTable("ladder_progress", {
 ]);
 
 export type LadderProgress = typeof ladderProgressTable.$inferSelect;
+
+// One ladder per sport per calendar date — generated once, never changes during the day.
+export const dailyLaddersTable = pgTable("daily_ladders", {
+  id: serial("id").primaryKey(),
+  sport: text("sport").notNull(),       // "NBA", "MLB", "NHL", "NFL", "all"
+  date: text("date").notNull(),          // "YYYY-MM-DD" in US/Eastern
+  ladderJson: jsonb("ladder_json").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("idx_daily_ladders_sport_date").on(t.sport, t.date),
+]);
+
+export type DailyLadder = typeof dailyLaddersTable.$inferSelect;

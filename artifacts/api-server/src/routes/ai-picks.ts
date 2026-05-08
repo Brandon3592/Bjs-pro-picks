@@ -6,6 +6,8 @@ import { americanToDecimal, decimalToAmerican } from "../lib/model";
 import { buildSteamMap, scoreProps, buildWeatherPenaltySet, type MatchupContext } from "../lib/pick-scoring";
 import { getEloWinProb, warmEloCache } from "../lib/elo-model";
 import type { OddsEvent, PropEvent } from "../lib/odds-api";
+import { db, dailyLaddersTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 
 const router = Router();
 
@@ -244,6 +246,34 @@ function parsePropEvent(
 
 const picksCacheMap = new Map<string, { data: AIPicksResponse; expiresAt: number }>();
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+
+// Returns "YYYY-MM-DD" in US/Eastern time — used as the ladder's date key.
+function todayEasternDate(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
+// Load a persisted ladder from DB for this sport + today's date. Returns null if not yet generated.
+async function loadLadderFromDb(sport: string): Promise<AILadderParlay | null> {
+  try {
+    const rows = await db
+      .select()
+      .from(dailyLaddersTable)
+      .where(and(eq(dailyLaddersTable.sport, sport), eq(dailyLaddersTable.date, todayEasternDate())))
+      .limit(1);
+    if (rows.length > 0) return rows[0].ladderJson as AILadderParlay;
+  } catch { /* ignore DB errors — fall through to generate */ }
+  return null;
+}
+
+// Persist a generated ladder so it never changes during the same calendar day.
+async function saveLadderToDb(sport: string, ladder: AILadderParlay): Promise<void> {
+  try {
+    await db
+      .insert(dailyLaddersTable)
+      .values({ sport, date: todayEasternDate(), ladderJson: ladder as any })
+      .onConflictDoNothing(); // If another request raced us, keep the first one
+  } catch { /* ignore — ladder will still be used in-memory for this request */ }
+}
 
 // Label → API key for sports that have player props in our system.
 // Sports NOT in this map (Soccer, MMA, Boxing, NCAAB, NCAAF, WNBA) get no props.
@@ -1829,10 +1859,15 @@ router.get("/ai-picks", async (req, res) => {
       };
     }
 
-    const nbaLadder = buildDailyLadder(["basketball_nba"], "NBA");
-    const mlbLadder = buildDailyLadder(["baseball_mlb"], "MLB");
-    const nhlLadder = buildDailyLadder(["icehockey_nhl"], "NHL");
-    const nflLadder = buildDailyLadder(["americanfootball_nfl"], "NFL");
+    // Wrap buildDailyLadder with DB persistence: load today's ladder from DB if already
+    // generated; otherwise build from live odds and save — so it never changes mid-day.
+    async function getOrBuildLadder(apiKeys: string[], sportLabel: string): Promise<AILadderParlay | null> {
+      const stored = await loadLadderFromDb(sportLabel);
+      if (stored) return stored;
+      const generated = buildDailyLadder(apiKeys, sportLabel);
+      if (generated) await saveLadderToDb(sportLabel, generated);
+      return generated;
+    }
 
     // All-sports ladder: pick from the top 2 most active sports today
     const sportCounts: Record<string, number> = {};
@@ -1841,7 +1876,14 @@ router.get("/ai-picks", async (req, res) => {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 2)
       .map(([k]) => k);
-    const allLadder = topSportKeys.length > 0 ? buildDailyLadder(topSportKeys, "All Sports") : null;
+
+    const [nbaLadder, mlbLadder, nhlLadder, nflLadder, allLadder] = await Promise.all([
+      getOrBuildLadder(["basketball_nba"], "NBA"),
+      getOrBuildLadder(["baseball_mlb"], "MLB"),
+      getOrBuildLadder(["icehockey_nhl"], "NHL"),
+      getOrBuildLadder(["americanfootball_nfl"], "NFL"),
+      topSportKeys.length > 0 ? getOrBuildLadder(topSportKeys, "All Sports") : Promise.resolve(null),
+    ]);
 
     const sportsInPlay = [...new Set([
       ...gameLegPool.slice(0, 6).map((l) => normSport(l.sport)),
