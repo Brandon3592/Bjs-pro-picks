@@ -20,7 +20,7 @@ const TAB_DEFS = [
   {
     name: "value-bets",
     href: "/(tabs)/value-bets",
-    title: "Picks",
+    title: "Today's",
     headerTitle: "Today's Picks",
     icon: "zap" as FeatherIconName,
     match: "/value-bets",
@@ -50,12 +50,12 @@ const TAB_DEFS = [
     match: "/arb",
   },
   {
-    name: "tracker",
-    href: "/(tabs)/tracker",
-    title: "Tracker",
-    headerTitle: "Bet Tracker",
-    icon: "trending-up" as FeatherIconName,
-    match: "/tracker",
+    name: "help",
+    href: "/(tabs)/help",
+    title: "Help",
+    headerTitle: "Help & Support",
+    icon: "help-circle" as FeatherIconName,
+    match: "/help",
   },
 ];
 
@@ -190,6 +190,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      initialRouteName="value-bets"
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,

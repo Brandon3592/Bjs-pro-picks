@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { useSubscribeAlerts, useGetVapidPublicKey } from "@workspace/api-client-react";
-import { Moon, Sun, Bell, BellOff, Shield, AlertTriangle, Flame, CheckCircle2 } from "lucide-react";
+import { Moon, Sun, Bell, BellOff, Shield, AlertTriangle, Flame, CheckCircle2, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,23 @@ export default function Settings() {
   const [bankroll, setBankroll] = useState("1000");
   const [alertStatus, setAlertStatus] = useState<AlertStatus>("idle");
   const [currentEndpoint, setCurrentEndpoint] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/user", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d: any) => setUserId(d.id || null))
+      .catch(() => {});
+  }, []);
+
+  function copyId() {
+    if (!userId) return;
+    navigator.clipboard.writeText(userId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
 
   const subscribeAlerts = useSubscribeAlerts();
   const { data: vapidData } = useGetVapidPublicKey();
@@ -280,6 +297,28 @@ export default function Settings() {
           </div>
         </div>
       </div>
+
+      {/* Account Info */}
+      {userId && (
+        <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+          <h2 className="text-sm font-semibold">Your Account</h2>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1.5">User ID — share with the site owner to request admin access</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-xs font-mono bg-muted/50 px-3 py-2 rounded border border-border truncate">
+                {userId}
+              </code>
+              <button
+                onClick={copyId}
+                className="flex items-center gap-1.5 text-xs px-3 py-2 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors flex-shrink-0"
+              >
+                {copied ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Disclaimer */}
       <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-lg p-4">

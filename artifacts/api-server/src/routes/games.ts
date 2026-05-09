@@ -90,7 +90,7 @@ async function getLiveGames() {
     fetchAllSportScores(),
   ]);
 
-  if (oddsData.every((d) => d.events.length === 0)) return generateMockGames();
+  if (oddsData.every((d) => d.events.length === 0)) return [];
 
   // Build a score lookup by event id
   const scoreMap = new Map<string, { homeScore: number | null; awayScore: number | null; completed: boolean }>();

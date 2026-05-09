@@ -13,6 +13,7 @@ import allMarketsRouter from "./all-markets";
 import aiPicksRouter from "./ai-picks";
 import pickHistoryRouter from "./pick-history";
 import ladderRouter from "./ladder";
+import supportRouter from "./support";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(lineMovementsRouter);
 router.use(arbRouter);
 router.use(propsRouter);
 router.use(allMarketsRouter);
+router.use(supportRouter);
 
 export default router;

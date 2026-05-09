@@ -17,26 +17,30 @@ import {
   Star,
   CalendarCheck,
   Dices,
+  HelpCircle,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { href: "/today", label: "Today's Picks", icon: CalendarCheck, highlight: true },
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/", label: "Today's Picks", icon: CalendarCheck, highlight: true },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/props", label: "Player Props", icon: Users },
   { href: "/arb", label: "Arb Finder", icon: Dices },
   { href: "/games", label: "Games", icon: Activity },
   { href: "/all-markets", label: "All Markets", icon: Globe },
   { href: "/picks", label: "Pick History", icon: Star },
   { href: "/tracker", label: "Bet Tracker", icon: BookOpen },
+  { href: "/help", label: "Help & Support", icon: HelpCircle },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/admin", label: "Owner Dashboard", icon: ShieldCheck },
 ];
 
 function NavLink({ href, label, icon: Icon, highlight, onClick }: { href: string; label: string; icon: React.ElementType; highlight?: boolean; onClick?: () => void }) {
   const [location] = useLocation();
-  const isActive = location === href;
+  const isActive = href === "/" ? location === "/" : location.startsWith(href);
   return (
     <Link href={href} onClick={onClick}>
       <div
@@ -167,10 +171,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           NAV_ITEMS[1], // Dashboard
           NAV_ITEMS[2], // Player Props
           NAV_ITEMS[3], // Arb Finder
-          NAV_ITEMS[7], // Bet Tracker
+          NAV_ITEMS[8], // Help & Support
         ].map((item) => {
           const Icon = item.icon;
-          const isActive = location === item.href;
+          const isActive = item.href === "/" ? location === "/" : location.startsWith(item.href);
           return (
             <Link key={item.href} href={item.href} className="flex-1">
               <div className={cn(

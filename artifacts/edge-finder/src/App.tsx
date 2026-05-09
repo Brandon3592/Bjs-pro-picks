@@ -7,6 +7,8 @@ import NotFound from "@/pages/not-found";
 import { AppLayout } from "@/components/layout/app-layout";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
+import Help from "@/pages/help";
+import Admin from "@/pages/admin";
 import Games from "@/pages/games";
 import GameDetail from "@/pages/game-detail";
 import Tracker from "@/pages/tracker";
@@ -32,7 +34,8 @@ function Router() {
       <Route>
         <AppLayout>
           <Switch>
-            <Route path="/" component={Dashboard} />
+            <Route path="/" component={Today} />
+            <Route path="/dashboard" component={Dashboard} />
             <Route path="/games" component={Games} />
             <Route path="/games/:gameId" component={GameDetail} />
             <Route path="/tracker" component={Tracker} />
@@ -42,6 +45,8 @@ function Router() {
             <Route path="/today" component={Today} />
             <Route path="/picks" component={Picks} />
             <Route path="/settings" component={Settings} />
+            <Route path="/help" component={Help} />
+            <Route path="/admin" component={Admin} />
             <Route component={NotFound} />
           </Switch>
         </AppLayout>
