@@ -1504,10 +1504,49 @@ router.get("/ai-picks", async (req, res) => {
       return res.json(fallback);
     }
 
-    // ── LOCK OF THE DAY: highest composite score (Elo model edge + books + steam) ──
-    // gameLegPool is already sorted by composite score desc — pick the top leg.
-    // Then fetch the full Elo reasoning to populate the Lock reasoning text.
-    let lockLeg: AIPickLeg = gameLegPool[0] ?? propPool[0];
+    // Normalize sport labels (API keys like "basketball_nba" → display label "NBA")
+    // Defined here so it can be used by both the lock selection and the parlay builders below.
+    function normSport(s: string): string {
+      // If already a display label (no underscores), return as-is
+      if (!s.includes("_")) return s;
+      return SPORT_API_TO_LABEL[s] ?? SPORT_FROM_KEY[s] ?? s.toUpperCase();
+    }
+
+    // ── LOCK OF THE DAY ──────────────────────────────────────────────────────
+    // For a single-sport view: take the top composite-score leg (book count +
+    // de-vig edge + Elo edge + steam), which is already sorted desc.
+    //
+    // For the ALL-SPORTS view we do NOT just take the raw #1 leg because that
+    // approach always favours MLB — it has the most games and the widest book
+    // coverage, so its legs score 10-20 pts higher on bookScore/contextScore
+    // even when a different sport has a sharper model-based pick.
+    //
+    // Instead we:
+    //   1. Find the best-scored leg PER SPORT (one "champion" per sport).
+    //   2. Rank those champions by Elo model edge first (sport-agnostic quality),
+    //      then fall back to the composite score as tiebreaker.
+    // This gives every active sport a fair shot at the lock.
+    let lockLeg: AIPickLeg;
+    if (cacheKey === "all" && gameLegPool.length > 0) {
+      // gameLegPool is already sorted desc by composite score, so the first
+      // occurrence of each sport is that sport's best-scored leg.
+      const sportChampionMap = new Map<string, AIPickLeg>();
+      for (const leg of gameLegPool) {
+        const s = normSport(leg.sport);
+        if (!sportChampionMap.has(s)) sportChampionMap.set(s, leg);
+      }
+      const sportChampions = [...sportChampionMap.values()];
+      // Sort by Elo edge desc (sport-agnostic model signal), composite score as tiebreaker
+      sportChampions.sort((a, b) => {
+        const eloA = getEloEdge(a.gameId, a.pick) ?? -Infinity;
+        const eloB = getEloEdge(b.gameId, b.pick) ?? -Infinity;
+        if (eloA !== eloB) return eloB - eloA;
+        return getGameScore(b.gameId, b.pick) - getGameScore(a.gameId, a.pick);
+      });
+      lockLeg = sportChampions[0] ?? propPool[0];
+    } else {
+      lockLeg = gameLegPool[0] ?? propPool[0];
+    }
     let lockEloResult: import("../lib/elo-model").EloLookupResult | null = null;
     let lockBookCount = 0;
 
@@ -1584,13 +1623,6 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: lockReasoningParts.join(" "),
       tags: [lockLeg.betType, "top pick", ...(lockEloResult ? ["elo model"] : [])],
     };
-
-    // Normalize sport labels (API keys like "basketball_nba" → display label "NBA")
-    function normSport(s: string): string {
-      // If already a display label (no underscores), return as-is
-      if (!s.includes("_")) return s;
-      return SPORT_API_TO_LABEL[s] ?? SPORT_FROM_KEY[s] ?? s.toUpperCase();
-    }
 
     // ── Group legs & props by sport (keep parlays sport-pure) ────────────────
     // Favorite pools — used by safe, game, mix, props, cross-sport parlays
