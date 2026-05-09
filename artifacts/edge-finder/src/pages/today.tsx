@@ -683,7 +683,10 @@ export default function TodayPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Today's Picks</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold">Today's Picks</h1>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border bg-primary/10 text-primary border-primary/20">v3.1</span>
+          </div>
           {allData?.generatedAt && (
             <p className="text-xs text-muted-foreground mt-0.5">
               Updated {new Date(allData.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}

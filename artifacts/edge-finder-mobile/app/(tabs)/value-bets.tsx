@@ -676,14 +676,14 @@ export default function AiPicksScreen() {
   const threePtParlay    = sportData?.threePtParlay    ?? allData?.threePtParlay    ?? null;
   const tdParlay         = sportData?.tdParlay         ?? allData?.tdParlay         ?? null;
 
-  // Ladders — allData has all sport-specific ladders pre-computed
+  // Ladders — prefer sportData (sport-specific) then fall back to allData (pre-computed)
   const allLadder    = (allData?.allLadder    ?? null) as AILadderParlay | null;
-  const nbaLadder    = (allData?.nbaLadder    ?? null) as AILadderParlay | null;
-  const mlbLadder    = (allData?.mlbLadder    ?? null) as AILadderParlay | null;
-  const nhlLadder    = (allData?.nhlLadder    ?? null) as AILadderParlay | null;
-  const nflLadder    = (allData?.nflLadder    ?? null) as AILadderParlay | null;
-  const wnbaLadder   = ((allData as any)?.wnbaLadder   ?? null) as AILadderParlay | null;
-  const soccerLadder = ((allData as any)?.soccerLadder ?? null) as AILadderParlay | null;
+  const nbaLadder    = (sportData?.nbaLadder    ?? allData?.nbaLadder    ?? null) as AILadderParlay | null;
+  const mlbLadder    = (sportData?.mlbLadder    ?? allData?.mlbLadder    ?? null) as AILadderParlay | null;
+  const nhlLadder    = (sportData?.nhlLadder    ?? allData?.nhlLadder    ?? null) as AILadderParlay | null;
+  const nflLadder    = (sportData?.nflLadder    ?? allData?.nflLadder    ?? null) as AILadderParlay | null;
+  const wnbaLadder   = ((sportData as any)?.wnbaLadder   ?? (allData as any)?.wnbaLadder   ?? null) as AILadderParlay | null;
+  const soccerLadder = ((sportData as any)?.soccerLadder ?? (allData as any)?.soccerLadder ?? null) as AILadderParlay | null;
   const isAI = allData?.isAI ?? false;
 
   const activeLadder =
@@ -884,6 +884,9 @@ export default function AiPicksScreen() {
                     Updated {new Date(allData.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                   </Text>
                 ) : null}
+                <View style={{ backgroundColor: colors.primary + "22", borderColor: colors.primary + "44", borderWidth: 1, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: colors.primary }}>v3.1</Text>
+                </View>
               </View>
               <Text style={[styles.summaryText, { color: colors.mutedForeground }]} numberOfLines={3}>
                 {allData.summary}
