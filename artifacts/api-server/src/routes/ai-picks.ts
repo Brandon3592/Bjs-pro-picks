@@ -378,9 +378,15 @@ async function loadPicksFromDb(sport: string): Promise<AIPicksResponse | null> {
       return null;
     }
 
-    // Invalidate picks that were saved with an empty activeSports (broken catalog fallback).
-    // These would hide all sport tabs — regenerate so the correct list is computed.
-    if (!picks.activeSports || picks.activeSports.length === 0) {
+    // Invalidate picks that were saved with no actual content — these are stale "No games"
+    // entries written during API quota exhaustion. They have activeSports set but null picks.
+    // Also invalidate picks with empty activeSports (broken catalog fallback).
+    const hasContent = picks.lockOfTheDay != null || picks.safeParlay != null ||
+      picks.lottoParlay != null || picks.gameParlayOfTheDay != null ||
+      picks.nbaLadder != null || picks.mlbLadder != null ||
+      picks.nhlLadder != null || picks.nflLadder != null || picks.allLadder != null;
+    const isEmptySports = !picks.activeSports || picks.activeSports.length === 0;
+    if (!hasContent || isEmptySports) {
       await db
         .delete(dailyPicksTable)
         .where(and(eq(dailyPicksTable.sport, sport), eq(dailyPicksTable.date, todayEasternDate())));
