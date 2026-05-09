@@ -52,7 +52,7 @@ function NavLink({ href, label, icon: Icon, highlight, onClick }: { href: string
       >
         <Icon className={cn("h-4 w-4 flex-shrink-0", isActive || highlight ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-accent-foreground")} />
         <span className="flex-1">{label}</span>
-        {highlight && !isActive && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/25 leading-none">NEW</span>}
+        {highlight && !isActive && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/25 leading-none">LIVE</span>}
         {isActive && <ChevronRight className="h-3 w-3 text-primary" />}
       </div>
     </Link>

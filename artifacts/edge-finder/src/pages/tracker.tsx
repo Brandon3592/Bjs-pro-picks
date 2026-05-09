@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 
 const betFormSchema = z.object({
-  sport: z.enum(["NFL", "NBA", "MLB", "NHL"]),
+  sport: z.enum(["NFL", "NBA", "MLB", "NHL", "WNBA", "NCAAB", "NCAAF"]),
   homeTeam: z.string().min(1, "Required"),
   awayTeam: z.string().min(1, "Required"),
   team: z.string().min(1, "Required"),
@@ -150,6 +150,9 @@ export default function Tracker() {
                         <SelectItem value="NBA">NBA</SelectItem>
                         <SelectItem value="MLB">MLB</SelectItem>
                         <SelectItem value="NHL">NHL</SelectItem>
+                        <SelectItem value="WNBA">WNBA</SelectItem>
+                        <SelectItem value="NCAAB">NCAAB</SelectItem>
+                        <SelectItem value="NCAAF">NCAAF</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

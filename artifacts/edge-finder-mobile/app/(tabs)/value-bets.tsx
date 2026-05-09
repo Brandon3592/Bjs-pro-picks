@@ -93,12 +93,6 @@ function formatTime(iso: string) {
   return `${h}:${m} ${ampm}`;
 }
 
-function confidenceColor(c: number) {
-  if (c >= 70) return "#22c55e";
-  if (c >= 55) return "#f59e0b";
-  return "#ef4444";
-}
-
 // ─── Section header ───────────────────────────────────────────────────────────
 
 function SectionHeader({ icon, label, sublabel, accent }: {
@@ -149,7 +143,6 @@ function LockCard({
   const colors = useColors();
   const [expanded, setExpanded] = useState(true);
   const GOLD = "#f59e0b";
-  const confColor = confidenceColor(pick.confidence);
   const isPositive = pick.odds > 0;
 
   return (
@@ -262,7 +255,6 @@ function ParlayCard({
 }) {
   const colors = useColors();
   const [expanded, setExpanded] = useState(false);
-  const confColor = confidenceColor(parlay.confidence);
 
   return (
     <TouchableOpacity
@@ -705,6 +697,9 @@ export default function AiPicksScreen() {
   const hasSportProps  = PROPS_SPORTS.has(selectedSport);
   const hasSportLadder = activeLadder !== null;
 
+  // True when the API returned no picks for this sport (no qualifying games today)
+  const noPicksForSport = !isAllTab && !isLoading && !lock && !safeParlay && !lottoParlay && !gameParlay;
+
   // Build the tab list dynamically — show only sports with games today.
   // While loading, fall back to the 4 core US sports.
   const activeSports = (allData as any)?.activeSports as string[] | undefined;
@@ -869,6 +864,13 @@ export default function AiPicksScreen() {
             <SkeletonCard height={240} />
             <SkeletonCard height={290} />
           </>
+        ) : noPicksForSport ? (
+          /* ── No picks available for this sport today ── */
+          <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border, marginHorizontal: 16 }]}>
+            <Text style={[styles.emptyCardText, { color: colors.mutedForeground, textAlign: "center" }]}>
+              No {selectedSport} picks today — either no games are on the board or market coverage is too thin.{"\n\n"}Check back later or switch to another sport.
+            </Text>
+          </View>
         ) : (
           <>
             {selectedSport === "NFL" && !NFL_SEASON_ACTIVE ? (

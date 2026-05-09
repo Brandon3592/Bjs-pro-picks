@@ -63,16 +63,23 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-function confidenceColor(c: number) {
-  if (c >= 70) return "text-green-400";
-  if (c >= 55) return "text-amber-400";
-  return "text-red-400";
-}
+const BOOKMAKER_URLS: Record<string, string> = {
+  "DraftKings":  "https://www.draftkings.com",
+  "FanDuel":     "https://www.fanduel.com",
+  "BetMGM":      "https://www.betmgm.com",
+  "Caesars":     "https://www.caesars.com/sportsbook-online",
+  "PointsBet":   "https://www.pointsbet.com",
+  "BetRivers":   "https://www.betrivers.com",
+  "ESPN Bet":    "https://www.espnbet.com",
+  "Bet365":      "https://www.bet365.com",
+  "WynnBet":     "https://www.wynnbet.com",
+  "Betway":      "https://www.betway.com",
+  "Fliff":       "https://www.getfliff.com",
+  "Hard Rock":   "https://www.hardrock.bet",
+};
 
-function confidenceBg(c: number) {
-  if (c >= 70) return "bg-green-500";
-  if (c >= 55) return "bg-amber-500";
-  return "bg-red-500";
+function bookmakerUrl(name: string): string {
+  return BOOKMAKER_URLS[name] ?? "https://www.draftkings.com";
 }
 
 function sportBadgeClass(sport: string) {
@@ -216,7 +223,7 @@ function LockCard({ pick }: { pick: AIPick }) {
           Log Bet
         </Link>
         <a
-          href="https://www.draftkings.com"
+          href={bookmakerUrl(pick.bookmaker)}
           target="_blank"
           rel="noopener noreferrer"
           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:opacity-80"
@@ -323,7 +330,7 @@ function ParlayCard({ parlay, accent }: { parlay: AIParlay; accent: string }) {
           Log Bet
         </Link>
         <a
-          href="https://www.draftkings.com"
+          href={bookmakerUrl(parlay.legs[0]?.bookmaker ?? "")}
           target="_blank"
           rel="noopener noreferrer"
           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:opacity-80"
@@ -460,7 +467,7 @@ function DailyLadderCard({
         </div>
 
         <a
-          href="https://www.draftkings.com"
+          href={bookmakerUrl(today.legs[0]?.bookmaker ?? "")}
           target="_blank"
           rel="noopener noreferrer"
           className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors hover:opacity-90"
