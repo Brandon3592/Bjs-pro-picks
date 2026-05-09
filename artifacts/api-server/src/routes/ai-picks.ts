@@ -6,8 +6,8 @@ import { americanToDecimal, decimalToAmerican } from "../lib/model";
 import { buildSteamMap, scoreProps, buildWeatherPenaltySet, type MatchupContext } from "../lib/pick-scoring";
 import { getEloWinProb, warmEloCache } from "../lib/elo-model";
 import type { OddsEvent, PropEvent } from "../lib/odds-api";
-import { db, dailyLaddersTable, dailyPicksTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { db, dailyLaddersTable, dailyPicksTable, oddsSnapshotsTable } from "@workspace/db";
+import { eq, and, gte, gt, lte } from "drizzle-orm";
 
 const router = Router();
 
@@ -249,6 +249,11 @@ function parsePropEvent(
 const picksCacheMap = new Map<string, { data: AIPicksResponse; expiresAt: number }>();
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
+// Persists the last successfully-computed sport tab list across requests within
+// a server session. Used as fallback when the odds API quota is exhausted so the
+// tabs don't disappear entirely after a server restart with empty live data.
+let lastKnownActiveSports: string[] = [];
+
 // Returns "YYYY-MM-DD" in US/Eastern time — used as the ladder's date key.
 function todayEasternDate(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
@@ -371,6 +376,21 @@ async function loadPicksFromDb(sport: string): Promise<AIPicksResponse | null> {
         .delete(dailyPicksTable)
         .where(and(eq(dailyPicksTable.sport, sport), eq(dailyPicksTable.date, todayEasternDate())));
       return null;
+    }
+
+    // Invalidate picks that were saved with an empty activeSports (broken catalog fallback).
+    // These would hide all sport tabs — regenerate so the correct list is computed.
+    if (!picks.activeSports || picks.activeSports.length === 0) {
+      await db
+        .delete(dailyPicksTable)
+        .where(and(eq(dailyPicksTable.sport, sport), eq(dailyPicksTable.date, todayEasternDate())));
+      return null;
+    }
+
+    // Seed lastKnownActiveSports from the DB cache so sport tabs survive a server restart
+    // even if the odds API is exhausted when the first new request comes in.
+    if (picks.activeSports.length > 0 && lastKnownActiveSports.length === 0) {
+      lastKnownActiveSports = picks.activeSports;
     }
 
     return picks;
@@ -1068,25 +1088,6 @@ router.get("/ai-picks", async (req, res) => {
   try {
     const allOddsRaw = await fetchAllSportOdds();
 
-    // Build the sport tab list from the catalog (/sports endpoint — minimal quota).
-    // This runs even when odds quota is exhausted so tabs like NHL always show during playoffs.
-    const catalogActiveSports = await (async () => {
-      try {
-        const activeKeys = await fetchActiveSportApiKeys();
-        const seen = new Set<string>();
-        const labels: string[] = [];
-        for (const [apiKey, label] of Object.entries(SPORT_API_TO_LABEL)) {
-          if (activeKeys.has(apiKey) && !seen.has(label)) {
-            seen.add(label);
-            labels.push(label);
-          }
-        }
-        return labels.length > 0 ? labels : allOddsRaw.map(({ sport }) => sport);
-      } catch {
-        return allOddsRaw.map(({ sport }) => sport);
-      }
-    })();
-
     // ── Adaptive cutoff ────────────────────────────────────────────────────────
     // Use today's games if any are still upcoming; otherwise extend to tomorrow,
     // then the day after (up to 2 days ahead) so picks are always available even
@@ -1104,6 +1105,54 @@ router.get("/ai-picks", async (req, res) => {
       hasUpcomingGames(endOfDayEasternMs(0)) ? endOfDayEasternMs(0) :
       hasUpcomingGames(endOfDayEasternMs(1)) ? endOfDayEasternMs(1) :
       endOfDayEasternMs(2); // fallback: 2 days ahead
+
+    // Sport tabs to show: only sports with at least 1 upcoming game with any h2h coverage.
+    // Uses actual odds data (not the /sports catalog) so off-season sports never appear.
+    // Falls back (in order) to: memory-cached "all" picks → lastKnownActiveSports →
+    // DB snapshots (recent upcoming games) so tabs survive quota exhaustion.
+    const catalogActiveSports = await (async () => {
+      const fromOdds = allOddsRaw
+        .filter(({ events }) => events.some((ev) => {
+          const t = new Date(ev.commence_time).getTime();
+          if (t <= nowMs || t > todayCutoffMs) return false;
+          return ev.bookmakers.some((b) => b.markets.some((m) => m.key === "h2h"));
+        }))
+        .map(({ sport }) => sport);
+      if (fromOdds.length > 0) {
+        lastKnownActiveSports = fromOdds; // persist for quota-exhausted sessions
+        return fromOdds;
+      }
+      // Quota exhausted — try memory-cached "all" picks first
+      const allMem = picksCacheMap.get("all");
+      if (allMem && allMem.expiresAt > Date.now() && allMem.data.activeSports.length > 0) {
+        return allMem.data.activeSports;
+      }
+      // Try last known (from an earlier request this server session)
+      if (lastKnownActiveSports.length > 0) return lastKnownActiveSports;
+      // Last resort: query the DB snapshots for sports with upcoming games in the next 48h.
+      // The snapshot job runs every 5 min and stores odds even when the API key is rate-limited,
+      // so this gives us the correct sport list even after a fresh server restart with no quota.
+      try {
+        // Only count sports whose snapshots were taken in the last 24h AND whose games
+        // haven't started yet. This prevents stale NFL/NCAAF data from leaking in during
+        // their off-season since the snapshot pruning window is 48h.
+        const recentCutoff = new Date(nowMs - 24 * 60 * 60 * 1000);
+        const rows = await db
+          .selectDistinct({ sport: oddsSnapshotsTable.sport })
+          .from(oddsSnapshotsTable)
+          .where(and(
+            gt(oddsSnapshotsTable.commenceTime, new Date(nowMs)),
+            lte(oddsSnapshotsTable.commenceTime, new Date(todayCutoffMs)),
+            gte(oddsSnapshotsTable.snapshotAt, recentCutoff),
+          ));
+        const fromSnapshots = rows.map((r) => r.sport).filter(Boolean) as string[];
+        if (fromSnapshots.length > 0) {
+          lastKnownActiveSports = fromSnapshots;
+          return fromSnapshots;
+        }
+      } catch { /* ignore DB errors */ }
+      return []; // truly no data available
+    })();
 
     // cacheKey is now a label key ("NBA","MLB"…) matching allOddsRaw[i].sport
     const sportApiKey = cacheKey !== "all" ? SPORT_LABEL[cacheKey] : null;
@@ -1502,6 +1551,52 @@ router.get("/ai-picks", async (req, res) => {
     // return null picks with a message instead so no wrong-sport data is shown.
     if (gameLegPool.length === 0 && propPool.length === 0) {
       if (cacheKey !== "all") {
+        // Before returning empty, check if the "all" picks cache has picks for this sport.
+        // This avoids a blank tab when odds quota is exhausted — the "all" picks were built
+        // when quota was available and already contain legs for every sport.
+        const allCached = picksCacheMap.get("all");
+        if (allCached && allCached.expiresAt > Date.now()) {
+          const all = allCached.data;
+          const filterParlay = (p: AIParlay | null): AIParlay | null => {
+            if (!p) return null;
+            const legs = p.legs.filter((l) => l.sport === cacheKey);
+            return legs.length > 0 ? { ...p, legs } : null;
+          };
+          const sportResult: AIPicksResponse = {
+            lockOfTheDay: all.lockOfTheDay?.sport === cacheKey ? all.lockOfTheDay : null,
+            safeParlay: filterParlay(all.safeParlay),
+            lottoParlay: filterParlay(all.lottoParlay),
+            gameParlayOfTheDay: filterParlay(all.gameParlayOfTheDay),
+            propParlayOfTheDay: filterParlay(all.propParlayOfTheDay),
+            mixParlayOfTheDay: filterParlay(all.mixParlayOfTheDay),
+            allSafeParlay: null, allLottoParlay: null, allGameParlay: null,
+            allPropsParlay: null, allMixParlay: null,
+            hrParlay:          cacheKey === "MLB" ? all.hrParlay : null,
+            goalScorerParlay:  cacheKey === "NHL" ? all.goalScorerParlay : null,
+            threePtParlay:     cacheKey === "NBA" ? all.threePtParlay : null,
+            tdParlay:          cacheKey === "NFL" ? all.tdParlay : null,
+            allLadder: null,
+            nbaLadder: cacheKey === "NBA" ? all.nbaLadder : null,
+            mlbLadder: cacheKey === "MLB" ? all.mlbLadder : null,
+            nhlLadder: cacheKey === "NHL" ? all.nhlLadder : null,
+            nflLadder: cacheKey === "NFL" ? all.nflLadder : null,
+            summary: all.summary,
+            generatedAt: all.generatedAt,
+            isAI: all.isAI,
+            activeSports: all.activeSports,
+          };
+          const hasContent = sportResult.lockOfTheDay != null || [
+            sportResult.safeParlay, sportResult.lottoParlay, sportResult.gameParlayOfTheDay,
+            sportResult.propParlayOfTheDay, sportResult.nbaLadder, sportResult.mlbLadder,
+            sportResult.nhlLadder, sportResult.nflLadder, sportResult.hrParlay,
+            sportResult.goalScorerParlay, sportResult.threePtParlay,
+          ].some(Boolean);
+          if (hasContent) {
+            picksCacheMap.set(cacheKey, { data: sportResult, expiresAt: allCached.expiresAt });
+            return res.json(sportResult);
+          }
+        }
+
         const emptyResult: AIPicksResponse = {
           lockOfTheDay: null, safeParlay: null, lottoParlay: null,
           gameParlayOfTheDay: null, propParlayOfTheDay: null, mixParlayOfTheDay: null,
