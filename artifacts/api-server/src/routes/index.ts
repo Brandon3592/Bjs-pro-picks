@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import authRouter from "./auth";
+import localAuthRouter from "./local-auth";
 import gamesRouter from "./games";
 import oddsRouter from "./odds";
 import betsRouter from "./bets";
@@ -21,6 +22,7 @@ router.use(aiPicksRouter);
 router.use(pickHistoryRouter);
 router.use(ladderRouter);
 router.use(healthRouter);
+router.use(localAuthRouter);
 router.use(authRouter);
 router.use(gamesRouter);
 router.use(oddsRouter);

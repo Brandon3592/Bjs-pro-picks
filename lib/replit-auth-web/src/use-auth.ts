@@ -25,7 +25,6 @@ export function useAuth(): AuthState {
       })
       .then((data) => {
         if (!cancelled) {
-          // Server returns AuthUser directly (not wrapped in { user: ... })
           setUser(data.isAuthenticated ? data : null);
           setIsLoading(false);
         }
@@ -43,12 +42,12 @@ export function useAuth(): AuthState {
   }, []);
 
   const login = useCallback(() => {
-    const base = import.meta.env.BASE_URL.replace(/\/+$/, "") || "/";
-    window.location.href = `/api/login?returnTo=${encodeURIComponent(base)}`;
+    window.location.href = "/login";
   }, []);
 
-  const logout = useCallback(() => {
-    window.location.href = "/api/logout";
+  const logout = useCallback(async () => {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    window.location.href = "/login";
   }, []);
 
   return {

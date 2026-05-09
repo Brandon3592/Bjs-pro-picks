@@ -1,5 +1,6 @@
 export * from "./auth";
 export * from "./bets";
+export * from "./credentials";
 export * from "./line-movements";
 export * from "./picks";
 export * from "./support";

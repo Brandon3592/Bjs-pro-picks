@@ -123,7 +123,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
   if (!isLoading && !isAuthenticated) {
-    login();
+    window.location.href = "/login";
     return null;
   }
 
