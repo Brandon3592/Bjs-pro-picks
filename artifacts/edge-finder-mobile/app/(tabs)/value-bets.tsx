@@ -677,20 +677,24 @@ export default function AiPicksScreen() {
   const tdParlay         = sportData?.tdParlay         ?? allData?.tdParlay         ?? null;
 
   // Ladders — allData has all sport-specific ladders pre-computed
-  const allLadder = (allData?.allLadder ?? null) as AILadderParlay | null;
-  const nbaLadder = (allData?.nbaLadder ?? null) as AILadderParlay | null;
-  const mlbLadder = (allData?.mlbLadder ?? null) as AILadderParlay | null;
-  const nhlLadder = (allData?.nhlLadder ?? null) as AILadderParlay | null;
-  const nflLadder = (allData?.nflLadder ?? null) as AILadderParlay | null;
+  const allLadder    = (allData?.allLadder    ?? null) as AILadderParlay | null;
+  const nbaLadder    = (allData?.nbaLadder    ?? null) as AILadderParlay | null;
+  const mlbLadder    = (allData?.mlbLadder    ?? null) as AILadderParlay | null;
+  const nhlLadder    = (allData?.nhlLadder    ?? null) as AILadderParlay | null;
+  const nflLadder    = (allData?.nflLadder    ?? null) as AILadderParlay | null;
+  const wnbaLadder   = ((allData as any)?.wnbaLadder   ?? null) as AILadderParlay | null;
+  const soccerLadder = ((allData as any)?.soccerLadder ?? null) as AILadderParlay | null;
   const isAI = allData?.isAI ?? false;
 
   const activeLadder =
-    selectedSport === "all" ? allLadder :
-    selectedSport === "NBA" ? nbaLadder :
-    selectedSport === "MLB" ? mlbLadder :
-    selectedSport === "NHL" ? nhlLadder :
-    selectedSport === "NFL" ? nflLadder :
-    null; // new sports (Soccer, MMA, NCAAB, etc.) don't have ladders yet
+    selectedSport === "all"    ? allLadder    :
+    selectedSport === "NBA"    ? nbaLadder    :
+    selectedSport === "MLB"    ? mlbLadder    :
+    selectedSport === "NHL"    ? nhlLadder    :
+    selectedSport === "NFL"    ? nflLadder    :
+    selectedSport === "WNBA"   ? wnbaLadder   :
+    selectedSport === "Soccer" ? soccerLadder :
+    null;
 
   const sportIconMap: Record<string, string> = {
     all: "🏆", NBA: "🏀", MLB: "⚾", NHL: "🏒", NFL: "🏈",
@@ -699,15 +703,15 @@ export default function AiPicksScreen() {
   const ladderSportIcon = sportIconMap[selectedSport] ?? "🏆";
   const ladderSportLabel = selectedSport === "all" ? "All Sports" : selectedSport;
 
-  // Sports that support player props and have a Daily Ladder
-  const PROPS_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL"]);
+  // Sports that support player props (prop/mix parlay sections shown)
+  const PROPS_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL", "WNBA", "Soccer"]);
   const hasSportProps  = PROPS_SPORTS.has(selectedSport);
   const hasSportLadder = activeLadder !== null;
 
-  // Individual sports (no team matchups) — hide "Game Picks Parlay" section,
-  // show Lock + Safe + Lotto only (match winners parlay as safe/lotto naturally)
+  // Individual sports (no team matchups) and combat sports — hide "Game Picks Parlay"
   const INDIVIDUAL_SPORTS = new Set(["Tennis", "Golf"]);
-  const isIndividualSport = INDIVIDUAL_SPORTS.has(selectedSport);
+  const COMBAT_SPORTS = new Set(["MMA", "Boxing"]);
+  const isIndividualSport = INDIVIDUAL_SPORTS.has(selectedSport) || COMBAT_SPORTS.has(selectedSport);
 
   // True when the API returned no picks for this sport (no qualifying games today).
   // Individual sports (Tennis, Golf) don't have game parlays, so don't gate on it.
@@ -978,7 +982,7 @@ export default function AiPicksScreen() {
                   )}
                 </View>
 
-                {/* ── Game Picks Parlay — team sports only (not Tennis/Golf) ── */}
+                {/* ── Game Picks Parlay — team sports only (not Tennis/Golf/MMA/Boxing) ── */}
                 {!isIndividualSport && (
                   <View style={styles.section}>
                     <SectionHeader icon="🏆" label="Game Picks Parlay" sublabel="Moneyline, spread & O/U only — no props" accent="#3b82f6" />
@@ -989,6 +993,26 @@ export default function AiPicksScreen() {
                     ) : (
                       <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                         <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No game parlay — pull to refresh.</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* ── Fight Picks Parlay — MMA and Boxing only ── */}
+                {COMBAT_SPORTS.has(selectedSport) && (
+                  <View style={styles.section}>
+                    <SectionHeader icon="🥊" label="Fight Picks Parlay" sublabel="Best value fight winner picks combined" accent="#ef4444" />
+                    {(propParlay?.legs?.length ?? 0) > 0 ? (
+                      <ParlayCard parlay={propParlay!} accent="#ef4444"
+                        onBet={(leg) => openBet({ ...leg, pick: `${propParlay!.name} (fight picks)`, odds: propParlay!.combinedOdds })}
+                        onLog={() => logParlay(propParlay!)} />
+                    ) : (gameParlay?.legs?.length ?? 0) > 0 ? (
+                      <ParlayCard parlay={gameParlay!} accent="#ef4444"
+                        onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (fight picks)`, odds: gameParlay!.combinedOdds })}
+                        onLog={() => logParlay(gameParlay!)} />
+                    ) : (
+                      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No fight picks parlay today.</Text>
                       </View>
                     )}
                   </View>

@@ -83,6 +83,8 @@ export interface AIPicksResponse {
   mlbLadder: AILadderParlay | null;
   nhlLadder: AILadderParlay | null;
   nflLadder: AILadderParlay | null;
+  wnbaLadder: AILadderParlay | null;
+  soccerLadder: AILadderParlay | null;
   summary: string;
   generatedAt: string;
   isAI: boolean;
@@ -112,6 +114,7 @@ interface CompactProp {
 // Props are cached for 2 hours, so quota cost per day stays well within the 20k/month budget.
 const SPORT_PROP_MARKETS: Record<string, string[]> = {
   basketball_nba:       ["player_points", "player_rebounds", "player_assists", "player_threes"],
+  basketball_wnba:      ["player_points", "player_rebounds", "player_assists"],
   baseball_mlb:         ["pitcher_strikeouts", "batter_hits", "batter_total_bases", "batter_home_runs"],
   icehockey_nhl:        ["player_shots_on_goal", "player_points", "player_goals"],
   americanfootball_nfl: ["player_pass_yds", "player_rush_yds", "player_reception_yds", "player_anytime_td"],
@@ -1036,6 +1039,8 @@ function buildFallbackPicks(activeSportsList: string[] = ["NBA", "MLB", "NHL", "
     mlbLadder,
     nhlLadder,
     nflLadder,
+    wnbaLadder: null,
+    soccerLadder: null,
     summary: "Today's slate features strong home-team narratives in the NBA playoffs, elite pitcher matchups in MLB, and standout player prop opportunities.",
     generatedAt: new Date().toISOString(),
     isAI: false,
@@ -1599,10 +1604,12 @@ router.get("/ai-picks", async (req, res) => {
             threePtParlay:     cacheKey === "NBA" ? all.threePtParlay : null,
             tdParlay:          cacheKey === "NFL" ? all.tdParlay : null,
             allLadder: null,
-            nbaLadder: cacheKey === "NBA" ? all.nbaLadder : null,
-            mlbLadder: cacheKey === "MLB" ? all.mlbLadder : null,
-            nhlLadder: cacheKey === "NHL" ? all.nhlLadder : null,
-            nflLadder: cacheKey === "NFL" ? all.nflLadder : null,
+            nbaLadder:    cacheKey === "NBA"    ? all.nbaLadder    : null,
+            mlbLadder:    cacheKey === "MLB"    ? all.mlbLadder    : null,
+            nhlLadder:    cacheKey === "NHL"    ? all.nhlLadder    : null,
+            nflLadder:    cacheKey === "NFL"    ? all.nflLadder    : null,
+            wnbaLadder:   cacheKey === "WNBA"   ? all.wnbaLadder   : null,
+            soccerLadder: cacheKey === "Soccer" ? all.soccerLadder : null,
             summary: all.summary,
             generatedAt: all.generatedAt,
             isAI: all.isAI,
@@ -1611,7 +1618,8 @@ router.get("/ai-picks", async (req, res) => {
           const hasContent = sportResult.lockOfTheDay != null || [
             sportResult.safeParlay, sportResult.lottoParlay, sportResult.gameParlayOfTheDay,
             sportResult.propParlayOfTheDay, sportResult.nbaLadder, sportResult.mlbLadder,
-            sportResult.nhlLadder, sportResult.nflLadder, sportResult.hrParlay,
+            sportResult.nhlLadder, sportResult.nflLadder, sportResult.wnbaLadder,
+            sportResult.soccerLadder, sportResult.hrParlay,
             sportResult.goalScorerParlay, sportResult.threePtParlay,
           ].some(Boolean);
           if (hasContent) {
@@ -1627,6 +1635,7 @@ router.get("/ai-picks", async (req, res) => {
           allPropsParlay: null, allMixParlay: null,
           hrParlay: null, goalScorerParlay: null, threePtParlay: null, tdParlay: null,
           allLadder: null, nbaLadder: null, mlbLadder: null, nhlLadder: null, nflLadder: null,
+          wnbaLadder: null, soccerLadder: null,
           summary: `No ${cacheKey} games on the board with enough market coverage today.`,
           generatedAt: new Date().toISOString(),
           isAI: false,
@@ -1805,10 +1814,28 @@ router.get("/ai-picks", async (req, res) => {
     const safeLegs = (() => {
       const gameLegs = safePool ? pickUnique(safePool.legs, 3) : [];
       if (gameLegs.length >= 2) return gameLegs;
-      // Only 0-1 game legs available — supplement with top prop legs (heavy-favorite side)
+      // Short game slate — supplement with player prop legs.
+      // Try the scored prop pool first (strict -130 filter). If that's empty (can happen when
+      // only 1 game is on the board and few props clear the threshold), fall back to ALL
+      // filteredProps for this sport, sorted by most-favorite odds — so NBA games with 1 matchup
+      // still build a safe parlay from the available player prop lines.
       const sportLabel = safePool?.sport ?? (cacheKey !== "all" ? normSport(cacheKey) : "");
-      const fillProps = (propsBySport.get(sportLabel) ?? propPool).slice(0, 3 - gameLegs.length);
-      return [...gameLegs, ...fillProps];
+      const strictPool = propsBySport.get(sportLabel) ?? [];
+      const seenSafePlayers = new Set<string>();
+      const fillLegs = (strictPool.length > 0
+        ? strictPool
+        : filteredProps
+            .slice()
+            .sort((a, b) => Math.min(a.overOdds, a.underOdds) - Math.min(b.overOdds, b.underOdds))
+            .map(propToFavoriteLeg)
+      )
+        .filter((l) => {
+          if (l.player && seenSafePlayers.has(l.player)) return false;
+          if (l.player) seenSafePlayers.add(l.player);
+          return true;
+        })
+        .slice(0, 3 - gameLegs.length);
+      return [...gameLegs, ...fillLegs];
     })();
     const safeSport = safePool?.sport ?? "";
     const safeParlay: AIParlay | null = safeLegs.length >= 2 ? {
@@ -1897,10 +1924,17 @@ router.get("/ai-picks", async (req, res) => {
     } : null;
 
     // ── PROPS PARLAY: 3-4 props, same sport ──────────────────────────────────
+    // For sports without player prop markets (Soccer, Tennis, MMA), falls back to
+    // underdog game picks so the prop parlay section always has content.
     const sortedPropSports = [...propsBySport.entries()].sort((a, b) => b[1].length - a[1].length);
     const topPropSport = sortedPropSports[0];
-    const propParlayLegs = topPropSport ? topPropSport[1].slice(0, 4) : propPool.slice(0, 4);
-    const propSportLabel = topPropSport?.[0] ?? "";
+    const propParlayLegs = (() => {
+      if (topPropSport) return topPropSport[1].slice(0, 4);
+      // No props — use underdog game picks as the parlay for prop-less sports
+      const fallbackSportLabel = cacheKey !== "all" ? normSport(cacheKey) : "";
+      return (underdogLegsBySport.get(fallbackSportLabel) ?? underdogLegPool).slice(0, 4);
+    })();
+    const propSportLabel = topPropSport?.[0] ?? (cacheKey !== "all" ? normSport(cacheKey) : "");
     const propParlayOfTheDay: AIParlay | null = propParlayLegs.length >= 2 ? {
       id: "prop-1",
       name: `${propSportLabel} Props ${propParlayLegs.length}-Legger`,
@@ -1922,7 +1956,19 @@ router.get("/ai-picks", async (req, res) => {
       // Guarantee at least 1 game + 1 prop to qualify as "mixed", then fill to 4
       const firstGame = mixAllGameLegs[0];
       const firstProp = mixAllPropLegs[0];
-      if (!firstGame || !firstProp) return [] as AIPickLeg[];
+      if (!firstGame || !firstProp) {
+        // No props — for prop-less sports (Soccer, Tennis, MMA) interleave favorites
+        // and underdogs from the same sport so the mix section has content
+        const fallbackLabel = cacheKey !== "all" ? normSport(cacheKey) : mixSportLabel;
+        const favLegs  = (legsBySport.get(fallbackLabel) ?? []).slice(0, 2);
+        const dogLegs  = (underdogLegsBySport.get(fallbackLabel) ?? []).slice(0, 2);
+        const combined: AIPickLeg[] = [];
+        for (let i = 0; i < Math.max(favLegs.length, dogLegs.length); i++) {
+          if (favLegs[i]) combined.push(favLegs[i]);
+          if (dogLegs[i] && combined.length < 4) combined.push(dogLegs[i]);
+        }
+        return combined;
+      }
       const seenKeys = new Set([firstGame.pick, firstProp.player ?? firstProp.pick]);
       const result: AIPickLeg[] = [firstGame, firstProp];
       // Fill remaining spots from whichever pool has the next best leg
@@ -2136,7 +2182,7 @@ router.get("/ai-picks", async (req, res) => {
 
     // NBA: 3-pointer parlay ("player_threes" → "threes")
     const threePtLegs = buildSpecificPropLegs("basketball_nba", "threes", 4, true);
-    const threePtParlay: AIParlay | null = threePtLegs.length >= 2 ? {
+    const threePtParlay: AIParlay | null = threePtLegs.length >= 1 ? {
       id: "3pt-1",
       name: `NBA 3PT ${threePtLegs.length}-Legger`,
       legs: threePtLegs,
@@ -2162,6 +2208,7 @@ router.get("/ai-picks", async (req, res) => {
     function buildDailyLadder(
       apiKeys: string[],
       sportLabel: string,
+      fallbackGameLegs?: AIPickLeg[], // used for prop-less sports (Soccer, Tennis, etc.)
     ): AILadderParlay | null {
       const START = 10;
       const TARGET = 10240;
@@ -2170,7 +2217,7 @@ router.get("/ai-picks", async (req, res) => {
 
       // Use props where the FAVORITE side is a heavy favorite: -180 to -400
       // Two heavy favorites combined (~-250 each) give a near even-money parlay
-      const candidates: AIPickLeg[] = realProps
+      const propCandidates: AIPickLeg[] = realProps
         .filter((p) => {
           if (!apiKeys.includes(p.sport)) return false;
           const favOdds = Math.min(p.overOdds, p.underOdds); // most negative = heavier favorite
@@ -2188,6 +2235,12 @@ router.get("/ai-picks", async (req, res) => {
           if (l.player) seenPlayers.add(l.player);
           return true;
         });
+
+      // Fall back to game legs for prop-less sports (Soccer, Tennis, MMA).
+      // Game favorites in the -120 to -350 range behave similarly to heavy prop favorites.
+      const candidates: AIPickLeg[] = propCandidates.length >= 2
+        ? propCandidates
+        : (fallbackGameLegs ?? []).filter((l) => l.odds >= -350 && l.odds <= -110);
 
       if (candidates.length < 2) return null;
 
@@ -2232,10 +2285,14 @@ router.get("/ai-picks", async (req, res) => {
 
     // Wrap buildDailyLadder with DB persistence: load today's ladder from DB if already
     // generated; otherwise build from live odds and save — so it never changes mid-day.
-    async function getOrBuildLadder(apiKeys: string[], sportLabel: string): Promise<AILadderParlay | null> {
+    async function getOrBuildLadder(
+      apiKeys: string[],
+      sportLabel: string,
+      fallbackLegs?: AIPickLeg[],
+    ): Promise<AILadderParlay | null> {
       const stored = await loadLadderFromDb(sportLabel);
       if (stored) return stored;
-      const generated = buildDailyLadder(apiKeys, sportLabel);
+      const generated = buildDailyLadder(apiKeys, sportLabel, fallbackLegs);
       if (generated) await saveLadderToDb(sportLabel, generated);
       return generated;
     }
@@ -2244,11 +2301,21 @@ router.get("/ai-picks", async (req, res) => {
     // not just the top 2 — so the best legs genuinely come from across all sports.
     const allPropSportKeys = [...new Set(realProps.map((p) => p.sport))];
 
-    const [nbaLadder, mlbLadder, nhlLadder, nflLadder, allLadder] = await Promise.all([
+    // Soccer ladder uses game-leg favorites since soccer has no player prop markets.
+    // WNBA ladder also falls back to game legs: WNBA props tend to be -130 to -160
+    // (below the -180 prop threshold), so the game-leg fallback ensures the ladder builds.
+    const soccerGameFavLegs = (legsBySport.get("Soccer") ?? [])
+      .filter((l) => l.odds >= -350 && l.odds <= -110);
+    const wnbaGameFavLegs = (legsBySport.get("WNBA") ?? [])
+      .filter((l) => l.odds >= -350 && l.odds <= -110);
+
+    const [nbaLadder, mlbLadder, nhlLadder, nflLadder, wnbaLadder, soccerLadder, allLadder] = await Promise.all([
       getOrBuildLadder(["basketball_nba"], "NBA"),
       getOrBuildLadder(["baseball_mlb"], "MLB"),
       getOrBuildLadder(["icehockey_nhl"], "NHL"),
       getOrBuildLadder(["americanfootball_nfl"], "NFL"),
+      getOrBuildLadder(["basketball_wnba"], "WNBA", wnbaGameFavLegs),
+      getOrBuildLadder([], "Soccer", soccerGameFavLegs),
       allPropSportKeys.length > 0 ? getOrBuildLadder(allPropSportKeys, "All Sports") : Promise.resolve(null),
     ]);
 
@@ -2281,6 +2348,8 @@ router.get("/ai-picks", async (req, res) => {
       mlbLadder,
       nhlLadder,
       nflLadder,
+      wnbaLadder,
+      soccerLadder,
       summary,
       generatedAt: new Date().toISOString(),
       isAI: false,
