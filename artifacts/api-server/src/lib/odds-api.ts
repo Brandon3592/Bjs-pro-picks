@@ -187,7 +187,8 @@ export async function fetchScoresForSport(sportKey: string): Promise<ScoreEvent[
 
 // Fetch the Odds API sport catalog to find which sport keys are currently active
 // (have events in the near future). Result is cached like any other API call.
-async function fetchActiveSportApiKeys(): Promise<Set<string>> {
+// Exported so picks route can build sport tabs from the catalog (low-quota call).
+export async function fetchActiveSportApiKeys(): Promise<Set<string>> {
   interface SportInfo { key: string; active: boolean; }
   const sports = await fetchWithKey<SportInfo[]>("/sports");
   if (!sports) return new Set(Object.keys(SPORT_API_TO_LABEL)); // fallback: try all

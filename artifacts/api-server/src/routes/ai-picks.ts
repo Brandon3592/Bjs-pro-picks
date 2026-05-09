@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { fetchAllSportOdds, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, SPORT_API_TO_LABEL, hasApiKey } from "../lib/odds-api";
+import { fetchAllSportOdds, fetchActiveSportApiKeys, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, SPORT_API_TO_LABEL, hasApiKey } from "../lib/odds-api";
 import { fetchMlbLineupNames } from "../lib/mlb-lineups";
 import { fetchNbaOut, fetchNhlOut } from "../lib/sport-lineups";
 import { americanToDecimal, decimalToAmerican } from "../lib/model";
@@ -426,7 +426,7 @@ function calcCombinedOdds(legs: AIPickLeg[]): number {
 
 // ─── Fallback mock ────────────────────────────────────────────────────────────
 
-function buildFallbackPicks(): AIPicksResponse {
+function buildFallbackPicks(activeSportsList: string[] = ["NBA", "MLB", "NHL", "NFL"]): AIPicksResponse {
   const now = Date.now();
 
   const lockOfTheDay: AIPick = {
@@ -1001,7 +1001,7 @@ function buildFallbackPicks(): AIPicksResponse {
     summary: "Today's slate features strong home-team narratives in the NBA playoffs, elite pitcher matchups in MLB, and standout player prop opportunities.",
     generatedAt: new Date().toISOString(),
     isAI: false,
-    activeSports: ["NBA", "MLB"],
+    activeSports: activeSportsList,
   };
 }
 
@@ -1067,6 +1067,25 @@ router.get("/ai-picks", async (req, res) => {
 
   try {
     const allOddsRaw = await fetchAllSportOdds();
+
+    // Build the sport tab list from the catalog (/sports endpoint — minimal quota).
+    // This runs even when odds quota is exhausted so tabs like NHL always show during playoffs.
+    const catalogActiveSports = await (async () => {
+      try {
+        const activeKeys = await fetchActiveSportApiKeys();
+        const seen = new Set<string>();
+        const labels: string[] = [];
+        for (const [apiKey, label] of Object.entries(SPORT_API_TO_LABEL)) {
+          if (activeKeys.has(apiKey) && !seen.has(label)) {
+            seen.add(label);
+            labels.push(label);
+          }
+        }
+        return labels.length > 0 ? labels : allOddsRaw.map(({ sport }) => sport);
+      } catch {
+        return allOddsRaw.map(({ sport }) => sport);
+      }
+    })();
 
     // ── Adaptive cutoff ────────────────────────────────────────────────────────
     // Use today's games if any are still upcoming; otherwise extend to tomorrow,
@@ -1493,13 +1512,13 @@ router.get("/ai-picks", async (req, res) => {
           summary: `No ${cacheKey} games on the board with enough market coverage today.`,
           generatedAt: new Date().toISOString(),
           isAI: false,
-          activeSports: activeSports as string[],
+          activeSports: catalogActiveSports,
         };
         void savePicksToDb(cacheKey, emptyResult);
         picksCacheMap.set(cacheKey, { data: emptyResult, expiresAt: Date.now() + 5 * 60_000 });
         return res.json(emptyResult);
       }
-      const fallback = buildFallbackPicks();
+      const fallback = buildFallbackPicks(catalogActiveSports);
       picksCacheMap.set(cacheKey, { data: fallback, expiresAt: Date.now() + 5 * 60_000 });
       return res.json(fallback);
     }
@@ -2138,17 +2157,9 @@ router.get("/ai-picks", async (req, res) => {
       summary,
       generatedAt: new Date().toISOString(),
       isAI: false,
-      // Which sport tabs have qualifying games today — only include a sport if at least
-      // one of its games is in the betting window AND has enough bookmakers to build a leg.
-      // This prevents tabs like Soccer from appearing when games exist but have no h2h markets.
-      activeSports: allOddsRaw
-        .filter(({ sport, events }) => events.some((ev) => {
-          const t = new Date(ev.commence_time).getTime();
-          if (t <= nowMs || t > todayCutoffMs) return false;
-          const bookCount = ev.bookmakers.filter((b) => b.markets.some((m) => m.key === "h2h")).length;
-          return bookCount >= minBooks(sport);
-        }))
-        .map(({ sport }) => sport),
+      // Which sport tabs to show — computed from the /sports catalog at the top of this
+      // handler so it works even when odds quota is exhausted (NHL shows during playoffs, etc.)
+      activeSports: catalogActiveSports,
     };
 
     // Cache until the next game starts (+ 30s so it's definitely in progress), or until
@@ -2176,7 +2187,7 @@ router.get("/ai-picks", async (req, res) => {
     req.log.error({ err }, "Picks generation failed, using fallback");
     const fallback = buildFallbackPicks();
     picksCacheMap.set(cacheKey, { data: fallback, expiresAt: Date.now() + 5 * 60_000 });
-    return res.json(fallback);
+    return res.json(fallback); // catalogActiveSports not available in outer catch; default is fine
   }
 });
 
