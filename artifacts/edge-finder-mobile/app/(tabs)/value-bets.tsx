@@ -9,7 +9,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -756,6 +756,17 @@ export default function AiPicksScreen() {
     void stake; // stake shown in modal after user enters it
   }
 
+  // Auto-refresh banner: shown when picks were silently regenerated due to
+  // a canceled game or a ruled-out player — auto-dismisses after 15s.
+  const [autoRefreshedBanner, setAutoRefreshedBanner] = useState(false);
+  const autoRefreshedFlag = (allData as any)?.autoRefreshed as boolean | undefined;
+  useEffect(() => {
+    if (!autoRefreshedFlag) return;
+    setAutoRefreshedBanner(true);
+    const t = setTimeout(() => setAutoRefreshedBanner(false), 15_000);
+    return () => clearTimeout(t);
+  }, [autoRefreshedFlag]);
+
   function handleRefresh() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     doRefresh(undefined, { onSettled: () => refetch() });
@@ -819,6 +830,23 @@ export default function AiPicksScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
+        {/* Auto-refresh banner — appears when picks were silently regenerated */}
+        {autoRefreshedBanner && (
+          <View style={{
+            flexDirection: "row", alignItems: "flex-start", gap: 10,
+            backgroundColor: "#f59e0b18", borderColor: "#f59e0b44",
+            borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 12,
+          }}>
+            <Feather name="alert-triangle" size={15} color="#fbbf24" style={{ marginTop: 1 }} />
+            <Text style={{ flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", color: "#fcd34d", lineHeight: 19 }}>
+              Picks were automatically updated — a game was postponed or a player was ruled out. Fresh picks are now showing.
+            </Text>
+            <TouchableOpacity onPress={() => setAutoRefreshedBanner(false)} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+              <Feather name="x" size={15} color="#fbbf2488" />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Summary banner */}
         {allData?.summary ? (
           <View style={[styles.summaryBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>

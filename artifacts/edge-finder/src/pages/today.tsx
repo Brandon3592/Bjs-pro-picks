@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import {
   useGetAiPicks,
@@ -11,7 +11,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   RefreshCw, Lock, Zap, Dices, Trophy, Shuffle, Target,
-  TrendingUp, Cpu, Share2, ExternalLink,
+  TrendingUp, Cpu, Share2, ExternalLink, AlertTriangle,
   Check, X, ArrowRight, ChevronDown, ChevronUp, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -588,6 +588,17 @@ export default function TodayPage() {
     );
   }
 
+  // Auto-refresh banner: shown when picks were silently regenerated due to
+  // a canceled game or a ruled-out player — auto-dismisses after 15s.
+  const [autoRefreshedBanner, setAutoRefreshedBanner] = useState(false);
+  const autoRefreshedFlag = (allData as any)?.autoRefreshed as boolean | undefined;
+  useEffect(() => {
+    if (!autoRefreshedFlag) return;
+    setAutoRefreshedBanner(true);
+    const t = setTimeout(() => setAutoRefreshedBanner(false), 15_000);
+    return () => clearTimeout(t);
+  }, [autoRefreshedFlag]);
+
   function handleRefresh() {
     doRefresh(undefined, {
       onSettled: () => {
@@ -668,6 +679,22 @@ export default function TodayPage() {
           {isRefreshing ? "Regenerating…" : "Refresh"}
         </button>
       </div>
+
+      {/* Auto-refresh banner — appears when picks were silently regenerated */}
+      {autoRefreshedBanner && (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
+          <AlertTriangle className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-300 flex-1 leading-relaxed">
+            Picks were automatically updated — a game was postponed or a player was ruled out. Fresh picks are now showing.
+          </p>
+          <button
+            onClick={() => setAutoRefreshedBanner(false)}
+            className="text-amber-400/60 hover:text-amber-400 transition-colors flex-shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Sport tabs — dynamically shown based on what's active today */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">

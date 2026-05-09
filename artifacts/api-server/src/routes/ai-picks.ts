@@ -87,6 +87,7 @@ export interface AIPicksResponse {
   generatedAt: string;
   isAI: boolean;
   activeSports: string[];
+  autoRefreshed?: boolean;
 }
 
 // ─── Props helper ─────────────────────────────────────────────────────────────
@@ -307,6 +308,46 @@ function picksAreStale(picks: AIPicksResponse): boolean {
     for (const leg of parlay.legs) {
       if (new Date(leg.startTime).getTime() <= now) return true;
     }
+  }
+
+  return false;
+}
+
+// Detects legs that are no longer valid because a game was canceled/postponed
+// or a player has been ruled out or scratched since picks were generated.
+// All external sources (Odds API, ESPN injuries, MLB lineups) have their own
+// 20-minute in-process TTL caches — safe and cheap to call on every request.
+function picksHaveInvalidLeg(
+  picks: AIPicksResponse,
+  validGameIds: Set<string>,
+  nbaOut: Set<string> | null,
+  nhlOut: Set<string> | null,
+  mlbLineups: Set<string> | null,
+): boolean {
+  function legIsInvalid(leg: AIPickLeg): boolean {
+    // Game no longer in the live odds feed → canceled or postponed
+    if (!validGameIds.has(leg.gameId)) return true;
+    // Player prop athlete has been ruled out / scratched
+    if (leg.betType === "player_prop" && leg.player) {
+      if (leg.sport === "NBA" && nbaOut?.has(leg.player)) return true;
+      if (leg.sport === "NHL" && nhlOut?.has(leg.player)) return true;
+      // MLB: if lineups are posted, only confirmed starters are valid
+      if (leg.sport === "MLB" && mlbLineups && mlbLineups.size > 0 && !mlbLineups.has(leg.player)) return true;
+    }
+    return false;
+  }
+
+  if (picks.lockOfTheDay && legIsInvalid(picks.lockOfTheDay)) return true;
+
+  const parlayFields: Array<keyof AIPicksResponse> = [
+    "safeParlay", "lottoParlay", "gameParlayOfTheDay", "propParlayOfTheDay",
+    "mixParlayOfTheDay", "allSafeParlay", "allLottoParlay", "allGameParlay",
+    "allPropsParlay", "allMixParlay", "hrParlay", "goalScorerParlay",
+    "threePtParlay", "tdParlay",
+  ];
+  for (const field of parlayFields) {
+    const parlay = picks[field] as AIParlay | null;
+    if (parlay?.legs.some(legIsInvalid)) return true;
   }
 
   return false;
@@ -960,6 +1001,7 @@ function buildFallbackPicks(): AIPicksResponse {
     summary: "Today's slate features strong home-team narratives in the NBA playoffs, elite pitcher matchups in MLB, and standout player prop opportunities.",
     generatedAt: new Date().toISOString(),
     isAI: false,
+    activeSports: ["NBA", "MLB"],
   };
 }
 
@@ -974,17 +1016,53 @@ router.get("/ai-picks", async (req, res) => {
     ? "all"
     : (SPORT_FROM_KEY[sportRaw] ?? LABEL_LOWER_MAP[sportRaw] ?? sportRaw.toUpperCase());
 
+  // ── Live validity gate — runs before serving any cached picks ───────────────
+  // Checks: (1) game still in the odds feed (not canceled/postponed)
+  //         (2) player prop athletes still available (not ruled out/scratched)
+  // All three sources have 20-min in-process TTL caches — cheap on every request.
+  const [liveOddsForValidation, nbaOutLive, nhlOutLive, mlbLineupsLive] = await Promise.all([
+    fetchAllSportOdds().catch(() => null),
+    fetchNbaOut().catch(() => null),
+    fetchNhlOut().catch(() => null),
+    fetchMlbLineupNames().catch(() => null),
+  ]);
+
+  const liveGameIds = new Set<string>();
+  if (liveOddsForValidation) {
+    const nowForValidation = Date.now();
+    for (const { events } of liveOddsForValidation) {
+      for (const ev of events) {
+        if (new Date(ev.commence_time).getTime() > nowForValidation) {
+          liveGameIds.add(ev.id);
+        }
+      }
+    }
+  }
+  // If the Odds API is unreachable, skip validation and serve whatever we have
+  const canValidate = liveGameIds.size > 0;
+  let wasAutoRefreshed = false;
+
   const cached = picksCacheMap.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) {
-    return res.json(cached.data);
+    if (!canValidate || !picksHaveInvalidLeg(cached.data, liveGameIds, nbaOutLive, nhlOutLive, mlbLineupsLive)) {
+      return res.json(cached.data);
+    }
+    req.log.warn({ cacheKey }, "Picks invalidated (cache): game canceled or player scratched — regenerating");
+    picksCacheMap.delete(cacheKey);
+    await deletePicksFromDb(cacheKey);
+    wasAutoRefreshed = true;
   }
 
   // Check DB for today's persisted picks — generated once, stable all day.
   const dbPicks = await loadPicksFromDb(cacheKey);
   if (dbPicks) {
-    // Refresh the in-memory cache so subsequent requests don't hit the DB every time.
-    picksCacheMap.set(cacheKey, { data: dbPicks, expiresAt: Date.now() + CACHE_TTL });
-    return res.json(dbPicks);
+    if (!canValidate || !picksHaveInvalidLeg(dbPicks, liveGameIds, nbaOutLive, nhlOutLive, mlbLineupsLive)) {
+      picksCacheMap.set(cacheKey, { data: dbPicks, expiresAt: Date.now() + CACHE_TTL });
+      return res.json(dbPicks);
+    }
+    req.log.warn({ cacheKey }, "Picks invalidated (DB): game canceled or player scratched — regenerating");
+    await deletePicksFromDb(cacheKey);
+    wasAutoRefreshed = true;
   }
 
   try {
@@ -2060,7 +2138,7 @@ router.get("/ai-picks", async (req, res) => {
     picksCacheMap.set(cacheKey, { data: result, expiresAt: Date.now() + effectiveTTL });
     // Persist to DB — picks are now locked for the rest of the calendar day.
     void savePicksToDb(cacheKey, result);
-    return res.json(result);
+    return res.json(wasAutoRefreshed ? { ...result, autoRefreshed: true } : result);
 
   } catch (err) {
     req.log.error({ err }, "Picks generation failed, using fallback");
