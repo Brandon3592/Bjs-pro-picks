@@ -279,19 +279,19 @@ function ParlayCard({ parlay, accent }: { parlay: AIParlay; accent: string }) {
       {/* Legs */}
       <div className="divide-y divide-border">
         {parlay.legs.map((leg: AIPickLeg, i: number) => (
-          <div key={i} className="flex items-center gap-3 px-4 py-2.5">
-            <div className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: sportDotColor(leg.sport) }} />
+          <div key={i} className="flex items-start gap-3 px-4 py-2.5">
+            <div className="h-2 w-2 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: sportDotColor(leg.sport) }} />
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] text-muted-foreground truncate">
+              <p className="text-[10px] text-muted-foreground leading-snug">
                 {leg.awayTeam && leg.homeTeam ? `${leg.awayTeam} @ ${leg.homeTeam}` : leg.homeTeam || "Today's game"}
               </p>
-              <p className="text-sm font-semibold truncate">
+              <p className="text-sm font-semibold leading-snug">
                 {leg.player && !leg.pick.toLowerCase().includes(leg.player.toLowerCase())
                   ? `${leg.player} ${leg.pick}`
                   : leg.pick}
               </p>
             </div>
-            <div className="flex-shrink-0 text-right">
+            <div className="flex-shrink-0 text-right pt-0.5">
               <p className="text-sm font-bold font-mono" style={{ color: accent }}>{fmtOdds(leg.odds)}</p>
               <p className="text-[10px] text-muted-foreground">{impliedProb(leg.odds)} impl.</p>
             </div>
@@ -430,20 +430,20 @@ function DailyLadderCard({
         <p className="text-[10px] font-bold tracking-wider mb-2" style={{ color: ACCENT }}>TODAY'S 2-LEG PARLAY</p>
         <div className="space-y-2 mb-3">
           {today.legs.map((leg, li) => (
-            <div key={li} className="flex items-center gap-2.5">
+            <div key={li} className="flex items-start gap-2.5">
               <div
-                className="h-5 w-5 rounded flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white"
+                className="h-5 w-5 rounded flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white mt-0.5"
                 style={{ backgroundColor: li === 0 ? ACCENT : ACCENT + "80" }}
               >
                 {li + 1}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">{leg.pick}</p>
-                <p className="text-[10px] text-muted-foreground truncate">
+                <p className="text-sm font-semibold leading-snug">{leg.pick}</p>
+                <p className="text-[10px] text-muted-foreground leading-snug">
                   {leg.awayTeam && leg.homeTeam ? `${leg.awayTeam} @ ${leg.homeTeam}` : leg.homeTeam || "Today's game"} · {leg.bookmaker}
                 </p>
               </div>
-              <span className="text-xs font-bold font-mono px-2 py-0.5 rounded border" style={{ color: ACCENT, backgroundColor: ACCENT + "22", borderColor: ACCENT + "55" }}>
+              <span className="text-xs font-bold font-mono px-2 py-0.5 rounded border flex-shrink-0 mt-0.5" style={{ color: ACCENT, backgroundColor: ACCENT + "22", borderColor: ACCENT + "55" }}>
                 {fmtOdds(leg.odds)}
               </span>
             </div>
