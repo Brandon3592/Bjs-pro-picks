@@ -1,3 +1,36 @@
+const CACHE_VERSION = "bjspropicks-v3";
+
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter((key) => key !== CACHE_VERSION)
+          .map((key) => caches.delete(key)),
+      ),
+    ).then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  if (request.method !== "GET") return;
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/")) return;
+
+  event.respondWith(
+    fetch(request, { cache: "no-store" }).catch(() =>
+      caches.match(request),
+    ),
+  );
+});
+
 self.addEventListener("push", (event) => {
   if (!event.data) return;
 
@@ -28,11 +61,9 @@ self.addEventListener("notificationclick", (event) => {
     clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clientList) => {
-        // Focus an existing tab if open
         for (const client of clientList) {
           if ("focus" in client) return client.focus();
         }
-        // Otherwise open a new window
         if (clients.openWindow) return clients.openWindow("/");
       }),
   );
