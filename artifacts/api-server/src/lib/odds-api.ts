@@ -43,6 +43,31 @@ export const SPORT_API_TO_LABEL: Record<string, string> = {
   // Combat
   mma_mixed_martial_arts:             "MMA",
   boxing_boxing:                      "Boxing",
+  // Tennis — ATP + WTA tournaments all share one tab
+  tennis_atp_aus_open:                "Tennis",
+  tennis_wta_aus_open:                "Tennis",
+  tennis_atp_french_open:             "Tennis",
+  tennis_wta_french_open:             "Tennis",
+  tennis_atp_wimbledon:               "Tennis",
+  tennis_wta_wimbledon:               "Tennis",
+  tennis_atp_us_open:                 "Tennis",
+  tennis_wta_us_open:                 "Tennis",
+  tennis_atp_madrid_open:             "Tennis",
+  tennis_wta_madrid_open:             "Tennis",
+  tennis_atp_italian_open:            "Tennis",
+  tennis_wta_italian_open:            "Tennis",
+  tennis_atp_miami_open:              "Tennis",
+  tennis_wta_miami_open:              "Tennis",
+  tennis_atp_indian_wells_masters:    "Tennis",
+  tennis_wta_indian_wells_masters:    "Tennis",
+  // Golf — major tournaments and tour events share one tab
+  golf_pga_tour:                      "Golf",
+  golf_masters_tournament_winner:     "Golf",
+  golf_pga_championship_winner:       "Golf",
+  golf_us_open_winner:                "Golf",
+  golf_the_open_championship_winner:  "Golf",
+  golf_dp_world_tour:                 "Golf",
+  golf_liv_golf:                      "Golf",
 };
 
 // Reverse map: API key → display label (for legacy code that uses SPORT_FROM_KEY)

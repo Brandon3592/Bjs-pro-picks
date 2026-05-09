@@ -35,6 +35,8 @@ const ALL_POSSIBLE_TABS = [
   { key: "NCAAF",  label: "NCAAF",     emoji: "🎓" },
   { key: "WNBA",   label: "WNBA",      emoji: "🏀" },
   { key: "Soccer", label: "Soccer",    emoji: "⚽" },
+  { key: "Tennis", label: "Tennis",    emoji: "🎾" },
+  { key: "Golf",   label: "Golf",      emoji: "⛳" },
   { key: "MMA",    label: "MMA",       emoji: "🥊" },
   { key: "Boxing", label: "Boxing",    emoji: "🥊" },
 ];
@@ -84,10 +86,15 @@ function bookmakerUrl(name: string): string {
 
 function sportBadgeClass(sport: string) {
   const map: Record<string, string> = {
-    NBA: "bg-orange-500/10 text-orange-400 border-orange-500/20",
-    MLB: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-    NHL: "bg-violet-500/10 text-violet-400 border-violet-500/20",
-    NFL: "bg-green-500/10 text-green-400 border-green-500/20",
+    NBA:    "bg-orange-500/10 text-orange-400 border-orange-500/20",
+    MLB:    "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    NHL:    "bg-violet-500/10 text-violet-400 border-violet-500/20",
+    NFL:    "bg-green-500/10 text-green-400 border-green-500/20",
+    Tennis: "bg-pink-500/10 text-pink-400 border-pink-500/20",
+    Golf:   "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    Soccer: "bg-teal-500/10 text-teal-400 border-teal-500/20",
+    MMA:    "bg-red-500/10 text-red-400 border-red-500/20",
+    Boxing: "bg-red-500/10 text-red-400 border-red-500/20",
   };
   return map[sport] ?? "bg-muted text-muted-foreground border-border";
 }
@@ -95,6 +102,8 @@ function sportBadgeClass(sport: string) {
 function sportDotColor(sport: string) {
   const map: Record<string, string> = {
     NBA: "#f97316", MLB: "#3b82f6", NHL: "#8b5cf6", NFL: "#22c55e",
+    Tennis: "#ec4899", Golf: "#10b981", Soccer: "#14b8a6",
+    MMA: "#ef4444", Boxing: "#ef4444",
   };
   return map[sport] ?? "#6b7280";
 }

@@ -42,6 +42,8 @@ const ALL_POSSIBLE_TABS = [
   { key: "NCAAF",  label: "NCAAF",     icon: "🎓" },
   { key: "WNBA",   label: "WNBA",      icon: "🏀" },
   { key: "Soccer", label: "Soccer",    icon: "⚽" },
+  { key: "Tennis", label: "Tennis",    icon: "🎾" },
+  { key: "Golf",   label: "Golf",      icon: "⛳" },
   { key: "MMA",    label: "MMA",       icon: "🥊" },
   { key: "Boxing", label: "Boxing",    icon: "🥊" },
 ];
@@ -73,11 +75,16 @@ function combinedOddsPayoutStr(odds: number): string {
 
 function sportBadgeColor(sport: string): string {
   switch (sport) {
-    case "NBA": return "#F97316";
-    case "MLB": return "#3B82F6";
-    case "NHL": return "#8B5CF6";
-    case "NFL": return "#22C55E";
-    default: return "#6B7280";
+    case "NBA":    return "#F97316";
+    case "MLB":    return "#3B82F6";
+    case "NHL":    return "#8B5CF6";
+    case "NFL":    return "#22C55E";
+    case "Tennis": return "#EC4899";
+    case "Golf":   return "#10B981";
+    case "Soccer": return "#14B8A6";
+    case "MMA":    return "#EF4444";
+    case "Boxing": return "#EF4444";
+    default:       return "#6B7280";
   }
 }
 
