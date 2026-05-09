@@ -704,8 +704,15 @@ export default function AiPicksScreen() {
   const hasSportProps  = PROPS_SPORTS.has(selectedSport);
   const hasSportLadder = activeLadder !== null;
 
-  // True when the API returned no picks for this sport (no qualifying games today)
-  const noPicksForSport = !isAllTab && !isLoading && !lock && !safeParlay && !lottoParlay && !gameParlay;
+  // Individual sports (no team matchups) — hide "Game Picks Parlay" section,
+  // show Lock + Safe + Lotto only (match winners parlay as safe/lotto naturally)
+  const INDIVIDUAL_SPORTS = new Set(["Tennis", "Golf"]);
+  const isIndividualSport = INDIVIDUAL_SPORTS.has(selectedSport);
+
+  // True when the API returned no picks for this sport (no qualifying games today).
+  // Individual sports (Tennis, Golf) don't have game parlays, so don't gate on it.
+  const noPicksForSport = !isAllTab && !isLoading && !lock && !safeParlay && !lottoParlay
+    && (isIndividualSport || !gameParlay);
 
   // Build the tab list dynamically — show only sports with games today.
   // While loading, fall back to the 4 core US sports.
@@ -971,19 +978,21 @@ export default function AiPicksScreen() {
                   )}
                 </View>
 
-                {/* ── Game Picks Parlay — every tab ── */}
-                <View style={styles.section}>
-                  <SectionHeader icon="🏆" label="Game Picks Parlay" sublabel="Moneyline, spread & O/U only — no props" accent="#3b82f6" />
-                  {(gameParlay?.legs?.length ?? 0) > 0 ? (
-                    <ParlayCard parlay={gameParlay!} accent="#3b82f6"
-                      onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (game parlay)`, odds: gameParlay!.combinedOdds })}
-                      onLog={() => logParlay(gameParlay!)} />
-                  ) : (
-                    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No game parlay — pull to refresh.</Text>
-                    </View>
-                  )}
-                </View>
+                {/* ── Game Picks Parlay — team sports only (not Tennis/Golf) ── */}
+                {!isIndividualSport && (
+                  <View style={styles.section}>
+                    <SectionHeader icon="🏆" label="Game Picks Parlay" sublabel="Moneyline, spread & O/U only — no props" accent="#3b82f6" />
+                    {(gameParlay?.legs?.length ?? 0) > 0 ? (
+                      <ParlayCard parlay={gameParlay!} accent="#3b82f6"
+                        onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (game parlay)`, odds: gameParlay!.combinedOdds })}
+                        onLog={() => logParlay(gameParlay!)} />
+                    ) : (
+                      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No game parlay — pull to refresh.</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
 
                 {/* ── Player Props Parlay — only for sports with prop markets ── */}
                 {hasSportProps && (

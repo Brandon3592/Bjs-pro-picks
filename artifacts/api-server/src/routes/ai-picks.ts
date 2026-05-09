@@ -127,6 +127,18 @@ function endOfDayEasternMs(offsetDays = 0): number {
   return endET.getTime() + 4 * 3600_000; // shift EDT → UTC
 }
 
+// Midnight Eastern — start-of-day boundary used for tab visibility.
+// International sports (Tennis, Soccer) often start during US overnight hours,
+// so "today" in Eastern time includes games that have already tipped off.
+function startOfDayEasternMs(offsetDays = 0): number {
+  const nowET = new Date(Date.now() - 4 * 3600_000);
+  const startET = new Date(Date.UTC(
+    nowET.getUTCFullYear(), nowET.getUTCMonth(), nowET.getUTCDate() + offsetDays,
+    0, 0, 0, 0,
+  ));
+  return startET.getTime() + 4 * 3600_000;
+}
+
 async function fetchRealPropsForAI(
   allOdds: { sport: string; events: OddsEvent[] }[],
   cutoffMs: number,
@@ -1117,10 +1129,15 @@ router.get("/ai-picks", async (req, res) => {
     // Falls back (in order) to: memory-cached "all" picks → lastKnownActiveSports →
     // DB snapshots (recent upcoming games) so tabs survive quota exhaustion.
     const catalogActiveSports = await (async () => {
+      // For tab visibility, include sports with ANY event today in Eastern time — even if
+      // matches have already started. International sports (Tennis, Soccer morning kick-offs)
+      // often begin during US overnight hours and would disappear mid-day if we filtered
+      // only by upcoming games. The actual picks still only use upcoming games.
+      const todayStartMs = startOfDayEasternMs();
       const fromOdds = allOddsRaw
         .filter(({ events }) => events.some((ev) => {
           const t = new Date(ev.commence_time).getTime();
-          if (t <= nowMs || t > todayCutoffMs) return false;
+          if (t < todayStartMs || t > todayCutoffMs) return false;
           return ev.bookmakers.some((b) => b.markets.some((m) => m.key === "h2h"));
         }))
         .map(({ sport }) => sport);
@@ -1783,8 +1800,16 @@ router.get("/ai-picks", async (req, res) => {
     }
 
     // ── SAFE PARLAY: 2-3 highest-edge game bets, same sport ──────────────────
-    const safePool = topSportPool(2);
-    const safeLegs = safePool ? pickUnique(safePool.legs, 3) : [];
+    // Requires only 1 game leg; supplements with props when slate is thin (e.g. NBA with 1 game).
+    const safePool = topSportPool(1);
+    const safeLegs = (() => {
+      const gameLegs = safePool ? pickUnique(safePool.legs, 3) : [];
+      if (gameLegs.length >= 2) return gameLegs;
+      // Only 0-1 game legs available — supplement with top prop legs (heavy-favorite side)
+      const sportLabel = safePool?.sport ?? (cacheKey !== "all" ? normSport(cacheKey) : "");
+      const fillProps = (propsBySport.get(sportLabel) ?? propPool).slice(0, 3 - gameLegs.length);
+      return [...gameLegs, ...fillProps];
+    })();
     const safeSport = safePool?.sport ?? "";
     const safeParlay: AIParlay | null = safeLegs.length >= 2 ? {
       id: "safe-1",
@@ -1792,14 +1817,15 @@ router.get("/ai-picks", async (req, res) => {
       legs: safeLegs,
       combinedOdds: calcCombinedOdds(safeLegs),
       confidence: 62,
-      reasoning: `${safeLegs.length} ${safeSport} game picks for today's slate — one per game, combined into a conservative parlay targeting solid upside.`,
+      reasoning: `${safeLegs.length} ${safeSport} picks for today's slate — combined into a conservative parlay targeting solid upside.`,
     } : null;
 
-    // ── GAME PARLAY: 3-4 game bets, same sport ───────────────────────────────
-    const gamePool = topSportPool(2);
+    // ── GAME PARLAY: up to 4 game bets, same sport ───────────────────────────
+    // Works with just 1 game available — useful for thin slates (single NBA game, tennis, etc.)
+    const gamePool = topSportPool(1);
     const gameLegs = gamePool ? pickUnique(gamePool.legs, 4) : [];
     const gameSport = gamePool?.sport ?? "";
-    const gameParlayOfTheDay: AIParlay | null = gameLegs.length >= 2 ? {
+    const gameParlayOfTheDay: AIParlay | null = gameLegs.length >= 1 ? {
       id: "game-1",
       name: `${gameSport} Game ${gameLegs.length}-Legger`,
       legs: gameLegs,
