@@ -4,6 +4,7 @@ import { fetchMlbLineupNames } from "../lib/mlb-lineups";
 import { fetchNbaOut, fetchNhlOut } from "../lib/sport-lineups";
 import { americanToDecimal, decimalToAmerican } from "../lib/model";
 import { buildSteamMap, scoreProps, buildWeatherPenaltySet, type MatchupContext } from "../lib/pick-scoring";
+import { buildFightMethodLeg } from "../lib/fighter-styles";
 import { getEloWinProb, warmEloCache } from "../lib/elo-model";
 import type { OddsEvent, PropEvent } from "../lib/odds-api";
 import { db, dailyLaddersTable, dailyPicksTable, oddsSnapshotsTable } from "@workspace/db";
@@ -1930,18 +1931,29 @@ router.get("/ai-picks", async (req, res) => {
     const topPropSport = sortedPropSports[0];
     const propParlayLegs = (() => {
       if (topPropSport) return topPropSport[1].slice(0, 4);
-      // No props — use underdog game picks as the parlay for prop-less sports
       const fallbackSportLabel = cacheKey !== "all" ? normSport(cacheKey) : "";
+      // MMA/Boxing: generate fight-method picks (KO/Submission/Decision) instead of plain moneylines
+      if (fallbackSportLabel === "MMA" || fallbackSportLabel === "Boxing") {
+        const fightLegs = legsBySport.get(fallbackSportLabel) ?? [];
+        const methodLegs = fightLegs.map((leg) => buildFightMethodLeg(leg)).slice(0, 4);
+        if (methodLegs.length >= 2) return methodLegs;
+      }
+      // Other prop-less sports (Soccer, Tennis, etc.) — use underdog game picks
       return (underdogLegsBySport.get(fallbackSportLabel) ?? underdogLegPool).slice(0, 4);
     })();
     const propSportLabel = topPropSport?.[0] ?? (cacheKey !== "all" ? normSport(cacheKey) : "");
+    const isCombatSport = propSportLabel === "MMA" || propSportLabel === "Boxing";
     const propParlayOfTheDay: AIParlay | null = propParlayLegs.length >= 2 ? {
       id: "prop-1",
-      name: `${propSportLabel} Props ${propParlayLegs.length}-Legger`,
+      name: isCombatSport
+        ? `${propSportLabel} Fight Method ${propParlayLegs.length}-Legger`
+        : `${propSportLabel} Props ${propParlayLegs.length}-Legger`,
       legs: propParlayLegs,
       combinedOdds: calcCombinedOdds(propParlayLegs),
       confidence: Math.max(20, Math.round(44 - propParlayLegs.length * 2)),
-      reasoning: `Real bookmaker lines for these ${propSportLabel} player performance props, sourced directly from the best available odds across major sportsbooks.`,
+      reasoning: isCombatSport
+        ? `Fight method picks for tonight's ${propSportLabel} card — KO, submission, and decision props based on each fighter's finishing history.`
+        : `Real bookmaker lines for these ${propSportLabel} player performance props, sourced directly from the best available odds across major sportsbooks.`,
     } : null;
 
     // ── MIX PARLAY: best 3-4 legs — any mix of game bets and player props ─────

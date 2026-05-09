@@ -813,7 +813,7 @@ export default function TodayPage() {
           {/* Fight Picks Parlay — MMA and Boxing only */}
           {COMBAT_SPORTS.has(selectedSport) && (
             <div>
-              <SectionHeader icon={Target} label="Fight Picks Parlay" sublabel="Best value fight winner picks combined" accent="#ef4444" />
+              <SectionHeader icon={Target} label="Fight Picks Parlay" sublabel="KO, submission & decision method props" accent="#ef4444" />
               {(propParlay?.legs?.length ?? 0) > 0
                 ? <ParlayCard parlay={propParlay!} accent="#ef4444" />
                 : (gameParlay?.legs?.length ?? 0) > 0
@@ -826,7 +826,10 @@ export default function TodayPage() {
           {/* Props Parlay — only for sports with player prop markets */}
           {hasSportProps && (
             <div>
-              <SectionHeader icon={Target} label="Player Props Parlay" sublabel="All player performance props" accent="#f97316" />
+              <SectionHeader icon={Target}
+                label={selectedSport === "Soccer" ? "Match Value Parlay" : selectedSport === "WNBA" ? "WNBA Value Parlay" : "Player Props Parlay"}
+                sublabel={selectedSport === "Soccer" ? "Best value soccer match picks combined" : selectedSport === "WNBA" ? "Best value WNBA game picks combined" : "All player performance props"}
+                accent="#f97316" />
               {(propParlay?.legs?.length ?? 0) > 0
                 ? <ParlayCard parlay={propParlay!} accent="#f97316" />
                 : <EmptyCard>No props parlay — try refreshing.</EmptyCard>

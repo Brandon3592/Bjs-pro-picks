@@ -1004,7 +1004,7 @@ export default function AiPicksScreen() {
                 {/* ── Fight Picks Parlay — MMA and Boxing only ── */}
                 {COMBAT_SPORTS.has(selectedSport) && (
                   <View style={styles.section}>
-                    <SectionHeader icon="🥊" label="Fight Picks Parlay" sublabel="Best value fight winner picks combined" accent="#ef4444" />
+                    <SectionHeader icon="🥊" label="Fight Picks Parlay" sublabel="KO, submission & decision method props" accent="#ef4444" />
                     {(propParlay?.legs?.length ?? 0) > 0 ? (
                       <ParlayCard parlay={propParlay!} accent="#ef4444"
                         onBet={(leg) => openBet({ ...leg, pick: `${propParlay!.name} (fight picks)`, odds: propParlay!.combinedOdds })}
@@ -1024,7 +1024,10 @@ export default function AiPicksScreen() {
                 {/* ── Player Props Parlay — only for sports with prop markets ── */}
                 {hasSportProps && (
                   <View style={styles.section}>
-                    <SectionHeader icon="🎯" label="Player Props Parlay" sublabel="All player performance props" accent="#f97316" />
+                    <SectionHeader icon="🎯"
+                      label={selectedSport === "Soccer" ? "Match Value Parlay" : selectedSport === "WNBA" ? "WNBA Value Parlay" : "Player Props Parlay"}
+                      sublabel={selectedSport === "Soccer" ? "Best value soccer match picks combined" : selectedSport === "WNBA" ? "Best value WNBA game picks combined" : "All player performance props"}
+                      accent="#f97316" />
                     {(propParlay?.legs?.length ?? 0) > 0 ? (
                       <ParlayCard parlay={propParlay!} accent="#f97316"
                         onBet={(leg) => openBet({ ...leg, pick: `${propParlay!.name} (props parlay)`, odds: propParlay!.combinedOdds })}
