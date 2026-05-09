@@ -1563,6 +1563,12 @@ components:
         nflLadder:
           $ref: "#/components/schemas/AILadderParlay"
           nullable: true
+        wnbaLadder:
+          $ref: "#/components/schemas/AILadderParlay"
+          nullable: true
+        soccerLadder:
+          $ref: "#/components/schemas/AILadderParlay"
+          nullable: true
         summary:
           type: string
         generatedAt:

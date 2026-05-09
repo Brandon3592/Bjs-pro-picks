@@ -529,6 +529,72 @@ export const GetAiPicksResponse = zod.object({
       reasoning: zod.string(),
     })
     .nullish(),
+  wnbaLadder: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      sport: zod.string(),
+      startStake: zod.number(),
+      targetPayout: zod.number(),
+      totalDays: zod.number(),
+      steps: zod.array(
+        zod.object({
+          day: zod.number(),
+          stake: zod.number(),
+          targetWin: zod.number(),
+          legs: zod.array(
+            zod.object({
+              gameId: zod.string(),
+              sport: zod.string(),
+              homeTeam: zod.string(),
+              awayTeam: zod.string(),
+              startTime: zod.coerce.date(),
+              pick: zod.string(),
+              betType: zod.string(),
+              bookmaker: zod.string(),
+              odds: zod.number(),
+              player: zod.string().nullish(),
+            }),
+          ),
+        }),
+      ),
+      confidence: zod.number(),
+      reasoning: zod.string(),
+    })
+    .nullish(),
+  soccerLadder: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      sport: zod.string(),
+      startStake: zod.number(),
+      targetPayout: zod.number(),
+      totalDays: zod.number(),
+      steps: zod.array(
+        zod.object({
+          day: zod.number(),
+          stake: zod.number(),
+          targetWin: zod.number(),
+          legs: zod.array(
+            zod.object({
+              gameId: zod.string(),
+              sport: zod.string(),
+              homeTeam: zod.string(),
+              awayTeam: zod.string(),
+              startTime: zod.coerce.date(),
+              pick: zod.string(),
+              betType: zod.string(),
+              bookmaker: zod.string(),
+              odds: zod.number(),
+              player: zod.string().nullish(),
+            }),
+          ),
+        }),
+      ),
+      confidence: zod.number(),
+      reasoning: zod.string(),
+    })
+    .nullish(),
   summary: zod.string(),
   generatedAt: zod.coerce.date(),
   isAI: zod.boolean(),

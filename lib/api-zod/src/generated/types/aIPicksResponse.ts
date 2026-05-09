@@ -30,6 +30,8 @@ export interface AIPicksResponse {
   mlbLadder?: AILadderParlay | null;
   nhlLadder?: AILadderParlay | null;
   nflLadder?: AILadderParlay | null;
+  wnbaLadder?: AILadderParlay | null;
+  soccerLadder?: AILadderParlay | null;
   summary: string;
   generatedAt: Date;
   isAI: boolean;

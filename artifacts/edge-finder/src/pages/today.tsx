@@ -632,31 +632,42 @@ export default function TodayPage() {
   const tdParlay         = sportData?.tdParlay         ?? allData?.tdParlay         ?? null;
 
   // Ladders
-  const allLadder = (allData?.allLadder ?? null) as AILadderParlay | null;
-  const nbaLadder = (allData?.nbaLadder ?? null) as AILadderParlay | null;
-  const mlbLadder = (allData?.mlbLadder ?? null) as AILadderParlay | null;
-  const nhlLadder = (allData?.nhlLadder ?? null) as AILadderParlay | null;
-  const nflLadder = (allData?.nflLadder ?? null) as AILadderParlay | null;
+  const allLadder    = (allData?.allLadder    ?? null) as AILadderParlay | null;
+  const nbaLadder    = (sportData?.nbaLadder    ?? allData?.nbaLadder    ?? null) as AILadderParlay | null;
+  const mlbLadder    = (sportData?.mlbLadder    ?? allData?.mlbLadder    ?? null) as AILadderParlay | null;
+  const nhlLadder    = (sportData?.nhlLadder    ?? allData?.nhlLadder    ?? null) as AILadderParlay | null;
+  const nflLadder    = (sportData?.nflLadder    ?? allData?.nflLadder    ?? null) as AILadderParlay | null;
+  const wnbaLadder   = (sportData?.wnbaLadder   ?? allData?.wnbaLadder   ?? null) as AILadderParlay | null;
+  const soccerLadder = (sportData?.soccerLadder ?? allData?.soccerLadder ?? null) as AILadderParlay | null;
   const isAI = allData?.isAI ?? false;
 
-  // True when the API returned no picks for this sport (no qualifying games today)
-  const noPicksForSport = !isAllTab && !isLoading && !lock && !safeParlay && !lottoParlay && !gameParlay;
+  // Combat sports (MMA, Boxing) and individual sports (Tennis, Golf) — hide Game Picks Parlay
+  const INDIVIDUAL_SPORTS = new Set(["Tennis", "Golf"]);
+  const COMBAT_SPORTS     = new Set(["MMA", "Boxing"]);
+  const isIndividualSport = INDIVIDUAL_SPORTS.has(selectedSport) || COMBAT_SPORTS.has(selectedSport);
+
+  // True when the API returned no picks for this sport (no qualifying games today).
+  // Individual/combat sports don't have game parlays, so don't gate on gameParlay for them.
+  const noPicksForSport = !isAllTab && !isLoading && !lock && !safeParlay && !lottoParlay
+    && (isIndividualSport || !gameParlay);
 
   const activeLadder =
-    selectedSport === "all" ? allLadder :
-    selectedSport === "NBA" ? nbaLadder :
-    selectedSport === "MLB" ? mlbLadder :
-    selectedSport === "NHL" ? nhlLadder :
-    selectedSport === "NFL" ? nflLadder :
-    null; // new sports (Soccer, MMA, NCAAB, etc.) don't have ladders yet
+    selectedSport === "all"    ? allLadder    :
+    selectedSport === "NBA"    ? nbaLadder    :
+    selectedSport === "MLB"    ? mlbLadder    :
+    selectedSport === "NHL"    ? nhlLadder    :
+    selectedSport === "NFL"    ? nflLadder    :
+    selectedSport === "WNBA"   ? wnbaLadder   :
+    selectedSport === "Soccer" ? soccerLadder :
+    null;
 
   const ladderSportLabel =
     selectedSport === "all" ? "All Sports" : selectedSport;
 
   const isNflOffSeason = selectedSport === "NFL" && !NFL_SEASON_ACTIVE;
 
-  // Sports that support player props and have a Daily Ladder
-  const PROPS_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL"]);
+  // Sports that support player props (prop/mix parlay sections shown)
+  const PROPS_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL", "WNBA", "Soccer"]);
   const hasSportProps  = PROPS_SPORTS.has(selectedSport);
   const hasSportLadder = activeLadder !== null;
 
@@ -785,14 +796,29 @@ export default function TodayPage() {
             }
           </div>
 
-          {/* Game Parlay */}
-          <div>
-            <SectionHeader icon={Trophy} label="Game Picks Parlay" sublabel="Moneyline, spread & O/U only — no props" accent="#3b82f6" />
-            {(gameParlay?.legs?.length ?? 0) > 0
-              ? <ParlayCard parlay={gameParlay!} accent="#3b82f6" />
-              : <EmptyCard>No game parlay — try refreshing.</EmptyCard>
-            }
-          </div>
+          {/* Game Parlay — team sports only, not Tennis/Golf/MMA/Boxing */}
+          {!isIndividualSport && (
+            <div>
+              <SectionHeader icon={Trophy} label="Game Picks Parlay" sublabel="Moneyline, spread & O/U only — no props" accent="#3b82f6" />
+              {(gameParlay?.legs?.length ?? 0) > 0
+                ? <ParlayCard parlay={gameParlay!} accent="#3b82f6" />
+                : <EmptyCard>No game parlay — try refreshing.</EmptyCard>
+              }
+            </div>
+          )}
+
+          {/* Fight Picks Parlay — MMA and Boxing only */}
+          {COMBAT_SPORTS.has(selectedSport) && (
+            <div>
+              <SectionHeader icon={Target} label="Fight Picks Parlay" sublabel="Best value fight winner picks combined" accent="#ef4444" />
+              {(propParlay?.legs?.length ?? 0) > 0
+                ? <ParlayCard parlay={propParlay!} accent="#ef4444" />
+                : (gameParlay?.legs?.length ?? 0) > 0
+                  ? <ParlayCard parlay={gameParlay!} accent="#ef4444" />
+                  : <EmptyCard>No fight picks parlay today — check back on event days.</EmptyCard>
+              }
+            </div>
+          )}
 
           {/* Props Parlay — only for sports with player prop markets */}
           {hasSportProps && (
