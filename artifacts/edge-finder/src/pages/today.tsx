@@ -293,7 +293,7 @@ function ParlayCard({ parlay, accent }: { parlay: AIParlay; accent: string }) {
             </div>
             <div className="flex-shrink-0 text-right pt-0.5">
               <p className="text-sm font-bold font-mono" style={{ color: accent }}>{fmtOdds(leg.odds)}</p>
-              <p className="text-[10px] text-muted-foreground">{impliedProb(leg.odds)} impl.</p>
+              <p className="text-[10px] text-muted-foreground">{formatTime(leg.startTime)}</p>
             </div>
           </div>
         ))}
@@ -443,9 +443,12 @@ function DailyLadderCard({
                   {leg.awayTeam && leg.homeTeam ? `${leg.awayTeam} @ ${leg.homeTeam}` : leg.homeTeam || "Today's game"} · {leg.bookmaker}
                 </p>
               </div>
-              <span className="text-xs font-bold font-mono px-2 py-0.5 rounded border flex-shrink-0 mt-0.5" style={{ color: ACCENT, backgroundColor: ACCENT + "22", borderColor: ACCENT + "55" }}>
-                {fmtOdds(leg.odds)}
-              </span>
+              <div className="flex-shrink-0 flex flex-col items-end gap-0.5 mt-0.5">
+                <span className="text-xs font-bold font-mono px-2 py-0.5 rounded border" style={{ color: ACCENT, backgroundColor: ACCENT + "22", borderColor: ACCENT + "55" }}>
+                  {fmtOdds(leg.odds)}
+                </span>
+                <span className="text-[10px] text-muted-foreground">{formatTime(leg.startTime)}</span>
+              </div>
             </div>
           ))}
         </div>

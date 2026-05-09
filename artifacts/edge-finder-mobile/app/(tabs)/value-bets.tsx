@@ -303,7 +303,7 @@ function ParlayCard({
             <View style={{ alignItems: "flex-end", gap: 2 }}>
               <Text style={[styles.legOdds, { color: accent }]}>{fmtOdds(leg.odds)}</Text>
               <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: "#6b7280" }}>
-                {impliedProb(leg.odds)} impl.
+                {formatTime(leg.startTime)}
               </Text>
             </View>
           </View>
