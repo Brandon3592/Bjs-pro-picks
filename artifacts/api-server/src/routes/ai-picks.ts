@@ -2365,9 +2365,16 @@ router.get("/ai-picks", async (req, res) => {
       summary,
       generatedAt: new Date().toISOString(),
       isAI: false,
-      // Which sport tabs to show — computed from the /sports catalog at the top of this
-      // handler so it works even when odds quota is exhausted (NHL shows during playoffs, etc.)
-      activeSports: catalogActiveSports,
+      // Only show a sport tab when it has actual game legs — prevents empty Boxing/Tennis
+      // tabs from appearing on days with no events for that sport.
+      activeSports: (() => {
+        const sportsWithLegs = new Set(
+          [...legsBySport.keys()].filter((s) => (legsBySport.get(s)?.length ?? 0) > 0),
+        );
+        const filtered = catalogActiveSports.filter((s) => sportsWithLegs.has(s));
+        // Fall back to full catalog if filtering produces nothing (e.g. first run)
+        return filtered.length > 0 ? filtered : catalogActiveSports;
+      })(),
     };
 
     // Cache until the next game starts (+ 30s so it's definitely in progress), or until
