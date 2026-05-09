@@ -58,16 +58,31 @@ router.post("/auth/register", async (req: Request, res: Response) => {
   }
 
   const normalEmail = email.toLowerCase().trim();
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-  const [existing] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, normalEmail));
+  const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, normalEmail));
+
   if (existing) {
-    res.status(409).json({ error: "An account with that email already exists" });
+    // User row already exists (e.g. from a previous Replit OIDC login).
+    // If they have no credential yet, allow them to add email/password now.
+    const [cred] = await db.select({ userId: credentialsTable.userId }).from(credentialsTable).where(eq(credentialsTable.userId, existing.id));
+    if (cred) {
+      res.status(409).json({ error: "An account with that email already exists" });
+      return;
+    }
+    // No credential yet — link one now so they can sign in with email/password
+    await db.insert(credentialsTable).values({ userId: existing.id, passwordHash });
+    const sessionData: SessionData = {
+      user: { id: existing.id, email: existing.email, firstName: existing.firstName, lastName: existing.lastName },
+      access_token: "local",
+    };
+    const sid = await createSession(sessionData);
+    setSessionCookie(res, sid, false);
+    res.status(201).json({ success: true });
     return;
   }
 
-  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   const userId = crypto.randomUUID();
-
   const fName = typeof firstName === "string" ? firstName.trim() || null : null;
   const lName = typeof lastName === "string" ? lastName.trim() || null : null;
 
@@ -209,15 +224,29 @@ router.post("/auth/mobile-register", async (req: Request, res: Response) => {
   }
 
   const normalEmail = email.toLowerCase().trim();
-  const [existing] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, normalEmail));
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+  const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, normalEmail));
+
   if (existing) {
-    res.status(409).json({ error: "An account with that email already exists" });
+    // User row exists (e.g. from a previous Replit OIDC login).
+    // If they have no credential yet, link one now so they can sign in with email/password.
+    const [cred] = await db.select({ userId: credentialsTable.userId }).from(credentialsTable).where(eq(credentialsTable.userId, existing.id));
+    if (cred) {
+      res.status(409).json({ error: "An account with that email already exists" });
+      return;
+    }
+    await db.insert(credentialsTable).values({ userId: existing.id, passwordHash });
+    const sessionData: SessionData = {
+      user: { id: existing.id, email: existing.email, firstName: existing.firstName, lastName: existing.lastName },
+      access_token: "local",
+    };
+    const sid = await createSession(sessionData);
+    res.status(201).json({ token: sid, userId: existing.id, name: [existing.firstName, existing.lastName].filter(Boolean).join(" ") || existing.email });
     return;
   }
 
-  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   const userId = crypto.randomUUID();
-
   const fName = typeof firstName === "string" ? firstName.trim() || null : null;
   const lName = typeof lastName === "string" ? lastName.trim() || null : null;
 
