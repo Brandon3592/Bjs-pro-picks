@@ -2294,22 +2294,74 @@ router.get("/ai-picks", async (req, res) => {
         .map(toLeg);
     }
 
-    // MLB: Home Run parlay — anytime HR props (lowest available line per player, one per game)
+    // MLB: Home Run parlay — anytime HR props, scored by matchup quality.
+    // Scoring combines:
+    //   1. Implied probability (book consensus on likelihood)
+    //   2. Park HR factor — Coors/Cincy/Philly boost; Oracle/Marlins/Mariners penalise
+    //   3. Daily-seeded jitter — same player gets a different bump each day so the
+    //      same sluggers (Schwarber, Judge) don't monopolise the parlay every day
     // realProps is already filtered for confirmed starters / non-OUT players upstream.
     function buildHrParlayLegs(n: number): AIPickLeg[] {
+      // Park HR factors keyed by HOME team name (positive = hitter-friendly)
+      const PARK_HR_FACTOR: Record<string, number> = {
+        "Colorado Rockies":       10,  // Coors Field — extreme altitude/air
+        "Cincinnati Reds":         6,  // Great American Ball Park
+        "Philadelphia Phillies":   5,  // Citizens Bank Park
+        "Texas Rangers":           5,  // Globe Life Field — hot/thin air
+        "Chicago Cubs":            4,  // Wrigley Field
+        "New York Yankees":        4,  // Yankee Stadium short porch RF
+        "Atlanta Braves":          3,  // Truist Park
+        "Boston Red Sox":          3,  // Fenway Park — Green Monster left field
+        "Baltimore Orioles":       2,
+        "Minnesota Twins":         2,  // Target Field plays medium
+        "Milwaukee Brewers":      -2,
+        "Kansas City Royals":     -2,
+        "Los Angeles Dodgers":    -2,
+        "Chicago White Sox":      -2,
+        "Houston Astros":         -3,  // Minute Maid (roof closed)
+        "Tampa Bay Rays":         -3,  // Tropicana Field dome
+        "San Diego Padres":       -4,  // Petco Park — large outfield
+        "Seattle Mariners":       -4,  // T-Mobile Park
+        "Oakland Athletics":      -4,
+        "Miami Marlins":          -5,  // loanDepot park dome
+        "San Francisco Giants":   -7,  // Oracle Park — wind/cold kills HRs
+      };
+
+      // Daily jitter: deterministic per player+date so it's stable within a day
+      // but rotates across days — prevents the same players appearing every day.
+      const todayStr = new Date().toISOString().slice(0, 10);
+      function playerJitter(name: string): number {
+        const key = `${todayStr}:${name}`;
+        const h = [...key].reduce((acc, c) => ((acc << 5) - acc + c.charCodeAt(0)) | 0, 0);
+        return ((Math.abs(h) % 1000) / 1000 - 0.5) * 12; // ±6 pp jitter in implied-prob space
+      }
+
       const hrProps = realProps.filter(
         (p) => p.sport === "baseball_mlb" && p.market === "home runs",
       );
-      // Group by player — keep only the lowest line (most likely to hit: 0.5 > 1.5 > 2.5)
+      // Group by player — keep only the lowest available line per player
       const bestPerPlayer = new Map<string, CompactProp>();
       for (const p of hrProps) {
         const existing = bestPerPlayer.get(p.player);
-        if (!existing || p.line < existing.line) bestPerPlayer.set(p.player, p);
+        if (!existing || p.line < existing.line ||
+            (p.line === existing.line && p.minOverOdds < existing.minOverOdds)) {
+          bestPerPlayer.set(p.player, p);
+        }
       }
-      // Now pick one player per game, sorted by consensus most-likely (tightest market odds first)
+
+      function scoreHr(p: CompactProp): number {
+        const impliedProb = p.minOverOdds > 0
+          ? (100 / (p.minOverOdds + 100)) * 100
+          : (Math.abs(p.minOverOdds) / (Math.abs(p.minOverOdds) + 100)) * 100;
+        const parkBonus = (PARK_HR_FACTOR[p.homeTeam] ?? 0) * 0.4; // scale park pts into prob space
+        const jitter    = playerJitter(p.player);
+        return impliedProb + parkBonus + jitter;
+      }
+
+      // One player per game; sorted by composite matchup score (not raw odds)
       const seenGames = new Set<string>();
       return [...bestPerPlayer.values()]
-        .sort((a, b) => a.minOverOdds - b.minOverOdds) // ascending: most negative = most likely
+        .sort((a, b) => scoreHr(b) - scoreHr(a))
         .filter((p) => {
           if (seenGames.has(p.gameId)) return false;
           seenGames.add(p.gameId);
