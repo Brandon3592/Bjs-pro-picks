@@ -10,10 +10,10 @@ title = "generated_image"
 id = "E2rT2eVsSEmWEHsIz5U9w"
 uri = "file://artifacts/edge-finder-mobile/assets/bjspropicks-logo.png"
 type = "image"
-title = "BJs Pro Picks logo v3 circular layout"
+title = "BJs Pro Picks logo exact first style"
 
 [[outputs]]
 id = "e9ZytOwCZuCkj7C_Z2dqH"
 uri = "file://artifacts/edge-finder-mobile/assets/bjspropicks-logo.png"
 type = "image"
-title = "BJ's Pro Picks — App Store Logo (Final)"
+title = "BJ's Pro Picks — App Store Logo"
