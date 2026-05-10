@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "g2GkgIX5guXrPh9JUa81C"
@@ -12,3 +11,9 @@ id = "E2rT2eVsSEmWEHsIz5U9w"
 uri = "file://artifacts/edge-finder-mobile/assets/bjspropicks-logo.png"
 type = "image"
 title = "BJs Pro Picks sports logo with text"
+
+[[outputs]]
+id = "e9ZytOwCZuCkj7C_Z2dqH"
+uri = "file://artifacts/edge-finder-mobile/assets/bjspropicks-logo.png"
+type = "image"
+title = "BJ's Pro Picks — App Store Logo"
