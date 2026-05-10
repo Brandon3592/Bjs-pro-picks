@@ -2434,23 +2434,14 @@ router.get("/ai-picks", async (req, res) => {
         })
         .slice(0, Math.max(n * 3, 9)); // keep top 9+ for daily rotation
 
-      // Daily-seed selection: deterministic within a day, different every day.
-      // Picks n players from the quality pool so the parlay rotates instead of always
-      // taking the same top-n (which would be Judge/Schwarber every day).
-      const todayStr = new Date().toISOString().slice(0, 10);
-      function dailyPickHash(seed: number, poolSize: number): number {
-        const key = `${todayStr}:hr:${seed}`;
-        const h = [...key].reduce((acc, c) => ((acc << 5) - acc + c.charCodeAt(0)) | 0, 0);
-        return Math.abs(h) % poolSize;
-      }
-
-      const remaining = [...qualityPool];
+      // Random selection from the quality pool — true randomness so each Refresh
+      // gives genuinely different picks. Picks are stable all day via DB persistence;
+      // an explicit Refresh clears the DB and triggers a new random draw.
+      const shuffled = [...qualityPool].sort(() => Math.random() - 0.5);
       const selected: CompactProp[] = [];
       const seenGamesSelected = new Set<string>();
-      let seed = 0;
-      while (selected.length < n && remaining.length > 0) {
-        const idx = dailyPickHash(seed++, remaining.length);
-        const candidate = remaining.splice(idx, 1)[0];
+      for (const candidate of shuffled) {
+        if (selected.length >= n) break;
         if (!seenGamesSelected.has(candidate.gameId)) {
           selected.push(candidate);
           seenGamesSelected.add(candidate.gameId);
@@ -2734,8 +2725,8 @@ router.get("/ai-picks", async (req, res) => {
   }
 });
 
-// Force refresh — clears both in-memory cache AND today's DB row so fresh picks
-// are generated on the next request. Only use when you explicitly want new picks.
+// Force refresh — clears in-memory cache, today's daily_picks rows, AND today's
+// daily_ladders rows so both picks AND ladders regenerate on the next request.
 router.post("/ai-picks/refresh", async (req, res) => {
   const sport = typeof req.query.sport === "string" ? req.query.sport.toUpperCase() : null;
   const sportKey = sport && sport !== "ALL" ? sport : null;
@@ -2744,8 +2735,22 @@ router.post("/ai-picks/refresh", async (req, res) => {
   } else {
     picksCacheMap.clear();
   }
-  // Also remove today's DB row(s) so next request generates fresh picks.
+  // Clear picks for today
   await deletePicksFromDb(sportKey);
+  // Also clear ladders — they are stored in a separate table and were NOT previously
+  // cleared on refresh, causing the ladder to serve stale data even after picks changed.
+  try {
+    if (sportKey) {
+      await db.delete(dailyLaddersTable)
+        .where(and(eq(dailyLaddersTable.sport, sportKey), eq(dailyLaddersTable.date, todayEasternDate())));
+      // Also clear "All Sports" ladder so it regenerates with fresh cross-sport data
+      await db.delete(dailyLaddersTable)
+        .where(and(eq(dailyLaddersTable.sport, "All Sports"), eq(dailyLaddersTable.date, todayEasternDate())));
+    } else {
+      await db.delete(dailyLaddersTable)
+        .where(eq(dailyLaddersTable.date, todayEasternDate()));
+    }
+  } catch { /* ignore ladder clear errors */ }
   return res.json({ ok: true });
 });
 
