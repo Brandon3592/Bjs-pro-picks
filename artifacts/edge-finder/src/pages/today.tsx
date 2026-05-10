@@ -850,52 +850,43 @@ export default function TodayPage() {
             </div>
           )}
 
-          {/* Sport-specific prop parlays — only for prop-enabled sports */}
-          {hasSportProps && selectedSport !== "all" && (
-            <>
-              <Divider label={`${selectedSport} PROP PARLAYS`} />
-
-              {selectedSport === "NBA" && (
-                <div>
-                  <SectionHeader icon={Target} label="NBA 3-Pointer Parlay" sublabel="Volume shooters from deep" accent="#f97316" />
-                  {(threePtParlay?.legs?.length ?? 0) > 0
-                    ? <ParlayCard parlay={threePtParlay!} accent="#f97316" />
-                    : <EmptyCard>No 3PT parlay — check back on NBA game days.</EmptyCard>
-                  }
-                </div>
-              )}
-
-              {selectedSport === "MLB" && (
-                <div>
-                  <SectionHeader icon={TrendingUp} label="MLB Home Run Parlay" sublabel="Multi-HR bomber parlay · high variance" accent="#3b82f6" />
-                  {(hrParlay?.legs?.length ?? 0) > 0
-                    ? <ParlayCard parlay={hrParlay!} accent="#3b82f6" />
-                    : <EmptyCard>Home run prop odds haven't been posted yet — check back closer to first pitch.</EmptyCard>
-                  }
-                </div>
-              )}
-
-              {selectedSport === "NHL" && (
-                <div>
-                  <SectionHeader icon={Target} label="NHL Points Parlay" sublabel="Anytime goal or assist combo" accent="#8b5cf6" />
-                  {(goalScorerParlay?.legs?.length ?? 0) > 0
-                    ? <ParlayCard parlay={goalScorerParlay!} accent="#8b5cf6" />
-                    : <EmptyCard>No goal scorer parlay — check back on NHL game days.</EmptyCard>
-                  }
-                </div>
-              )}
-
-              {selectedSport === "NFL" && NFL_SEASON_ACTIVE && (
-                <div>
-                  <SectionHeader icon={Target} label="NFL TD Scorer Parlay" sublabel="Anytime touchdown combo" accent="#22c55e" />
-                  {(tdParlay?.legs?.length ?? 0) > 0
-                    ? <ParlayCard parlay={tdParlay!} accent="#22c55e" />
-                    : <EmptyCard>No TD parlay — check back on NFL game days.</EmptyCard>
-                  }
-                </div>
-              )}
-            </>
-          )}
+          {/* Sport-specific prop parlays — only rendered when real data is available */}
+          {hasSportProps && selectedSport !== "all" && (() => {
+            const hasNba3pt  = selectedSport === "NBA" && (threePtParlay?.legs?.length ?? 0) > 0;
+            const hasMlbHr   = selectedSport === "MLB" && (hrParlay?.legs?.length ?? 0) > 0;
+            const hasNhlGs   = selectedSport === "NHL" && (goalScorerParlay?.legs?.length ?? 0) > 0;
+            const hasNflTd   = selectedSport === "NFL" && NFL_SEASON_ACTIVE && (tdParlay?.legs?.length ?? 0) > 0;
+            if (!hasNba3pt && !hasMlbHr && !hasNhlGs && !hasNflTd) return null;
+            return (
+              <>
+                <Divider label={`${selectedSport} PROP PARLAYS`} />
+                {hasNba3pt && (
+                  <div>
+                    <SectionHeader icon={Target} label="NBA 3-Pointer Parlay" sublabel="Volume shooters from deep" accent="#f97316" />
+                    <ParlayCard parlay={threePtParlay!} accent="#f97316" />
+                  </div>
+                )}
+                {hasMlbHr && (
+                  <div>
+                    <SectionHeader icon={TrendingUp} label="MLB Home Run Parlay" sublabel="Multi-HR bomber parlay · high variance" accent="#3b82f6" />
+                    <ParlayCard parlay={hrParlay!} accent="#3b82f6" />
+                  </div>
+                )}
+                {hasNhlGs && (
+                  <div>
+                    <SectionHeader icon={Target} label="NHL Goal Scorer Parlay" sublabel="Anytime goal or assist combo" accent="#8b5cf6" />
+                    <ParlayCard parlay={goalScorerParlay!} accent="#8b5cf6" />
+                  </div>
+                )}
+                {hasNflTd && (
+                  <div>
+                    <SectionHeader icon={Target} label="NFL TD Scorer Parlay" sublabel="Anytime touchdown combo" accent="#22c55e" />
+                    <ParlayCard parlay={tdParlay!} accent="#22c55e" />
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {/* Daily Ladder — only for sports that have a ladder (NBA/MLB/NHL/NFL/All) */}
           {hasSportLadder && (
