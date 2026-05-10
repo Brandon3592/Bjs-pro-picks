@@ -12,10 +12,7 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
-
-const API_BASE = process.env.EXPO_PUBLIC_DOMAIN
-  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-  : "";
+import { customFetch } from "@workspace/api-client-react";
 
 type AuthUser = { isAdmin: boolean; id: string };
 
@@ -64,9 +61,9 @@ export default function AdminScreen() {
   const [replyLoading, setReplyLoading] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/auth/user`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => setAuthUser(d as AuthUser))
+    customFetch<AuthUser>("/api/auth/user")
+      .then((d) => setAuthUser(d))
+      .catch(() => {})
       .finally(() => setAuthLoading(false));
   }, []);
 
@@ -74,11 +71,11 @@ export default function AdminScreen() {
     setLoading(true);
     try {
       if (tab === "users") {
-        const r = await fetch(`${API_BASE}/api/admin/users`, { credentials: "include" });
-        setUsers(await r.json());
+        const data = await customFetch<AdminUser[]>("/api/admin/users");
+        setUsers(data);
       } else {
-        const r = await fetch(`${API_BASE}/api/admin/submissions`, { credentials: "include" });
-        setSubmissions(await r.json());
+        const data = await customFetch<Submission[]>("/api/admin/submissions");
+        setSubmissions(data);
       }
     } finally {
       setLoading(false);
@@ -90,10 +87,9 @@ export default function AdminScreen() {
   }, [tab, authUser]);
 
   async function markRead(id: number) {
-    await fetch(`${API_BASE}/api/admin/submissions/${id}`, {
+    await customFetch(`/api/admin/submissions/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      credentials: "include",
       body: JSON.stringify({ status: "read" }),
     });
     setSubmissions((prev) => prev.map((s) => (s.id === id ? { ...s, status: "read" } : s)));
@@ -105,10 +101,9 @@ export default function AdminScreen() {
     try {
       const sub = submissions.find((s) => s.id === id);
       if (!sub) return;
-      await fetch(`${API_BASE}/api/admin/submissions/${id}`, {
+      await customFetch(`/api/admin/submissions/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ adminReply: replyText }),
       });
       const body = `Hi ${sub.name},\n\n${replyText}\n\n—BJ's Pro Picks Team`;

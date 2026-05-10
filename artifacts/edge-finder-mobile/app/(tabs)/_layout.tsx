@@ -268,7 +268,7 @@ export default function TabLayout() {
             ),
             ...(hideFromTabBar && {
               tabBarButton: () => null,
-              tabBarItemStyle: { width: 0, overflow: "hidden" },
+              tabBarItemStyle: { display: "none", width: 0, overflow: "hidden" },
             }),
           }}
         />
