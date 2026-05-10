@@ -1002,22 +1002,94 @@ function buildFallbackPicks(activeSportsList: string[] = ["NBA", "MLB", "NHL", "
     reasoning: "Two heavy favorites from different sports each day — typically one NBA prop (-250 to -270) and one MLB/NHL prop (-250 to -290). Each individual leg is a near-certainty. Combined parlay lands near even money. Win both every day for 10 days to turn $10 into $10K+.",
   };
 
-  // Fallback cross-sport parlays reuse the already-mixed fallback legs
+  // Fallback cross-sport parlays — each uses distinct legs not shared with any other parlay.
+  // These are only shown when The Odds API is completely unreachable.
+  const allSafeFallbackLegs: AIPickLeg[] = [
+    { gameId: "nba-mock-2", sport: "NBA", homeTeam: "Cleveland Cavaliers", awayTeam: "Miami Heat",
+      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Cavaliers ML",
+      betType: "moneyline", bookmaker: "FanDuel", odds: -165 },
+    { gameId: "mlb-mock-3", sport: "MLB", homeTeam: "Houston Astros", awayTeam: "Seattle Mariners",
+      startTime: new Date(now + 4 * 3600_000).toISOString(), pick: "Astros ML",
+      betType: "moneyline", bookmaker: "DraftKings", odds: -130 },
+    { gameId: "nhl-mock-2", sport: "NHL", homeTeam: "Colorado Avalanche", awayTeam: "Edmonton Oilers",
+      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Avalanche ML",
+      betType: "moneyline", bookmaker: "BetMGM", odds: -150 },
+  ];
   const allSafeParlay: AIParlay = {
-    id: "all-safe-1", name: "Cross-Sport Value Parlay",
-    legs: [safeParlayLeg1, safeParlayLeg2],
-    combinedOdds: calcCombinedOdds([safeParlayLeg1, safeParlayLeg2]),
-    confidence: 60,
-    reasoning: "One NBA and one MLB game bet each carrying a positive edge — a conservative two-sport parlay targeting solid upside.",
+    id: "all-safe-1", name: "3-Leg Cross-Sport Value Parlay",
+    legs: allSafeFallbackLegs,
+    combinedOdds: calcCombinedOdds(allSafeFallbackLegs),
+    confidence: 58,
+    reasoning: "Cavs, Astros, and Avalanche each at home facing inferior opponents — NBA, MLB, and NHL favorites combined into a conservative cross-sport 3-legger.",
   };
-  const allLottoParlay: AIParlay = { ...lottoParlay, id: "all-lotto-1", name: "Cross-Sport 5-Leg Lotto" };
-  const allGameParlay: AIParlay = { ...gameParlayOfTheDay, id: "all-game-1", name: "Cross-Sport Game 3-Legger" };
+  const allLottoFallbackLegs: AIPickLeg[] = [
+    { gameId: "nba-mock-3", sport: "NBA", homeTeam: "Boston Celtics", awayTeam: "New York Knicks",
+      startTime: new Date(now + 8 * 3600_000).toISOString(), pick: "Jaylen Brown Over 24.5 Points",
+      betType: "player_prop", player: "Jaylen Brown", bookmaker: "DraftKings", odds: +135 },
+    { gameId: "mlb-mock-4", sport: "MLB", homeTeam: "New York Yankees", awayTeam: "Boston Red Sox",
+      startTime: new Date(now + 3 * 3600_000).toISOString(), pick: "Aaron Judge Over 0.5 Home Runs",
+      betType: "player_prop", player: "Aaron Judge", bookmaker: "FanDuel", odds: +230 },
+    { gameId: "nhl-mock-3", sport: "NHL", homeTeam: "Boston Bruins", awayTeam: "Tampa Bay Lightning",
+      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Nikita Kucherov Anytime Goal Scorer",
+      betType: "player_prop", player: "Nikita Kucherov", bookmaker: "BetMGM", odds: +155 },
+    { gameId: "nfl-mock-2", sport: "NFL", homeTeam: "Dallas Cowboys", awayTeam: "Philadelphia Eagles",
+      startTime: new Date(now + 4 * 3600_000).toISOString(), pick: "CeeDee Lamb Anytime TD",
+      betType: "player_prop", player: "CeeDee Lamb", bookmaker: "DraftKings", odds: +115 },
+    { gameId: "mlb-mock-3", sport: "MLB", homeTeam: "Houston Astros", awayTeam: "Seattle Mariners",
+      startTime: new Date(now + 4 * 3600_000).toISOString(), pick: "Yordan Alvarez Over 0.5 Home Runs",
+      betType: "player_prop", player: "Yordan Alvarez", bookmaker: "FanDuel", odds: +200 },
+  ];
+  const allLottoParlay: AIParlay = {
+    id: "all-lotto-1", name: "5-Leg Cross-Sport Props Lotto",
+    legs: allLottoFallbackLegs,
+    combinedOdds: calcCombinedOdds(allLottoFallbackLegs),
+    confidence: 11,
+    reasoning: "Five plus-money player props drawn from NBA, MLB, NHL, and NFL — all from different games and sports. Small stake, big potential payout.",
+  };
+  const allGameFallbackLegs: AIPickLeg[] = [
+    { gameId: "nba-mock-2", sport: "NBA", homeTeam: "Cleveland Cavaliers", awayTeam: "Miami Heat",
+      startTime: new Date(now + 6 * 3600_000).toISOString(), pick: "Cavaliers -5.5",
+      betType: "spread", bookmaker: "FanDuel", odds: -108 },
+    { gameId: "mlb-mock-2", sport: "MLB", homeTeam: "New York Mets", awayTeam: "Colorado Rockies",
+      startTime: new Date(now + 2 * 3600_000).toISOString(), pick: "Mets ML",
+      betType: "moneyline", bookmaker: "FanDuel", odds: +128 },
+    { gameId: "nhl-mock-3", sport: "NHL", homeTeam: "Boston Bruins", awayTeam: "Tampa Bay Lightning",
+      startTime: new Date(now + 5 * 3600_000).toISOString(), pick: "Boston Bruins ML",
+      betType: "moneyline", bookmaker: "BetMGM", odds: +105 },
+  ];
+  const allGameParlay: AIParlay = {
+    id: "all-game-1", name: "3-Leg Cross-Sport Value Game Parlay",
+    legs: allGameFallbackLegs,
+    combinedOdds: calcCombinedOdds(allGameFallbackLegs),
+    confidence: 38,
+    reasoning: "Spread and moneyline value from NBA, MLB, and NHL — Cavs covering at home, Mets against a weak Colorado rotation, and Bruins as slight plus-money home value.",
+  };
   const allPropsParlay: AIParlay = {
     id: "all-props-1", name: "Cross-Sport Props 3-Legger",
     legs: propParlayLegs, combinedOdds: calcCombinedOdds(propParlayLegs), confidence: 43,
     reasoning: "Player props sampled from NBA and MLB — SGA scoring, Garland assists, and Alonso RBIs. Each from a different game and sport.",
   };
-  const allMixParlay: AIParlay = { ...mixParlayOfTheDay, id: "all-mix-1", name: "Cross-Sport Mix 4-Legger" };
+  const allMixFallbackLegs: AIPickLeg[] = [
+    { gameId: "nba-mock-3", sport: "NBA", homeTeam: "Boston Celtics", awayTeam: "New York Knicks",
+      startTime: new Date(now + 8 * 3600_000).toISOString(), pick: "Celtics ML",
+      betType: "moneyline", bookmaker: "DraftKings", odds: -160 },
+    { gameId: "nba-mock-3", sport: "NBA", homeTeam: "Boston Celtics", awayTeam: "New York Knicks",
+      startTime: new Date(now + 8 * 3600_000).toISOString(), pick: "Jaylen Brown Over 19.5 Points",
+      betType: "player_prop", player: "Jaylen Brown", bookmaker: "FanDuel", odds: -118 },
+    { gameId: "mlb-mock-3", sport: "MLB", homeTeam: "Houston Astros", awayTeam: "Seattle Mariners",
+      startTime: new Date(now + 4 * 3600_000).toISOString(), pick: "Astros ML",
+      betType: "moneyline", bookmaker: "BetMGM", odds: -130 },
+    { gameId: "nhl-mock-1", sport: "NHL", homeTeam: "Florida Panthers", awayTeam: "Toronto Maple Leafs",
+      startTime: new Date(now + 7 * 3600_000).toISOString(), pick: "Matthew Tkachuk Anytime Goal Scorer",
+      betType: "player_prop", player: "Matthew Tkachuk", bookmaker: "DraftKings", odds: +170 },
+  ];
+  const allMixParlay: AIParlay = {
+    id: "all-mix-1", name: "4-Leg Cross-Sport Mix",
+    legs: allMixFallbackLegs,
+    combinedOdds: calcCombinedOdds(allMixFallbackLegs),
+    confidence: 35,
+    reasoning: "Blends game lines and player props from NBA, MLB, and NHL — Celtics ML + Brown points, Astros ML, and Tkachuk anytime scorer.",
+  };
 
   return {
     lockOfTheDay,
@@ -1783,6 +1855,10 @@ router.get("/ai-picks", async (req, res) => {
       tags: [lockLeg.betType, "top pick", ...(lockEloResult ? ["elo model"] : [])],
     };
 
+    // Game IDs already committed to the lock — excluded from all parlays below so
+    // no parlay repeats a leg that the Lock of the Day already shows.
+    const lockExcludeIds = new Set<string>([lockLeg.gameId]);
+
     // ── Group legs & props by sport (keep parlays sport-pure) ────────────────
     // Favorite pools — used by safe, game, mix, props, cross-sport parlays
     const legsBySport = new Map<string, AIPickLeg[]>();
@@ -1823,9 +1899,10 @@ router.get("/ai-picks", async (req, res) => {
 
     // ── SAFE PARLAY: 2-3 highest-edge game bets, same sport ──────────────────
     // Requires only 1 game leg; supplements with props when slate is thin (e.g. NBA with 1 game).
+    // Excludes the Lock of the Day game so no leg appears in both the Lock and Safe Parlay.
     const safePool = topSportPool(1);
     const safeLegs = (() => {
-      const gameLegs = safePool ? pickUnique(safePool.legs, 3) : [];
+      const gameLegs = safePool ? pickUnique(safePool.legs, 3, lockExcludeIds) : [];
       if (gameLegs.length >= 2) return gameLegs;
       // Short game slate — supplement with player prop legs.
       // Try the scored prop pool first (strict -130 filter). If that's empty (can happen when
@@ -1860,10 +1937,15 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `${safeLegs.length} ${safeSport} picks for today's slate — combined into a conservative parlay targeting solid upside.`,
     } : null;
 
+    // Track game IDs already used by Lock + Safe Parlay so the Game Parlay
+    // never repeats a leg shown elsewhere above it on the page.
+    const safeUsedIds = new Set<string>([...lockExcludeIds, ...safeLegs.map(l => l.gameId)]);
+
     // ── GAME PARLAY: up to 4 game bets, same sport ───────────────────────────
     // Works with just 1 game available — useful for thin slates (single NBA game, tennis, etc.)
+    // Uses a different slice of the pool than Safe Parlay (excludes lock + safe game IDs).
     const gamePool = topSportPool(1);
-    const gameLegs = gamePool ? pickUnique(gamePool.legs, 4) : [];
+    const gameLegs = gamePool ? pickUnique(gamePool.legs, 4, safeUsedIds) : [];
     const gameSport = gamePool?.sport ?? "";
     const gameParlayOfTheDay: AIParlay | null = gameLegs.length >= 1 ? {
       id: "game-1",
@@ -1873,6 +1955,10 @@ router.get("/ai-picks", async (req, res) => {
       confidence: Math.min(65, Math.round(40 + gameLegs.length * 3)),
       reasoning: `Pure ${gameSport} game-line parlay — moneylines, spreads, and totals only. Best available lines from today's full ${gameSport} slate.`,
     } : null;
+
+    // Track all game IDs used by Lock + Safe + Game Parlay — Mix Parlay's game
+    // side must draw from what's left so no game leg appears in two parlays.
+    const gameUsedIds = new Set<string>([...safeUsedIds, ...gameLegs.map(l => l.gameId)]);
 
     // ── LOTTO PARLAY: best 5 legs — any mix of game underdogs and player props ─
     // No forced ratio. Game legs and prop legs compete on odds (highest first).
@@ -1936,6 +2022,12 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `High-upside ${lottoSportLabel} parlay — best available underdogs and props combined, sorted by payout potential. Small stake, big upside.`,
     } : null;
 
+    // Track player names already committed to lottoParlay so allLottoParlay
+    // (cross-sport) never reuses a prop leg from the single-sport Lotto.
+    const usedLottoPlayers = new Set<string>(
+      lottoLegs.filter(l => l.player).map(l => l.player!),
+    );
+
     // ── PROPS PARLAY: 3-4 props, same sport ──────────────────────────────────
     // For sports without player prop markets (Soccer, Tennis, MMA), falls back to
     // underdog game picks so the prop parlay section always has content.
@@ -1968,14 +2060,23 @@ router.get("/ai-picks", async (req, res) => {
         : `Real bookmaker lines for these ${propSportLabel} player performance props, sourced directly from the best available odds across major sportsbooks.`,
     } : null;
 
+    // Track player names already committed to Props Parlay so Mix Parlay's prop
+    // side and the cross-sport allPropsParlay never repeat the same player.
+    const usedPropPlayers = new Set<string>(
+      propParlayLegs.filter(l => l.player).map(l => l.player!),
+    );
+
     // ── MIX PARLAY: best 3-4 legs — any mix of game bets and player props ─────
     // No forced ratio. The only rule: must include at least 1 game leg AND 1 prop
     // leg — otherwise it would just be a props parlay or a game parlay.
+    // Game side excludes IDs already used by Lock + Safe + Game Parlay so
+    // no game appears in two different parlays.
     const mixSportEntry = sortedSports.find(([s]) => (propsBySport.get(s)?.length ?? 0) >= 1)
       ?? sortedSports[0] ?? null;
     const mixSportLabel = mixSportEntry?.[0] ?? "";
-    const mixAllGameLegs = mixSportEntry?.[1] ?? [];
-    const mixAllPropLegs = propsBySport.get(mixSportLabel) ?? [];
+    const mixAllGameLegs = (mixSportEntry?.[1] ?? []).filter(l => !gameUsedIds.has(l.gameId));
+    // Exclude players already in Props Parlay so Mix and Props never share a prop leg.
+    const mixAllPropLegs = (propsBySport.get(mixSportLabel) ?? []).filter(l => !l.player || !usedPropPlayers.has(l.player));
     const mixLegs = (() => {
       // Guarantee at least 1 game + 1 prop to qualify as "mixed", then fill to 4
       const firstGame = mixAllGameLegs[0];
@@ -2015,6 +2116,17 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `Best available ${mixSportLabel} game and prop legs combined — no forced ratio, just the strongest picks across both pools.`,
     } : null;
 
+    // Game IDs used by Mix Parlay's game side — extended exclusion set for
+    // allSafeParlay so it doesn't share game legs with any sport-specific parlay.
+    const mixGameIds = new Set<string>(
+      mixLegs.filter(l => l.betType !== "player_prop").map(l => l.gameId),
+    );
+    const allSafeExcludeIds = new Set<string>([...gameUsedIds, ...mixGameIds]);
+
+    // Extend usedPropPlayers with Mix Parlay's prop legs so allPropsParlay (built
+    // later) never contains a player already shown in the Mix Parlay.
+    mixLegs.filter(l => l.player).forEach(l => usedPropPlayers.add(l.player!));
+
     // ── CROSS-SPORT PARLAYS (All Sports tab) ─────────────────────────────────
     // Round-robin across sports: take one leg per sport at a time
     function buildCrossSportLegs(pools: Map<string, AIPickLeg[]>, totalCount: number): AIPickLeg[] {
@@ -2033,7 +2145,12 @@ router.get("/ai-picks", async (req, res) => {
       return result;
     }
 
-    const allSafeCrossLegs = buildCrossSportLegs(legsBySport, 3);
+    // allSafeParlay: cross-sport favorites — exclude game IDs already used by Lock/Safe/Game/Mix
+    // parlays so the All Sports tab doesn't repeat legs shown in single-sport views.
+    const filteredLegsBySportForAllSafe = new Map<string, AIPickLeg[]>(
+      [...legsBySport.entries()].map(([s, legs]) => [s, legs.filter(l => !allSafeExcludeIds.has(l.gameId))]),
+    );
+    const allSafeCrossLegs = buildCrossSportLegs(filteredLegsBySportForAllSafe, 3);
     const allSafeParlay: AIParlay | null = allSafeCrossLegs.length >= 2 ? {
       id: "all-safe-1",
       name: `${allSafeCrossLegs.length}-Leg Cross-Sport Value Parlay`,
@@ -2044,8 +2161,14 @@ router.get("/ai-picks", async (req, res) => {
     } : null;
 
     // allLottoParlay: use the lotto prop pool (highest-odds/plus-money side) — underdog hunting
+    // Exclude players already in the single-sport lottoParlay so no prop appears in both.
     const allLottoPropMap = new Map(
-      [...lottoPropsBySport.entries()].map(([s, legs]) => [s, [...legs].sort((a, b) => b.odds - a.odds)]),
+      [...lottoPropsBySport.entries()].map(([s, legs]) => [
+        s,
+        [...legs]
+          .filter(l => !l.player || !usedLottoPlayers.has(l.player))
+          .sort((a, b) => b.odds - a.odds),
+      ]),
     );
     const allLottoCrossLegs = buildCrossSportLegs(allLottoPropMap, 5);
     const allLottoParlay: AIParlay | null = allLottoCrossLegs.length >= 2 ? {
@@ -2068,7 +2191,14 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `Plus-money and value game picks drawn from across today's full slate — moneylines, spreads, and totals with underdog value across ${[...new Set(allGameCrossLegs.map(l => normSport(l.sport)))].join(', ')}.`,
     } : null;
 
-    const allPropsCrossLegs = buildCrossSportLegs(propsBySport, 4);
+    // Exclude players already committed to propParlayOfTheDay so allPropsParlay
+    // never shares a prop leg with the single-sport Props Parlay.
+    const filteredPropsBySportForAll = new Map<string, AIPickLeg[]>(
+      [...propsBySport.entries()].map(([s, legs]) => [
+        s, legs.filter(l => !l.player || !usedPropPlayers.has(l.player)),
+      ]),
+    );
+    const allPropsCrossLegs = buildCrossSportLegs(filteredPropsBySportForAll, 4);
     const allPropsParlay: AIParlay | null = allPropsCrossLegs.length >= 2 ? {
       id: "all-props-1",
       name: `${allPropsCrossLegs.length}-Leg Cross-Sport Props`,
@@ -2078,10 +2208,22 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `Player performance props sampled from every active sport today — one standout prop per sport for true multi-sport diversification.`,
     } : null;
 
+    // allMixParlay: cross-sport mix — game side excludes all game IDs used by every
+    // sport-specific parlay (lock/safe/game/mix) AND allSafeParlay so no game is repeated.
+    // Prop side excludes all players already shown in allPropsParlay.
+    const allSafeUsedIds = new Set<string>([
+      ...allSafeExcludeIds,
+      ...allSafeCrossLegs.map(l => l.gameId),
+    ]);
+    const usedAllPropsPlayers = new Set<string>(
+      allPropsCrossLegs.filter(l => l.player).map(l => l.player!),
+    );
     const mixCrossMap = new Map<string, AIPickLeg[]>(
       [...legsBySport.keys()].map((s): [string, AIPickLeg[]] => {
-        const games = (legsBySport.get(s) ?? []).slice(0, 1);
-        const props = (propsBySport.get(s) ?? []).slice(0, 1);
+        const games = (legsBySport.get(s) ?? []).filter(l => !allSafeUsedIds.has(l.gameId)).slice(0, 1);
+        const props = (propsBySport.get(s) ?? [])
+          .filter(l => !l.player || (!usedPropPlayers.has(l.player) && !usedAllPropsPlayers.has(l.player)))
+          .slice(0, 1);
         return [s, [...games, ...props]];
       }).filter(([, legs]) => legs.length > 0),
     );
