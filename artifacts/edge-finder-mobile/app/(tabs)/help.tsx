@@ -11,6 +11,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 
 type Status = "idle" | "submitting" | "success" | "error";
@@ -21,6 +22,7 @@ const API_BASE = process.env.EXPO_PUBLIC_DOMAIN
 
 export default function HelpScreen() {
   const colors = useColors();
+  const router = useRouter();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -193,6 +195,22 @@ export default function HelpScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Owner Dashboard link */}
+        <TouchableOpacity
+          onPress={() => router.push("/(tabs)/admin" as any)}
+          style={[styles.ownerLink, { backgroundColor: colors.card, borderColor: colors.border }]}
+          activeOpacity={0.75}
+        >
+          <Feather name="shield" size={16} color={colors.mutedForeground} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.ownerLinkTitle, { color: colors.foreground }]}>Owner Dashboard</Text>
+            <Text style={[styles.ownerLinkSub, { color: colors.mutedForeground }]}>
+              View users & manage submissions
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -221,4 +239,7 @@ const styles = StyleSheet.create({
   textarea: { borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9, fontSize: 13, fontFamily: "Inter_400Regular", minHeight: 120 },
   submitBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 10, paddingVertical: 13, marginTop: 4 },
   submitLabel: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  ownerLink: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, borderWidth: 1, padding: 14 },
+  ownerLinkTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  ownerLinkSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
 });

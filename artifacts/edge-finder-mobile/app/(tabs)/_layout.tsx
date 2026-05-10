@@ -25,6 +25,7 @@ const TAB_DEFS = [
     headerTitle: "Today's Picks",
     icon: "zap" as FeatherIconName,
     match: "/value-bets",
+    hideFromTabBar: false,
   },
   {
     name: "index",
@@ -33,6 +34,7 @@ const TAB_DEFS = [
     headerTitle: "Dashboard",
     icon: "home" as FeatherIconName,
     match: "/",
+    hideFromTabBar: false,
   },
   {
     name: "props",
@@ -41,6 +43,7 @@ const TAB_DEFS = [
     headerTitle: "Player Props",
     icon: "target" as FeatherIconName,
     match: "/props",
+    hideFromTabBar: false,
   },
   {
     name: "arb",
@@ -49,6 +52,7 @@ const TAB_DEFS = [
     headerTitle: "Arb Scanner",
     icon: "shuffle" as FeatherIconName,
     match: "/arb",
+    hideFromTabBar: false,
   },
   {
     name: "help",
@@ -57,6 +61,16 @@ const TAB_DEFS = [
     headerTitle: "Help & Support",
     icon: "help-circle" as FeatherIconName,
     match: "/help",
+    hideFromTabBar: false,
+  },
+  {
+    name: "admin",
+    href: "/(tabs)/admin",
+    title: "Owner",
+    headerTitle: "Owner Dashboard",
+    icon: "shield" as FeatherIconName,
+    match: "/admin",
+    hideFromTabBar: true,
   },
 ];
 
@@ -230,7 +244,7 @@ export default function TabLayout() {
         tabBarIconStyle: { marginTop: 2 },
       }}
     >
-      {TAB_DEFS.map(({ name, title, headerTitle, icon }) => (
+      {TAB_DEFS.map(({ name, title, headerTitle, icon, hideFromTabBar }) => (
         <Tabs.Screen
           key={name}
           name={name}
@@ -240,6 +254,7 @@ export default function TabLayout() {
             tabBarIcon: ({ color, focused }) => (
               <TabIcon name={icon} color={color} focused={focused} />
             ),
+            ...(hideFromTabBar && { tabBarButton: () => null }),
           }}
         />
       ))}
