@@ -232,47 +232,9 @@ router.get("/games/:gameId", async (req, res) => {
     }
   }
 
-  // Mock fallback for game detail
-  const BOOKMAKERS = ["DraftKings", "FanDuel", "BetMGM", "Caesars", "PointsBet"];
-  const odds = BOOKMAKERS.map((bookmaker, i) => ({
-    id: `${game.id}-${bookmaker.toLowerCase().replace(/\s/g, "")}`,
-    gameId: game.id,
-    bookmaker,
-    homeMoneyline: -110 + (i * 5 - 10),
-    awayMoneyline: 100 + (i * 5 - 10),
-    homeSpread: -3.5,
-    awaySpread: 3.5,
-    homeSpreadOdds: -110,
-    awaySpreadOdds: -110,
-    overUnder: 47.5,
-    overOdds: -110,
-    underOdds: -110,
-    updatedAt: new Date().toISOString(),
-  }));
-
-  const prediction = {
-    gameId: game.id,
-    sport: game.sport,
-    homeWinProb: 0.62,
-    awayWinProb: 0.38,
-    drawProb: null,
-    edgeHome: game.topEdge ?? 0,
-    edgeAway: -2.1,
-    recommendedBet: `${game.homeTeam} ML`,
-    recommendedBookmaker: "DraftKings",
-    confidence: "high" as const,
-    modelFactors: ["Home field advantage", "Recent form (6-2 last 8)", "Opponent injury: starting QB questionable", "Historical matchup: 7-3 ATS"],
-    updatedAt: new Date().toISOString(),
-  };
-
-  const injuries = [
-    { player: "Patrick Mahomes", team: game.homeTeam, status: "Active", position: "QB", impact: "low" as const },
-    { player: "Travis Kelce", team: game.homeTeam, status: "Questionable", position: "TE", impact: "medium" as const },
-    { player: "Lamar Jackson", team: game.awayTeam, status: "Active", position: "QB", impact: "low" as const },
-    { player: "Mark Andrews", team: game.awayTeam, status: "Out", position: "TE", impact: "high" as const },
-  ];
-
-  return res.json({ game, odds, prediction, injuries });
+  // Game was found in the DB but not in the current odds cache (lines may have been pulled
+  // or quota was exhausted). Return the game with empty odds/prediction rather than fake numbers.
+  return res.json({ game, odds: [], prediction: null, injuries: [] });
 });
 
 export default router;
