@@ -2400,15 +2400,6 @@ router.get("/ai-picks", async (req, res) => {
         "San Francisco Giants":   -7,  // Oracle Park — wind/cold kills HRs
       };
 
-      // Daily jitter: deterministic per player+date so it's stable within a day
-      // but rotates across days — prevents the same players appearing every day.
-      const todayStr = new Date().toISOString().slice(0, 10);
-      function playerJitter(name: string): number {
-        const key = `${todayStr}:${name}`;
-        const h = [...key].reduce((acc, c) => ((acc << 5) - acc + c.charCodeAt(0)) | 0, 0);
-        return ((Math.abs(h) % 1000) / 1000 - 0.5) * 12; // ±6 pp jitter in implied-prob space
-      }
-
       const hrProps = realProps.filter(
         (p) => p.sport === "baseball_mlb" && p.market === "home runs",
       );
@@ -2422,37 +2413,62 @@ router.get("/ai-picks", async (req, res) => {
         }
       }
 
-      function scoreHr(p: CompactProp): number {
+      // Base quality score: park factor + implied probability (no jitter — jitter caused same
+      // players to dominate because their implied prob gap was larger than the jitter range).
+      function baseHrScore(p: CompactProp): number {
         const impliedProb = p.minOverOdds > 0
           ? (100 / (p.minOverOdds + 100)) * 100
           : (Math.abs(p.minOverOdds) / (Math.abs(p.minOverOdds) + 100)) * 100;
-        const parkBonus = (PARK_HR_FACTOR[p.homeTeam] ?? 0) * 0.4; // scale park pts into prob space
-        const jitter    = playerJitter(p.player);
-        return impliedProb + parkBonus + jitter;
+        return impliedProb + (PARK_HR_FACTOR[p.homeTeam] ?? 0) * 0.4;
       }
 
-      // One player per game; sorted by composite matchup score (not raw odds)
-      const seenGames = new Set<string>();
-      return [...bestPerPlayer.values()]
-        .sort((a, b) => scoreHr(b) - scoreHr(a))
+      // Build a quality pool: one player per game, sorted by base score, keep top 3×n
+      // candidates so the daily seed always draws from a meaningful set of real options.
+      const seenGamesPool = new Set<string>();
+      const qualityPool = [...bestPerPlayer.values()]
+        .sort((a, b) => baseHrScore(b) - baseHrScore(a))
         .filter((p) => {
-          if (seenGames.has(p.gameId)) return false;
-          seenGames.add(p.gameId);
+          if (seenGamesPool.has(p.gameId)) return false;
+          seenGamesPool.add(p.gameId);
           return true;
         })
-        .slice(0, n)
-        .map((p) => ({
-          gameId: p.gameId,
-          sport: "MLB",
-          homeTeam: p.homeTeam,
-          awayTeam: p.awayTeam,
-          startTime: p.startTime,
-          pick: `${p.player} Over ${p.line} Home Runs`,
-          betType: "player_prop" as const,
-          bookmaker: p.bestBook,
-          odds: p.overOdds,
-          player: p.player,
-        }));
+        .slice(0, Math.max(n * 3, 9)); // keep top 9+ for daily rotation
+
+      // Daily-seed selection: deterministic within a day, different every day.
+      // Picks n players from the quality pool so the parlay rotates instead of always
+      // taking the same top-n (which would be Judge/Schwarber every day).
+      const todayStr = new Date().toISOString().slice(0, 10);
+      function dailyPickHash(seed: number, poolSize: number): number {
+        const key = `${todayStr}:hr:${seed}`;
+        const h = [...key].reduce((acc, c) => ((acc << 5) - acc + c.charCodeAt(0)) | 0, 0);
+        return Math.abs(h) % poolSize;
+      }
+
+      const remaining = [...qualityPool];
+      const selected: CompactProp[] = [];
+      const seenGamesSelected = new Set<string>();
+      let seed = 0;
+      while (selected.length < n && remaining.length > 0) {
+        const idx = dailyPickHash(seed++, remaining.length);
+        const candidate = remaining.splice(idx, 1)[0];
+        if (!seenGamesSelected.has(candidate.gameId)) {
+          selected.push(candidate);
+          seenGamesSelected.add(candidate.gameId);
+        }
+      }
+
+      return selected.map((p) => ({
+        gameId: p.gameId,
+        sport: "MLB",
+        homeTeam: p.homeTeam,
+        awayTeam: p.awayTeam,
+        startTime: p.startTime,
+        pick: `${p.player} Over ${p.line} Home Runs`,
+        betType: "player_prop" as const,
+        bookmaker: p.bestBook,
+        odds: p.overOdds,
+        player: p.player,
+      }));
     }
     const hrLegs = buildHrParlayLegs(3);
     const hrParlay: AIParlay | null = hrLegs.length >= 2 ? {
