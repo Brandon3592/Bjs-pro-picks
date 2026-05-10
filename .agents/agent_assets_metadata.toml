@@ -6,3 +6,9 @@ id = "g2GkgIX5guXrPh9JUa81C"
 uri = "file://artifacts/edge-finder-mobile/assets/images/icon.png"
 type = "image"
 title = "generated_image"
+
+[[generated]]
+id = "E2rT2eVsSEmWEHsIz5U9w"
+uri = "file://artifacts/edge-finder-mobile/assets/bjspropicks-logo.png"
+type = "image"
+title = "BJs Pro Picks sports balls logo"

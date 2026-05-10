@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Eye, EyeOff, TrendingUp } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 
 type Mode = "login" | "register";
 
@@ -52,9 +52,11 @@ export default function Login() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="h-12 w-12 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center mb-4">
-            <TrendingUp className="h-6 w-6 text-primary" />
-          </div>
+          <img
+            src="/bjspropicks-logo.png"
+            alt="BJ's Pro Picks"
+            className="h-16 w-16 rounded-xl object-cover mb-4"
+          />
           <h1 className="text-2xl font-bold tracking-tight">BJ's Pro Picks</h1>
           <p className="text-sm text-muted-foreground mt-1">Sports betting intelligence</p>
         </div>

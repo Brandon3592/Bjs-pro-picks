@@ -3,6 +3,7 @@ import { Feather } from "@expo/vector-icons";
 import { Tabs, usePathname, useRouter } from "expo-router";
 import React from "react";
 import {
+  Image,
   Platform,
   StyleSheet,
   Text,
@@ -55,6 +56,15 @@ const TAB_DEFS = [
     hideFromTabBar: false,
   },
   {
+    name: "tracker",
+    href: "/(tabs)/tracker",
+    title: "Tracker",
+    headerTitle: "Bet Tracker",
+    icon: "bar-chart-2" as FeatherIconName,
+    match: "/tracker",
+    hideFromTabBar: false,
+  },
+  {
     name: "help",
     href: "/(tabs)/help",
     title: "Help",
@@ -85,9 +95,11 @@ function WebSidebar() {
     <View style={[webStyles.sidebar, { backgroundColor: colors.card, borderRightColor: colors.border }]}>
       {/* Branding */}
       <View style={webStyles.brand}>
-        <View style={[webStyles.brandIcon, { backgroundColor: colors.primary + "20" }]}>
-          <Feather name="zap" size={18} color={colors.primary} />
-        </View>
+        <Image
+          source={require("../../assets/bjspropicks-logo.png")}
+          style={webStyles.brandImage}
+          resizeMode="cover"
+        />
         <View>
           <Text style={[webStyles.brandName, { color: colors.foreground }]}>BJ's Pro Picks</Text>
           <Text style={[webStyles.brandSub, { color: colors.mutedForeground }]}>Sports Betting Edge</Text>
@@ -282,12 +294,10 @@ const webStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 20,
   },
-  brandIcon: {
+  brandImage: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
   },
   brandName: {
     fontSize: 16,

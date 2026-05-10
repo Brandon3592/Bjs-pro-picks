@@ -3,7 +3,6 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import {
   LayoutDashboard,
-  TrendingUp,
   Activity,
   BookOpen,
   Settings,
@@ -74,9 +73,11 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
       {/* Logo */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
-          <div className="h-6 w-6 rounded bg-primary flex items-center justify-center">
-            <TrendingUp className="h-3.5 w-3.5 text-primary-foreground" />
-          </div>
+          <img
+            src="/bjspropicks-logo.png"
+            alt="BJ's Pro Picks"
+            className="h-7 w-7 rounded-md object-cover"
+          />
           <span className="font-bold text-sidebar-foreground tracking-tight">BJ's Pro Picks</span>
         </div>
         {onClose && (
@@ -154,9 +155,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <Menu className="h-5 w-5 text-muted-foreground" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="h-5 w-5 rounded bg-primary flex items-center justify-center">
-              <TrendingUp className="h-3 w-3 text-primary-foreground" />
-            </div>
+            <img
+              src="/bjspropicks-logo.png"
+              alt="BJ's Pro Picks"
+              className="h-6 w-6 rounded object-cover"
+            />
             <span className="font-bold text-sm tracking-tight">BJ's Pro Picks</span>
           </div>
         </header>
