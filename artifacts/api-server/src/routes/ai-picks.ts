@@ -1956,30 +1956,51 @@ router.get("/ai-picks", async (req, res) => {
 
       if (candidates.length < 2) return null;
 
-      // Build day-by-day compound steps — 2 legs per day from different games AND
-      // different sports (for the All Sports ladder). Single-sport ladders just skip dupes.
-      const isAllSports = sportLabel === "All Sports";
       const steps: AILadderStep[] = [];
       let stake = START;
-      let idx = 0;
 
-      for (let day = 1; day <= TOTAL_DAYS && idx + 1 < candidates.length; day++) {
-        const leg1 = candidates[idx++];
-        // For All Sports: skip legs from the same game OR the same sport as leg1
-        // For single-sport: only skip same-game duplicates
-        while (idx < candidates.length && (
-          candidates[idx].gameId === leg1.gameId ||
-          (isAllSports && candidates[idx].sport === leg1.sport)
-        )) idx++;
-        if (idx >= candidates.length) break;
-        const leg2 = candidates[idx++];
+      if (sportLabel === "All Sports") {
+        // Build per-sport queues from prop candidates (leg.sport is already a display label).
+        // Supplement sports that have zero prop candidates with game-line favorites so that
+        // every sport with live games today can contribute a leg.
+        const sportQueue = new Map<string, AIPickLeg[]>();
+        for (const leg of candidates) {
+          if (!sportQueue.has(leg.sport)) sportQueue.set(leg.sport, []);
+          sportQueue.get(leg.sport)!.push(leg);
+        }
+        for (const [s, legs] of legsBySport.entries()) {
+          if ((sportQueue.get(s)?.length ?? 0) > 0) continue;
+          const favs = legs.filter((l) => l.odds >= -350 && l.odds <= -110);
+          if (favs.length > 0) sportQueue.set(s, [...favs]);
+        }
 
-        const dec1 = americanToDecimal(leg1.odds);
-        const dec2 = americanToDecimal(leg2.odds);
-        const combined = dec1 * dec2;
-        const targetWin = parseFloat((stake * combined).toFixed(2));
-        steps.push({ day, stake: parseFloat(stake.toFixed(2)), targetWin, legs: [leg1, leg2] });
-        stake = targetWin;
+        // Each day: pick the top leg from the sport with the most remaining candidates,
+        // then pick the top leg from the sport with the second-most — guaranteed different sports.
+        for (let day = 1; day <= TOTAL_DAYS; day++) {
+          const available = [...sportQueue.entries()]
+            .filter(([, q]) => q.length > 0)
+            .sort((a, b) => b[1].length - a[1].length);
+          if (available.length < 2) break;
+          const leg1 = available[0][1].shift()!;
+          const leg2 = available[1][1].shift()!;
+          const combined = americanToDecimal(leg1.odds) * americanToDecimal(leg2.odds);
+          const targetWin = parseFloat((stake * combined).toFixed(2));
+          steps.push({ day, stake: parseFloat(stake.toFixed(2)), targetWin, legs: [leg1, leg2] });
+          stake = targetWin;
+        }
+      } else {
+        // Single-sport: walk flat candidates array, skip same-game duplicates only.
+        let idx = 0;
+        for (let day = 1; day <= TOTAL_DAYS && idx + 1 < candidates.length; day++) {
+          const leg1 = candidates[idx++];
+          while (idx < candidates.length && candidates[idx].gameId === leg1.gameId) idx++;
+          if (idx >= candidates.length) break;
+          const leg2 = candidates[idx++];
+          const combined = americanToDecimal(leg1.odds) * americanToDecimal(leg2.odds);
+          const targetWin = parseFloat((stake * combined).toFixed(2));
+          steps.push({ day, stake: parseFloat(stake.toFixed(2)), targetWin, legs: [leg1, leg2] });
+          stake = targetWin;
+        }
       }
 
       if (steps.length < 1) return null;
