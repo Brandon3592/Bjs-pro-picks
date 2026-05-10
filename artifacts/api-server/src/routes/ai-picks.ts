@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { fetchAllSportOdds, fetchActiveSportApiKeys, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, SPORT_API_TO_LABEL, hasApiKey } from "../lib/odds-api";
+import { fetchAllSportOdds, fetchActiveSportApiKeys, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, SPORT_API_TO_LABEL, hasApiKey, BOOKMAKER_DISPLAY } from "../lib/odds-api";
 import { fetchMlbLineupNames } from "../lib/mlb-lineups";
 import { fetchNbaOut, fetchNhlOut } from "../lib/sport-lineups";
 import { americanToDecimal, decimalToAmerican } from "../lib/model";
@@ -1378,85 +1378,136 @@ router.get("/ai-picks", async (req, res) => {
     }
 
     // Convert any OddsEvent into a game leg using the best available line across bookmakers.
-    // Prefers h2h (moneyline) — picks the better-priced team (underdog / higher odds). Falls back to totals Over.
+    // Shops ALL books — picks the outcome+book combo with the highest American odds (best payout).
+    // Falls back to totals Over if no h2h market is available.
     function eventToLeg(event: OddsEvent, sportLabel: string): AIPickLeg | null {
-      // Try h2h first
+      // Shop all books for h2h — find the outcome with the single best (highest) price
+      let bestOutcome: { name: string; price: number; bookDisplay: string } | null = null;
       for (const book of event.bookmakers) {
         const h2h = book.markets.find((m) => m.key === "h2h");
         if (!h2h || h2h.outcomes.length < 2) continue;
-        const best = h2h.outcomes.reduce((a, b) => (b.price > a.price ? b : a));
+        const bookDisplay = BOOKMAKER_DISPLAY[book.key] ?? book.title;
+        for (const out of h2h.outcomes) {
+          if (!bestOutcome || out.price > bestOutcome.price) {
+            bestOutcome = { name: out.name, price: out.price, bookDisplay };
+          }
+        }
+      }
+      if (bestOutcome) {
         return {
           gameId: event.id,
           sport: sportLabel,
           homeTeam: event.home_team,
           awayTeam: event.away_team,
           startTime: event.commence_time,
-          pick: best.name,
+          pick: bestOutcome.name,
           betType: "moneyline",
-          bookmaker: book.key,
-          odds: best.price,
+          bookmaker: bestOutcome.bookDisplay,
+          odds: bestOutcome.price,
           player: null,
         };
       }
-      // Fall back to totals Over
+      // Fall back to totals Over — shop all books for best Over price
+      let bestOver: { point: number; price: number; bookDisplay: string } | null = null;
       for (const book of event.bookmakers) {
         const totals = book.markets.find((m) => m.key === "totals");
         if (!totals) continue;
         const over = totals.outcomes.find((o) => o.name === "Over");
         if (!over) continue;
+        const bookDisplay = BOOKMAKER_DISPLAY[book.key] ?? book.title;
+        if (!bestOver || over.price > bestOver.price) {
+          bestOver = { point: over.point ?? 0, price: over.price, bookDisplay };
+        }
+      }
+      if (bestOver) {
         return {
           gameId: event.id,
           sport: sportLabel,
           homeTeam: event.home_team,
           awayTeam: event.away_team,
           startTime: event.commence_time,
-          pick: `Over ${over.point}`,
+          pick: `Over ${bestOver.point}`,
           betType: "total",
-          bookmaker: book.key,
-          odds: over.price,
+          bookmaker: bestOver.bookDisplay,
+          odds: bestOver.price,
           player: null,
         };
       }
       return null;
     }
 
-    // eventToFavoriteLeg: like eventToLeg but always picks the FAVORITE (most negative / lowest odds).
-    // Used exclusively for Lock of the Day so it never surfaces an underdog as "the lock".
+    // eventToFavoriteLeg: always picks the FAVORITE, shopping all books for best value on that side.
+    // "Best value" for a favorite = highest (least negative) American odds across all books.
     function eventToFavoriteLeg(event: OddsEvent, sportLabel: string): AIPickLeg | null {
-      for (const book of event.bookmakers) {
-        const h2h = book.markets.find((m) => m.key === "h2h");
-        if (!h2h || h2h.outcomes.length < 2) continue;
-        // Favorite = lowest price (most negative American odds)
-        const favorite = h2h.outcomes.reduce((a, b) => (b.price < a.price ? b : a));
+      // Identify the favorite name (most negative odds in consensus), then find the best price for
+      // that team across all books. This separates "which team" from "which book has the best line".
+      const allH2hBooks = event.bookmakers
+        .map((bk) => ({ book: bk, h2h: bk.markets.find((m) => m.key === "h2h") }))
+        .filter((x): x is { book: typeof x.book; h2h: NonNullable<typeof x.h2h> } => !!x.h2h && x.h2h.outcomes.length >= 2);
+
+      if (allH2hBooks.length > 0) {
+        // Find the favorite by averaging prices across books
+        const teamPrices = new Map<string, number[]>();
+        for (const { h2h } of allH2hBooks) {
+          for (const out of h2h.outcomes) {
+            if (!teamPrices.has(out.name)) teamPrices.set(out.name, []);
+            teamPrices.get(out.name)!.push(out.price);
+          }
+        }
+        const avgPrice = (name: string) => {
+          const prices = teamPrices.get(name) ?? [];
+          return prices.reduce((s, p) => s + p, 0) / (prices.length || 1);
+        };
+        const favoriteName = [...teamPrices.keys()].reduce((a, b) => avgPrice(a) < avgPrice(b) ? a : b);
+
+        // Now shop all books for the best price on the favorite
+        let bestPrice = -Infinity;
+        let bestBookDisplay = "";
+        for (const { book, h2h } of allH2hBooks) {
+          const out = h2h.outcomes.find((o) => o.name === favoriteName);
+          if (!out) continue;
+          if (out.price > bestPrice) {
+            bestPrice = out.price;
+            bestBookDisplay = BOOKMAKER_DISPLAY[book.key] ?? book.title;
+          }
+        }
         return {
           gameId: event.id,
           sport: sportLabel,
           homeTeam: event.home_team,
           awayTeam: event.away_team,
           startTime: event.commence_time,
-          pick: favorite.name,
+          pick: favoriteName,
           betType: "moneyline",
-          bookmaker: book.key,
-          odds: favorite.price,
+          bookmaker: bestBookDisplay,
+          odds: bestPrice,
           player: null,
         };
       }
-      // Fall back to totals Under (favorites usually go Under in tight games)
+
+      // Fall back to totals Under — shop all books for best Under price
+      let bestUnder: { point: number; price: number; bookDisplay: string } | null = null;
       for (const book of event.bookmakers) {
         const totals = book.markets.find((m) => m.key === "totals");
         if (!totals) continue;
         const under = totals.outcomes.find((o) => o.name === "Under");
         if (!under) continue;
+        const bookDisplay = BOOKMAKER_DISPLAY[book.key] ?? book.title;
+        if (!bestUnder || under.price > bestUnder.price) {
+          bestUnder = { point: under.point ?? 0, price: under.price, bookDisplay };
+        }
+      }
+      if (bestUnder) {
         return {
           gameId: event.id,
           sport: sportLabel,
           homeTeam: event.home_team,
           awayTeam: event.away_team,
           startTime: event.commence_time,
-          pick: `Under ${under.point}`,
+          pick: `Under ${bestUnder.point}`,
           betType: "total",
-          bookmaker: book.key,
-          odds: under.price,
+          bookmaker: bestUnder.bookDisplay,
+          odds: bestUnder.price,
           player: null,
         };
       }
