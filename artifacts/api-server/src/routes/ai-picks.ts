@@ -1767,13 +1767,28 @@ router.get("/ai-picks", async (req, res) => {
         if (!sportChampionMap.has(s)) sportChampionMap.set(s, leg);
       }
       const sportChampions = [...sportChampionMap.values()];
-      // Sort by Elo edge desc (sport-agnostic model signal), composite score as tiebreaker
+      // Sort by Elo edge desc (sport-agnostic model signal), composite score as tiebreaker.
+      // Composite score is NOT used as the primary tiebreaker because it systematically
+      // favours MLB (15+ games/day vs NBA's 3-8 → more books → higher bookScore/contextScore).
+      // When no sport has a clear Elo advantage (>1.5% gap), rotate by day-of-year so the
+      // All Sports lock cycles across NBA, MLB, NHL etc. instead of always showing MLB.
       sportChampions.sort((a, b) => {
-        const eloA = getEloEdge(a.gameId, a.pick) ?? -Infinity;
-        const eloB = getEloEdge(b.gameId, b.pick) ?? -Infinity;
-        if (eloA !== eloB) return eloB - eloA;
+        const eloA = getEloEdge(a.gameId, a.pick) ?? null;
+        const eloB = getEloEdge(b.gameId, b.pick) ?? null;
+        if (eloA !== null && eloB !== null && Math.abs(eloA - eloB) > 1.5) return eloB - eloA;
         return getGameScore(b.gameId, b.pick) - getGameScore(a.gameId, a.pick);
       });
+      // Daily rotation: when no sport has a commanding Elo edge, shift the winner
+      // by day-of-year so MLB doesn't monopolise the All Sports lock every day.
+      const topElo   = getEloEdge(sportChampions[0]?.gameId ?? "", sportChampions[0]?.pick ?? "") ?? null;
+      const clearWin = sportChampions.length > 1 &&
+        topElo !== null &&
+        Math.abs(topElo - (getEloEdge(sportChampions[1].gameId, sportChampions[1].pick) ?? topElo)) > 1.5;
+      if (!clearWin && sportChampions.length > 1) {
+        const dayOfYear = Math.floor((Date.now() - Date.UTC(new Date().getUTCFullYear(), 0, 1)) / 86_400_000);
+        const offset = dayOfYear % sportChampions.length;
+        sportChampions.push(...sportChampions.splice(0, offset));
+      }
       lockLeg = sportChampions[0] ?? propPool[0];
     } else {
       lockLeg = gameLegPool[0] ?? propPool[0];
@@ -1943,9 +1958,10 @@ router.get("/ai-picks", async (req, res) => {
 
     // ── GAME PARLAY: up to 4 game bets, same sport ───────────────────────────
     // Works with just 1 game available — useful for thin slates (single NBA game, tennis, etc.)
-    // Uses a different slice of the pool than Safe Parlay (excludes lock + safe game IDs).
+    // Only excludes the Lock game — if we also excluded Safe Parlay games we'd have nothing
+    // left on thin slates (e.g. 2 NBA games: lock uses 1, safe uses the other → game parlay empty).
     const gamePool = topSportPool(1);
-    const gameLegs = gamePool ? pickUnique(gamePool.legs, 4, safeUsedIds) : [];
+    const gameLegs = gamePool ? pickUnique(gamePool.legs, 4, lockExcludeIds) : [];
     const gameSport = gamePool?.sport ?? "";
     const gameParlayOfTheDay: AIParlay | null = gameLegs.length >= 1 ? {
       id: "game-1",
@@ -2074,7 +2090,10 @@ router.get("/ai-picks", async (req, res) => {
     const mixSportEntry = sortedSports.find(([s]) => (propsBySport.get(s)?.length ?? 0) >= 1)
       ?? sortedSports[0] ?? null;
     const mixSportLabel = mixSportEntry?.[0] ?? "";
-    const mixAllGameLegs = (mixSportEntry?.[1] ?? []).filter(l => !gameUsedIds.has(l.gameId));
+    // Allow mix parlay to draw from ALL game legs for its sport — the aggressive
+    // gameUsedIds exclusion left mix parlay with zero game legs on thin slates (2 games),
+    // which triggered the fallback that picked both sides of the same game.
+    const mixAllGameLegs = mixSportEntry?.[1] ?? [];
     // Exclude players already in Props Parlay so Mix and Props never share a prop leg.
     const mixAllPropLegs = (propsBySport.get(mixSportLabel) ?? []).filter(l => !l.player || !usedPropPlayers.has(l.player));
     const mixLegs = (() => {
@@ -2085,12 +2104,23 @@ router.get("/ai-picks", async (req, res) => {
         // No props — for prop-less sports (Soccer, Tennis, MMA) interleave favorites
         // and underdogs from the same sport so the mix section has content
         const fallbackLabel = cacheKey !== "all" ? normSport(cacheKey) : mixSportLabel;
-        const favLegs  = (legsBySport.get(fallbackLabel) ?? []).slice(0, 2);
-        const dogLegs  = (underdogLegsBySport.get(fallbackLabel) ?? []).slice(0, 2);
+        const favLegs  = (legsBySport.get(fallbackLabel) ?? []).slice(0, 4);
+        const dogLegs  = (underdogLegsBySport.get(fallbackLabel) ?? []).slice(0, 4);
+        // Deduplicate by gameId — MUST NOT include both sides of the same game.
+        // Favorites go first (the safer pick), then underdogs from different games.
+        const usedFallbackIds = new Set<string>();
         const combined: AIPickLeg[] = [];
-        for (let i = 0; i < Math.max(favLegs.length, dogLegs.length); i++) {
-          if (favLegs[i]) combined.push(favLegs[i]);
-          if (dogLegs[i] && combined.length < 4) combined.push(dogLegs[i]);
+        for (const leg of favLegs) {
+          if (combined.length >= 4) break;
+          if (usedFallbackIds.has(leg.gameId)) continue;
+          combined.push(leg);
+          usedFallbackIds.add(leg.gameId);
+        }
+        for (const leg of dogLegs) {
+          if (combined.length >= 4) break;
+          if (usedFallbackIds.has(leg.gameId)) continue;
+          combined.push(leg);
+          usedFallbackIds.add(leg.gameId);
         }
         return combined;
       }
@@ -2383,7 +2413,7 @@ router.get("/ai-picks", async (req, res) => {
 
       // Use props where the FAVORITE side is a heavy favorite: -180 to -400
       // Two heavy favorites combined (~-250 each) give a near even-money parlay
-      const propCandidates: AIPickLeg[] = realProps
+      const rawPropCandidates: AIPickLeg[] = realProps
         .filter((p) => {
           if (!apiKeys.includes(p.sport)) return false;
           const favOdds = Math.min(p.overOdds, p.underOdds); // most negative = heavier favorite
@@ -2401,6 +2431,28 @@ router.get("/ai-picks", async (req, res) => {
           if (l.player) seenPlayers.add(l.player);
           return true;
         });
+
+      // For the All Sports ladder: interleave props by sport so the ladder doesn't
+      // show only NBA legs every day. Round-robin one leg per sport at a time.
+      const propCandidates: AIPickLeg[] = (() => {
+        if (sportLabel !== "All Sports" || rawPropCandidates.length === 0) return rawPropCandidates;
+        const bySport = new Map<string, AIPickLeg[]>();
+        for (const leg of rawPropCandidates) {
+          const s = leg.sport;
+          if (!bySport.has(s)) bySport.set(s, []);
+          bySport.get(s)!.push(leg);
+        }
+        const sportCycle = [...bySport.keys()];
+        const interleaved: AIPickLeg[] = [];
+        let si = 0;
+        while (interleaved.length < rawPropCandidates.length) {
+          const pool = bySport.get(sportCycle[si % sportCycle.length]);
+          if (pool && pool.length > 0) interleaved.push(pool.shift()!);
+          si++;
+          if (sportCycle.every(s => (bySport.get(s)?.length ?? 0) === 0)) break;
+        }
+        return interleaved;
+      })();
 
       // Fall back to game legs for prop-less sports (Soccer, Tennis, MMA).
       // Game favorites in the -120 to -350 range behave similarly to heavy prop favorites.
