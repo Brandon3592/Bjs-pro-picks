@@ -1130,6 +1130,11 @@ router.get("/ai-picks", async (req, res) => {
       hasUpcomingGames(endOfDayEasternMs(1)) ? endOfDayEasternMs(1) :
       endOfDayEasternMs(2); // fallback: 2 days ahead
 
+    // Combat sports (Boxing/MMA) run Saturday night US = early Sunday UTC.
+    // Always look 36h ahead so fight cards are never cut off when other sports
+    // anchor the main cutoff to "end of today".
+    const combatCutoffMs = Math.max(todayCutoffMs, endOfDayEasternMs(1));
+
     // Sport tabs to show: only sports with at least 1 upcoming game with any h2h coverage.
     // Uses actual odds data (not the /sports catalog) so off-season sports never appear.
     // Falls back (in order) to: memory-cached "all" picks → lastKnownActiveSports →
@@ -1141,11 +1146,14 @@ router.get("/ai-picks", async (req, res) => {
       // only by upcoming games. The actual picks still only use upcoming games.
       const todayStartMs = startOfDayEasternMs();
       const fromOdds = allOddsRaw
-        .filter(({ events }) => events.some((ev) => {
-          const t = new Date(ev.commence_time).getTime();
-          if (t < todayStartMs || t > todayCutoffMs) return false;
-          return ev.bookmakers.some((b) => b.markets.some((m) => m.key === "h2h"));
-        }))
+        .filter(({ sport, events }) => {
+          const cutoff = (sport === "Boxing" || sport === "MMA") ? combatCutoffMs : todayCutoffMs;
+          return events.some((ev) => {
+            const t = new Date(ev.commence_time).getTime();
+            if (t < todayStartMs || t > cutoff) return false;
+            return ev.bookmakers.some((b) => b.markets.some((m) => m.key === "h2h"));
+          });
+        })
         .map(({ sport }) => sport);
       if (fromOdds.length > 0) {
         lastKnownActiveSports = fromOdds; // persist for quota-exhausted sessions
@@ -1393,7 +1401,8 @@ router.get("/ai-picks", async (req, res) => {
       for (const { sport: sportLabel, events } of allOdds) {
         for (const ev of events) {
           const t = new Date(ev.commence_time).getTime();
-          if (t <= nowMs || t > todayCutoffMs) continue;
+          const effectiveCutoff = (sportLabel === "Boxing" || sportLabel === "MMA") ? combatCutoffMs : todayCutoffMs;
+          if (t <= nowMs || t > effectiveCutoff) continue;
           eloPairs.push({ key: `${ev.id}::${ev.home_team}`, homeTeam: ev.home_team, awayTeam: ev.away_team, sport: sportLabel, team: ev.home_team });
           eloPairs.push({ key: `${ev.id}::${ev.away_team}`, homeTeam: ev.home_team, awayTeam: ev.away_team, sport: sportLabel, team: ev.away_team });
         }
@@ -1420,7 +1429,8 @@ router.get("/ai-picks", async (req, res) => {
     for (const { sport: sportLabel, events } of allOdds) {
       for (const ev of events) {
         const t = new Date(ev.commence_time).getTime();
-        if (t <= nowMs || t > todayCutoffMs) continue;
+        const effectiveCutoff = (sportLabel === "Boxing" || sportLabel === "MMA") ? combatCutoffMs : todayCutoffMs;
+        if (t <= nowMs || t > effectiveCutoff) continue;
 
         const bookCount = ev.bookmakers.filter((b) => b.markets.some((m) => m.key === "h2h")).length;
         if (bookCount < minBooks(sportLabel)) continue;
