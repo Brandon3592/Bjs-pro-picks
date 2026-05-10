@@ -19,6 +19,7 @@ export interface AuthUser {
   name?: string;
   profileImage?: string;
   isAuthenticated: boolean;
+  isAdmin: boolean;
 }
 
 export type GameSport = (typeof GameSport)[keyof typeof GameSport];

@@ -622,6 +622,7 @@ export const GetAuthUserResponse = zod.object({
   name: zod.string().optional(),
   profileImage: zod.string().optional(),
   isAuthenticated: zod.boolean(),
+  isAdmin: zod.boolean(),
 });
 
 /**

@@ -35,7 +35,7 @@ const NAV_ITEMS = [
   { href: "/tracker", label: "Bet Tracker", icon: BookOpen },
   { href: "/help", label: "Help & Support", icon: HelpCircle },
   { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/admin", label: "Owner Dashboard", icon: ShieldCheck },
+  { href: "/admin", label: "Owner Dashboard", icon: ShieldCheck, adminOnly: true },
 ];
 
 function NavLink({ href, label, icon: Icon, highlight, onClick }: { href: string; label: string; icon: React.ElementType; highlight?: boolean; onClick?: () => void }) {
@@ -66,6 +66,8 @@ function NavLink({ href, label, icon: Icon, highlight, onClick }: { href: string
 function Sidebar({ onClose }: { onClose?: () => void }) {
   const { user, logout, isAuthenticated } = useAuth();
   const initials = user?.name ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) : "EF";
+  const isAdmin = user?.isAdmin === true;
+  const visibleNavItems = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin);
 
   return (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
@@ -86,7 +88,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
 
       {/* Nav */}
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map((item) => (
+        {visibleNavItems.map((item) => (
           <NavLink key={item.href} {...item} onClick={onClose} />
         ))}
       </nav>

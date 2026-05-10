@@ -743,7 +743,9 @@ components:
           type: string
         isAuthenticated:
           type: boolean
-      required: [id, isAuthenticated]
+        isAdmin:
+          type: boolean
+      required: [id, isAuthenticated, isAdmin]
 
     Game:
       type: object

@@ -11,4 +11,5 @@ export interface AuthUser {
   name?: string;
   profileImage?: string;
   isAuthenticated: boolean;
+  isAdmin: boolean;
 }

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -23,6 +23,14 @@ const API_BASE = process.env.EXPO_PUBLIC_DOMAIN
 export default function HelpScreen() {
   const colors = useColors();
   const router = useRouter();
+
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    fetch(`${API_BASE}/api/auth/user`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((d: any) => setIsAdmin(d?.isAdmin === true))
+      .catch(() => {});
+  }, []);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -196,21 +204,23 @@ export default function HelpScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Owner Dashboard link */}
-        <TouchableOpacity
-          onPress={() => router.push("/(tabs)/admin" as any)}
-          style={[styles.ownerLink, { backgroundColor: colors.card, borderColor: colors.border }]}
-          activeOpacity={0.75}
-        >
-          <Feather name="shield" size={16} color={colors.mutedForeground} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.ownerLinkTitle, { color: colors.foreground }]}>Owner Dashboard</Text>
-            <Text style={[styles.ownerLinkSub, { color: colors.mutedForeground }]}>
-              View users & manage submissions
-            </Text>
-          </View>
-          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-        </TouchableOpacity>
+        {/* Owner Dashboard link — only visible to the admin account */}
+        {isAdmin && (
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/admin" as any)}
+            style={[styles.ownerLink, { backgroundColor: colors.card, borderColor: colors.border }]}
+            activeOpacity={0.75}
+          >
+            <Feather name="shield" size={16} color={colors.mutedForeground} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.ownerLinkTitle, { color: colors.foreground }]}>Owner Dashboard</Text>
+              <Text style={[styles.ownerLinkSub, { color: colors.mutedForeground }]}>
+                View users & manage submissions
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
