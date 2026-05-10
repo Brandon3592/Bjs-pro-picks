@@ -1,89 +1,15 @@
 import { Router } from "express";
 import { GetGamesQueryParams } from "@workspace/api-zod";
 import { fetchAllSportOdds, fetchAllSportScores, SPORT_KEYS, hasApiKey } from "../lib/odds-api";
-import { gameStatus, bestEdgeForGame } from "../lib/model";
+import { gameStatus, bestEdgeForGame, consensusProb } from "../lib/model";
 import { fetchWeather } from "../lib/weather";
 
 const router = Router();
 
-// ─── Mock fallback ────────────────────────────────────────────────────────────
-
-function generateMockGames() {
-  const now = new Date();
-  return [
-    {
-      id: "nfl-1", sport: "NFL", homeTeam: "Kansas City Chiefs", awayTeam: "Baltimore Ravens",
-      homeScore: 21, awayScore: 17,
-      startTime: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
-      status: "live", quarter: "Q3", timeRemaining: "8:42",
-      venue: "Arrowhead Stadium",
-      weather: { temp: 58, condition: "Partly Cloudy", windSpeed: 12, precipitation: 0 },
-      topEdge: 4.8,
-    },
-    {
-      id: "nba-1", sport: "NBA", homeTeam: "Boston Celtics", awayTeam: "Golden State Warriors",
-      homeScore: 88, awayScore: 82,
-      startTime: new Date(now.getTime() - 1.5 * 60 * 60 * 1000).toISOString(),
-      status: "live", quarter: "Q3", timeRemaining: "5:21",
-      venue: "TD Garden", weather: null, topEdge: 6.2,
-    },
-    {
-      id: "nfl-2", sport: "NFL", homeTeam: "Dallas Cowboys", awayTeam: "Philadelphia Eagles",
-      homeScore: null, awayScore: null,
-      startTime: new Date(now.getTime() + 3 * 60 * 60 * 1000).toISOString(),
-      status: "upcoming", quarter: null, timeRemaining: null,
-      venue: "AT&T Stadium",
-      weather: { temp: 72, condition: "Clear", windSpeed: 8, precipitation: 0 },
-      topEdge: 5.1,
-    },
-    {
-      id: "nba-2", sport: "NBA", homeTeam: "Los Angeles Lakers", awayTeam: "Denver Nuggets",
-      homeScore: null, awayScore: null,
-      startTime: new Date(now.getTime() + 5 * 60 * 60 * 1000).toISOString(),
-      status: "upcoming", quarter: null, timeRemaining: null,
-      venue: "Crypto.com Arena", weather: null, topEdge: 3.7,
-    },
-    {
-      id: "mlb-1", sport: "MLB", homeTeam: "New York Yankees", awayTeam: "Houston Astros",
-      homeScore: null, awayScore: null,
-      startTime: new Date(now.getTime() + 7 * 60 * 60 * 1000).toISOString(),
-      status: "upcoming", quarter: null, timeRemaining: null,
-      venue: "Yankee Stadium",
-      weather: { temp: 65, condition: "Overcast", windSpeed: 15, precipitation: 20 },
-      topEdge: 4.3,
-    },
-    {
-      id: "nhl-1", sport: "NHL", homeTeam: "Colorado Avalanche", awayTeam: "Tampa Bay Lightning",
-      homeScore: 2, awayScore: 1,
-      startTime: new Date(now.getTime() - 1 * 60 * 60 * 1000).toISOString(),
-      status: "live", quarter: "P2", timeRemaining: "12:33",
-      venue: "Ball Arena", weather: null, topEdge: 3.9,
-    },
-    {
-      id: "nfl-3", sport: "NFL", homeTeam: "San Francisco 49ers", awayTeam: "Seattle Seahawks",
-      homeScore: 28, awayScore: 14,
-      startTime: new Date(now.getTime() - 4 * 60 * 60 * 1000).toISOString(),
-      status: "final", quarter: "Final", timeRemaining: null,
-      venue: "Levi's Stadium",
-      weather: { temp: 62, condition: "Foggy", windSpeed: 7, precipitation: 5 },
-      topEdge: null,
-    },
-    {
-      id: "mlb-2", sport: "MLB", homeTeam: "Los Angeles Dodgers", awayTeam: "Atlanta Braves",
-      homeScore: null, awayScore: null,
-      startTime: new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString(),
-      status: "upcoming", quarter: null, timeRemaining: null,
-      venue: "Dodger Stadium",
-      weather: { temp: 78, condition: "Sunny", windSpeed: 5, precipitation: 0 },
-      topEdge: 5.5,
-    },
-  ];
-}
-
 // ─── Real data transformation ─────────────────────────────────────────────────
 
 async function getLiveGames() {
-  if (!hasApiKey()) return generateMockGames();
+  if (!hasApiKey()) return [];
 
   const [oddsData, scoresData] = await Promise.all([
     fetchAllSportOdds(),
@@ -141,7 +67,7 @@ async function getLiveGames() {
     }
   }
 
-  if (rawGames.length === 0) return generateMockGames();
+  if (rawGames.length === 0) return [];
 
   // Fetch weather for outdoor venues in parallel (only for upcoming/live games)
   const weatherResults = await Promise.all(

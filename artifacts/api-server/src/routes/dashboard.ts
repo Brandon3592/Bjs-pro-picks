@@ -8,23 +8,12 @@ const router = Router();
 router.get("/dashboard/summary", async (_req, res) => {
   if (!hasApiKey()) {
     return res.json({
-      liveGamesCount: 3,
-      upcomingGamesCount: 14,
-      totalGames: 17,
+      liveGamesCount: 0,
+      upcomingGamesCount: 0,
+      totalGames: 0,
       topGames: [],
-      sportBreakdown: [
-        { sport: "NFL", games: 3 },
-        { sport: "NBA", games: 2 },
-        { sport: "MLB", games: 10 },
-        { sport: "NHL", games: 2 },
-      ],
-      bookmakerBreakdown: [
-        { bookmaker: "DraftKings", games: 14 },
-        { bookmaker: "FanDuel", games: 14 },
-        { bookmaker: "BetMGM", games: 12 },
-        { bookmaker: "Caesars", games: 11 },
-        { bookmaker: "PointsBet", games: 9 },
-      ],
+      sportBreakdown: [],
+      bookmakerBreakdown: [],
       lastRefreshed: new Date().toISOString(),
       isLiveData: false,
     });
