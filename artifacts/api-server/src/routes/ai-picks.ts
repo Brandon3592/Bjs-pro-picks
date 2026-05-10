@@ -1744,55 +1744,30 @@ router.get("/ai-picks", async (req, res) => {
     }
 
     // ── LOCK OF THE DAY ──────────────────────────────────────────────────────
-    // For a single-sport view: take the top composite-score leg (book count +
-    // de-vig edge + Elo edge + steam), which is already sorted desc.
+    // Pure "best pick wins" — no sport rotation, no favouritism.
+    // Score every candidate (game legs + prop legs) by lock quality:
+    //   lockScore = impliedProbability% + eloEdge*2 + gameCompositeBonus
+    // The highest-scoring pick wins, regardless of sport or bet type.
     //
-    // For the ALL-SPORTS view we do NOT just take the raw #1 leg because that
-    // approach always favours MLB — it has the most games and the widest book
-    // coverage, so its legs score 10-20 pts higher on bookScore/contextScore
-    // even when a different sport has a sharper model-based pick.
-    //
-    // Instead we:
-    //   1. Find the best-scored leg PER SPORT (one "champion" per sport).
-    //   2. Rank those champions by Elo model edge first (sport-agnostic quality),
-    //      then fall back to the composite score as tiebreaker.
-    // This gives every active sport a fair shot at the lock.
-    let lockLeg: AIPickLeg;
-    if (cacheKey === "all" && gameLegPool.length > 0) {
-      // gameLegPool is already sorted desc by composite score, so the first
-      // occurrence of each sport is that sport's best-scored leg.
-      const sportChampionMap = new Map<string, AIPickLeg>();
-      for (const leg of gameLegPool) {
-        const s = normSport(leg.sport);
-        if (!sportChampionMap.has(s)) sportChampionMap.set(s, leg);
-      }
-      const sportChampions = [...sportChampionMap.values()];
-      // Sort by Elo edge desc (sport-agnostic model signal), composite score as tiebreaker.
-      // Composite score is NOT used as the primary tiebreaker because it systematically
-      // favours MLB (15+ games/day vs NBA's 3-8 → more books → higher bookScore/contextScore).
-      // When no sport has a clear Elo advantage (>1.5% gap), rotate by day-of-year so the
-      // All Sports lock cycles across NBA, MLB, NHL etc. instead of always showing MLB.
-      sportChampions.sort((a, b) => {
-        const eloA = getEloEdge(a.gameId, a.pick) ?? null;
-        const eloB = getEloEdge(b.gameId, b.pick) ?? null;
-        if (eloA !== null && eloB !== null && Math.abs(eloA - eloB) > 1.5) return eloB - eloA;
-        return getGameScore(b.gameId, b.pick) - getGameScore(a.gameId, a.pick);
-      });
-      // Daily rotation: when no sport has a commanding Elo edge, shift the winner
-      // by day-of-year so MLB doesn't monopolise the All Sports lock every day.
-      const topElo   = getEloEdge(sportChampions[0]?.gameId ?? "", sportChampions[0]?.pick ?? "") ?? null;
-      const clearWin = sportChampions.length > 1 &&
-        topElo !== null &&
-        Math.abs(topElo - (getEloEdge(sportChampions[1].gameId, sportChampions[1].pick) ?? topElo)) > 1.5;
-      if (!clearWin && sportChampions.length > 1) {
-        const dayOfYear = Math.floor((Date.now() - Date.UTC(new Date().getUTCFullYear(), 0, 1)) / 86_400_000);
-        const offset = dayOfYear % sportChampions.length;
-        sportChampions.push(...sportChampions.splice(0, offset));
-      }
-      lockLeg = sportChampions[0] ?? propPool[0];
-    } else {
-      lockLeg = gameLegPool[0] ?? propPool[0];
+    // For the ALL-SPORTS tab: all sports + all bet types compete.
+    // For individual sport tabs: only that sport's pool competes (gameLegPool
+    // is already filtered to the selected sport when cacheKey !== "all").
+    function impliedProbPct(odds: number): number {
+      return odds > 0
+        ? (100 / (odds + 100)) * 100
+        : (Math.abs(odds) / (Math.abs(odds) + 100)) * 100;
     }
+    function lockScore(leg: AIPickLeg): number {
+      const impliedP = impliedProbPct(leg.odds);
+      const eloEdge  = getEloEdge(leg.gameId, leg.pick) ?? 0;
+      const gameComp = getGameScore(leg.gameId, leg.pick); // 0 for prop legs
+      // Implied probability is the foundation — we want the most likely bet to hit.
+      // Elo edge rewards model-backed picks. Game composite is a small tiebreaker.
+      return impliedP + eloEdge * 2 + gameComp * 0.1;
+    }
+    const lockCandidates: AIPickLeg[] = [...gameLegPool, ...propPool];
+    lockCandidates.sort((a, b) => lockScore(b) - lockScore(a));
+    let lockLeg: AIPickLeg = lockCandidates[0];
     let lockEloResult: import("../lib/elo-model").EloLookupResult | null = null;
     let lockBookCount = 0;
 
