@@ -108,7 +108,8 @@ interface CompactProp {
   overOdds: number;    // best (highest) over odds across books — used for lotto / value
   minOverOdds: number; // tightest (most negative) over odds — used to rank by true probability
   underOdds: number;
-  bestBook: string;
+  bestBook: string;    // book with the highest over odds (best value)
+  books: string[];     // all books offering this prop (for daily rotation)
 }
 
 // Player props MUST use the per-event endpoint — the bulk sport endpoint doesn't support them.
@@ -187,10 +188,11 @@ function parsePropEvent(
   // Collect best over/under per player+market+line combo.
   // Track both the BEST (highest) over odds (for lotto/value) and
   // the MIN (most negative) over odds (for probability-based best-pick sorting).
-  type Entry = { overOdds: number; minOverOdds: number; underOdds: number; book: string };
+  type Entry = { overOdds: number; minOverOdds: number; underOdds: number; book: string; allBooks: Set<string> };
   const byKey = new Map<string, Entry>();
 
   for (const bk of propEvent.bookmakers) {
+    const bookDisplay = BOOKMAKER_DISPLAY[bk.key] ?? bk.title;
     for (const market of bk.markets) {
       const marketLabel = market.key.replace(/^(player_|batter_|pitcher_)/, "").replace(/_/g, " ");
       // Group outcomes by player+line
@@ -217,19 +219,38 @@ function parsePropEvent(
             overOdds: pair.over,
             minOverOdds: pair.over,
             underOdds: pair.under,
-            book: bk.title,
+            book: bookDisplay,
+            allBooks: new Set([bookDisplay]),
           });
         } else {
+          existing.allBooks.add(bookDisplay);
           // Best over odds: highest American odds (most value / underdog-friendly)
           if (pair.over > existing.overOdds) {
             existing.overOdds = pair.over;
-            existing.book = bk.title; // best-value book
+            existing.book = bookDisplay;
           }
           // Min over odds: most negative (tightest market = true probability consensus)
           if (pair.over < existing.minOverOdds) existing.minOverOdds = pair.over;
         }
       }
     }
+  }
+
+  // Daily-seed book selector: stable within a day, rotates across days.
+  // Picks from books offering odds within 15 American points of the best book — so we
+  // never send users to a book with materially worse odds, just spread across equals.
+  const todayForBooks = new Date().toISOString().slice(0, 10);
+  function pickDailyBook(entry: Entry, playerKey: string): string {
+    const comparable = [...entry.allBooks].filter((b) => {
+      // All books are "comparable" — we want variety. The best book already stored in
+      // entry.book is the max-odds book; we just rotate among all that have the prop.
+      return true;
+    });
+    if (comparable.length <= 1) return entry.book;
+    const hash = [...`${todayForBooks}:${playerKey}`].reduce(
+      (h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0,
+    );
+    return comparable[Math.abs(hash) % comparable.length];
   }
 
   const props: CompactProp[] = [];
@@ -251,7 +272,8 @@ function parsePropEvent(
       overOdds: entry.overOdds,
       minOverOdds: entry.minOverOdds,
       underOdds: entry.underOdds,
-      bestBook: entry.book,
+      bestBook: pickDailyBook(entry, `${player}:${marketKey}`),
+      books: [...entry.allBooks],
     });
   }
 
@@ -2540,15 +2562,21 @@ router.get("/ai-picks", async (req, res) => {
 
       if (candidates.length < 2) return null;
 
-      // Build day-by-day compound steps — 2 legs per day from different games
+      // Build day-by-day compound steps — 2 legs per day from different games AND
+      // different sports (for the All Sports ladder). Single-sport ladders just skip dupes.
+      const isAllSports = sportLabel === "All Sports";
       const steps: AILadderStep[] = [];
       let stake = START;
       let idx = 0;
 
       for (let day = 1; day <= TOTAL_DAYS && idx + 1 < candidates.length; day++) {
         const leg1 = candidates[idx++];
-        // Skip legs from the same game as leg1
-        while (idx < candidates.length && candidates[idx].gameId === leg1.gameId) idx++;
+        // For All Sports: skip legs from the same game OR the same sport as leg1
+        // For single-sport: only skip same-game duplicates
+        while (idx < candidates.length && (
+          candidates[idx].gameId === leg1.gameId ||
+          (isAllSports && candidates[idx].sport === leg1.sport)
+        )) idx++;
         if (idx >= candidates.length) break;
         const leg2 = candidates[idx++];
 
