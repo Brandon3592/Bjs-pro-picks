@@ -1525,7 +1525,8 @@ router.get("/ai-picks", async (req, res) => {
     for (const { sport: sportLabel, events } of allOdds) {
       for (const ev of events) {
         const t = new Date(ev.commence_time).getTime();
-        if (t <= nowMs || t > todayCutoffMs) continue;
+        const effectiveCutoff = (sportLabel === "Boxing" || sportLabel === "MMA") ? combatCutoffMs : todayCutoffMs;
+        if (t <= nowMs || t > effectiveCutoff) continue;
         const bookCount = ev.bookmakers.filter((b) => b.markets.some((m) => m.key === "h2h")).length;
         if (bookCount < minBooks(sportLabel)) continue;
         const leg = eventToFavoriteLeg(ev, sportLabel);
@@ -1540,7 +1541,8 @@ router.get("/ai-picks", async (req, res) => {
     for (const { sport: sportLabel, events } of allOdds) {
       for (const ev of events) {
         const t = new Date(ev.commence_time).getTime();
-        if (t <= nowMs || t > todayCutoffMs) continue;
+        const effectiveCutoff = (sportLabel === "Boxing" || sportLabel === "MMA") ? combatCutoffMs : todayCutoffMs;
+        if (t <= nowMs || t > effectiveCutoff) continue;
         const leg = eventToLeg(ev, sportLabel);
         if (leg) underdogLegPool.push(leg);
       }
