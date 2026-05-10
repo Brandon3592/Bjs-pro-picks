@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 
@@ -183,6 +184,8 @@ function TabIcon({ name, color, focused }: { name: FeatherIconName; color: strin
 export default function TabLayout() {
   const colors = useColors();
   const isIOS = Platform.OS === "ios";
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 60 + insets.bottom;
 
   if (Platform.OS === "web") {
     return <WebLayout />;
@@ -210,7 +213,8 @@ export default function TabLayout() {
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: colors.border,
           elevation: 0,
-          height: 60,
+          height: tabBarHeight,
+          paddingBottom: insets.bottom,
         },
         tabBarBackground: () =>
           isIOS ? (
