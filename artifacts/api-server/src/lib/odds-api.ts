@@ -160,6 +160,16 @@ export function getApiKey(): string | undefined {
   return (process.env.THE_ODDS_KEY || process.env.ODDS_API_KEY)?.trim() || undefined;
 }
 
+/** Clear all cached player-prop responses so the next fetch goes back to the API.
+ *  Called by the force-refresh endpoint so stale "no props yet" results don't block
+ *  the HR/goal-scorer/3PT/TD parlays after books post their lines mid-day.
+ */
+export function clearPropsCache(): void {
+  for (const key of cache.keys()) {
+    if (key.startsWith("props::")) cache.delete(key);
+  }
+}
+
 export function hasApiKey(): boolean {
   return !!getApiKey();
 }

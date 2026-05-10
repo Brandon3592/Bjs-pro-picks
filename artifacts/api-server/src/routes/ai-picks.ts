@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { fetchAllSportOdds, fetchActiveSportApiKeys, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, SPORT_API_TO_LABEL, hasApiKey, BOOKMAKER_DISPLAY } from "../lib/odds-api";
+import { fetchAllSportOdds, fetchActiveSportApiKeys, fetchPlayerPropsForEvent, SPORT_KEYS, SPORT_FROM_KEY, SPORT_API_TO_LABEL, hasApiKey, BOOKMAKER_DISPLAY, clearPropsCache } from "../lib/odds-api";
 import { fetchMlbLineupNames } from "../lib/mlb-lineups";
 import { fetchNbaOut, fetchNhlOut } from "../lib/sport-lineups";
 import { americanToDecimal, decimalToAmerican } from "../lib/model";
@@ -1793,34 +1793,45 @@ router.get("/ai-picks", async (req, res) => {
         return impliedProb + (PARK_HR_FACTOR[p.homeTeam] ?? 0) * 0.4;
       }
 
-      // Build a quality pool: one player per game, minimum quality bar only.
-      // No size cap — we want the full eligible roster so random selection produces
-      // genuinely different players on each refresh, not the same top-5 names cycling.
-      const seenGamesPool = new Set<string>();
+      // Build a quality pool: all players meeting the minimum quality bar.
+      // No per-game cap — early in the day only one or two games have HR props posted,
+      // so restricting to one player per game would produce 0–1 legs and kill the parlay.
+      // Multiple players from the same game is fine for a themed HR parlay.
       const qualityPool = [...bestPerPlayer.values()]
         .filter((p) => {
-          // Minimum quality: implied HR probability ≥ 15% (odds ≤ ~+567)
-          // This excludes extreme longshots while keeping a wide field.
+          // Minimum quality: implied HR probability ≥ 10% (odds ≤ ~+900).
+          // Slightly relaxed from 15% so early-day slates with limited books still qualify.
           const impliedProb = p.minOverOdds > 0
             ? (100 / (p.minOverOdds + 100)) * 100
             : (Math.abs(p.minOverOdds) / (Math.abs(p.minOverOdds) + 100)) * 100;
-          if (impliedProb < 15) return false;
-          if (seenGamesPool.has(p.gameId)) return false;
-          seenGamesPool.add(p.gameId);
-          return true;
+          return impliedProb >= 10;
         });
 
       // Random selection from the quality pool — true randomness so each Refresh
       // gives genuinely different picks. Picks are stable all day via DB persistence;
       // an explicit Refresh clears the DB and triggers a new random draw.
+      // Prefer players from different games when possible (soft diversity via shuffle),
+      // but don't hard-block same-game legs — early-day data may only cover one game.
       const shuffled = [...qualityPool].sort(() => Math.random() - 0.5);
       const selected: CompactProp[] = [];
       const seenGamesSelected = new Set<string>();
+      // First pass: pick from different games
       for (const candidate of shuffled) {
         if (selected.length >= n) break;
         if (!seenGamesSelected.has(candidate.gameId)) {
           selected.push(candidate);
           seenGamesSelected.add(candidate.gameId);
+        }
+      }
+      // Second pass: fill remaining slots from any game if we still need legs
+      if (selected.length < n) {
+        const selectedPlayers = new Set(selected.map((s) => s.player));
+        for (const candidate of shuffled) {
+          if (selected.length >= n) break;
+          if (!selectedPlayers.has(candidate.player)) {
+            selected.push(candidate);
+            selectedPlayers.add(candidate.player);
+          }
         }
       }
 
@@ -2103,6 +2114,8 @@ router.get("/ai-picks", async (req, res) => {
 
 // Force refresh — clears in-memory cache, today's daily_picks rows, AND today's
 // daily_ladders rows so both picks AND ladders regenerate on the next request.
+// Also clears the props cache so HR/goal-scorer/3PT/TD parlays get fresh lines
+// from the API (books post those props mid-day after the initial picks are cached).
 router.post("/ai-picks/refresh", async (req, res) => {
   const sport = typeof req.query.sport === "string" ? req.query.sport.toUpperCase() : null;
   const sportKey = sport && sport !== "ALL" ? sport : null;
@@ -2111,6 +2124,10 @@ router.post("/ai-picks/refresh", async (req, res) => {
   } else {
     picksCacheMap.clear();
   }
+  // Clear the player-props cache so the next generation re-fetches from the API.
+  // Without this, a "no props yet" result cached at server start blocks the HR parlay
+  // from populating even after books post their lines later in the day.
+  clearPropsCache();
   // Clear picks for today
   await deletePicksFromDb(sportKey);
   // Also clear ladders — they are stored in a separate table and were NOT previously
