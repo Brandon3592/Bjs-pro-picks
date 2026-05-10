@@ -102,7 +102,7 @@ router.get("/bets/chart", async (req, res) => {
     return res.json(points);
   } catch (err) {
     req.log.error({ err }, "Error fetching bankroll chart");
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -125,7 +125,7 @@ router.get("/bets", async (req, res) => {
     return res.json(filtered);
   } catch (err) {
     req.log.error({ err }, "Error fetching bets");
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -154,7 +154,7 @@ router.post("/bets", async (req, res) => {
     return res.status(201).json(bet);
   } catch (err) {
     req.log.error({ err }, "Error creating bet");
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -184,7 +184,7 @@ router.patch("/bets/:betId", async (req, res) => {
     return res.json(updated);
   } catch (err) {
     req.log.error({ err }, "Error updating bet");
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -202,7 +202,7 @@ router.delete("/bets/:betId", async (req, res) => {
     return res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Error deleting bet");
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 

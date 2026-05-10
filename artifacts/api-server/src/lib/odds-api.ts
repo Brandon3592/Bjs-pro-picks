@@ -142,6 +142,9 @@ interface CacheEntry<T> {
 const cache = new Map<string, CacheEntry<unknown>>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+// Track endpoints that returned 422/404 so we don't hammer them until TTL expires
+const failedPaths = new Map<string, number>(); // cacheKey → expiry timestamp
+
 function getCached<T>(key: string): T | null {
   const entry = cache.get(key) as CacheEntry<T> | undefined;
   if (!entry) return null;
@@ -188,12 +191,22 @@ async function fetchWithKey<T>(path: string, params: Record<string, string> = {}
   const cached = getCached<T>(cacheKey);
   if (cached) return cached;
 
+  // Skip endpoints known to be unavailable within the current TTL window
+  const failureExpiry = failedPaths.get(cacheKey);
+  if (failureExpiry && Date.now() < failureExpiry) return null;
+
   try {
     const res = await fetch(url.toString());
     if (!res.ok) {
-      logger.warn({ status: res.status, path }, "Odds API request failed");
+      if (res.status === 422 || res.status === 404) {
+        // Sport/market not available right now — suppress retries until TTL expires
+        failedPaths.set(cacheKey, Date.now() + CACHE_TTL_MS);
+      } else {
+        logger.warn({ status: res.status, path }, "Odds API request failed");
+      }
       return null;
     }
+    failedPaths.delete(cacheKey); // Clear any prior failure if the endpoint recovers
     const data = (await res.json()) as T;
     setCache(cacheKey, data);
     const remaining = res.headers.get("x-requests-remaining");

@@ -91,7 +91,7 @@ router.get("/admin/submissions", requireAdmin, async (req: Request, res: Respons
 });
 
 router.patch("/admin/submissions/:id", requireAdmin, async (req: Request, res: Response) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid id" });
     return;

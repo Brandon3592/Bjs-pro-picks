@@ -1460,7 +1460,7 @@ router.get("/ai-picks", async (req, res) => {
     // Track player names already committed to lottoParlay so allLottoParlay
     // (cross-sport) never reuses a prop leg from the single-sport Lotto.
     const usedLottoPlayers = new Set<string>(
-      lottoLegs.filter(l => l.player).map(l => l.player!),
+      lottoLegs.flatMap(l => ('player' in l && l.player) ? [l.player as string] : []),
     );
 
     // ── PROPS PARLAY: 3-4 props, same sport ──────────────────────────────────
@@ -1498,7 +1498,7 @@ router.get("/ai-picks", async (req, res) => {
     // Track player names already committed to Props Parlay so Mix Parlay's prop
     // side and the cross-sport allPropsParlay never repeat the same player.
     const usedPropPlayers = new Set<string>(
-      propParlayLegs.filter(l => l.player).map(l => l.player!),
+      propParlayLegs.flatMap(l => ('player' in l && l.player) ? [l.player as string] : []),
     );
 
     // ── MIX PARLAY: best 3-4 legs — any mix of game bets and player props ─────

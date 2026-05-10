@@ -58,7 +58,7 @@ router.post("/alerts/subscribe", async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, "Error creating alert subscription");
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -74,7 +74,7 @@ router.delete("/alerts/subscribe", async (req, res) => {
     return res.json({ status: "unsubscribed" });
   } catch (err) {
     req.log.error({ err }, "Error unsubscribing");
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 

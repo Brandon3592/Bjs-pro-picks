@@ -100,7 +100,7 @@ router.get("/line-movements", async (req, res) => {
     return res.json(moves.slice(0, limitN));
   } catch (err) {
     req.log.error({ err }, "Error fetching line movements");
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -141,7 +141,7 @@ router.get("/line-movements/:gameId", async (req, res) => {
     return res.json({ gameId, series, hasHistory: true });
   } catch (err) {
     req.log.error({ err }, "Error fetching game line history");
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 

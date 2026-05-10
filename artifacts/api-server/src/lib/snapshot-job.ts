@@ -4,7 +4,7 @@ import { fetchAllSportOdds, hasApiKey, BOOKMAKER_DISPLAY } from "./odds-api";
 import { logger } from "./logger";
 import { sendPushToAll } from "./push-notifications";
 
-const SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000; // 60 minutes
+const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const SNAPSHOT_TTL_MS = 48 * 60 * 60 * 1000; // keep 48 hours of history
 const STEAM_THRESHOLD_PCT = 0.5; // 0.5% implied prob shift counts as a move
 const STEAM_MIN_BOOKS = 2; // need at least 2 books moving same direction
