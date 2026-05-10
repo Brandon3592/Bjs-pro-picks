@@ -7,6 +7,7 @@ export const SPORT_KEYS: Record<string, string> = {
   NBA: "basketball_nba",
   MLB: "baseball_mlb",
   NHL: "icehockey_nhl",
+  WNBA: "basketball_wnba",
 };
 
 // Maps every supported Odds API sport key → the display label used in the tab UI.

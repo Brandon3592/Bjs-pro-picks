@@ -305,7 +305,20 @@ async function loadLadderFromDb(sport: string): Promise<AILadderParlay | null> {
       .from(dailyLaddersTable)
       .where(and(eq(dailyLaddersTable.sport, sport), eq(dailyLaddersTable.date, todayEasternDate())))
       .limit(1);
-    if (rows.length > 0) return rows[0].ladderJson as AILadderParlay;
+    if (rows.length > 0) {
+      const ladder = rows[0].ladderJson as AILadderParlay;
+      // Self-heal: "All Sports" ladder is invalid if both legs in step 1 share the same sport.
+      // This can happen when a stale cache entry was saved before the cross-sport logic was in place.
+      if (sport === "All Sports") {
+        const legs = ladder.steps?.[0]?.legs;
+        if (legs && legs.length >= 2 && legs[0].sport && legs[0].sport === legs[1].sport) {
+          await db.delete(dailyLaddersTable)
+            .where(and(eq(dailyLaddersTable.sport, sport), eq(dailyLaddersTable.date, todayEasternDate())));
+          return null;
+        }
+      }
+      return ladder;
+    }
   } catch { /* ignore DB errors — fall through to generate */ }
   return null;
 }
@@ -472,6 +485,7 @@ const SPORT_LABEL: Record<string, string> = {
   MLB: "baseball_mlb",
   NHL: "icehockey_nhl",
   NFL: "americanfootball_nfl",
+  WNBA: "basketball_wnba",
 };
 
 // lowercase label → canonical label (e.g. "soccer" → "Soccer", "mma" → "MMA")
@@ -933,7 +947,8 @@ router.get("/ai-picks", async (req, res) => {
     }
 
     // ── Book-count threshold — US sports need 3+ books; international need only 1 ──
-    const US_SPORTS = new Set(["NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF", "WNBA"]);
+    const US_SPORTS = new Set(["NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF"]);
+    // WNBA has limited bookmaker coverage — require only 1 book (same as Soccer/MMA)
     const minBooks = (sportLabel: string) => US_SPORTS.has(sportLabel) ? 3 : 1;
 
     // ── Score-sorted game leg pools ───────────────────────────────────────────
@@ -1697,6 +1712,7 @@ router.get("/ai-picks", async (req, res) => {
       marketLabel: string,
       n: number,
       forceOver = false,
+      allowSameGame = false,
     ): AIPickLeg[] {
       const candidates = realProps.filter(
         (p) => p.sport === sportApiKey && p.market === marketLabel,
@@ -1707,7 +1723,7 @@ router.get("/ai-picks", async (req, res) => {
         const existing = bestPerPlayer.get(p.player);
         if (!existing || p.line < existing.line) bestPerPlayer.set(p.player, p);
       }
-      // One player per game, sorted by ascending Over odds (most likely first)
+      // One player per game (unless allowSameGame), sorted by ascending Over odds (most likely first)
       const seenGames = new Set<string>();
       const toLeg = forceOver
         ? (prop: CompactProp): AIPickLeg => {
@@ -1730,7 +1746,7 @@ router.get("/ai-picks", async (req, res) => {
       return [...bestPerPlayer.values()]
         .sort((a, b) => a.minOverOdds - b.minOverOdds) // most negative = most likely to hit
         .filter((p) => {
-          if (seenGames.has(p.gameId)) return false;
+          if (!allowSameGame && seenGames.has(p.gameId)) return false;
           seenGames.add(p.gameId);
           return true;
         })
@@ -1860,7 +1876,7 @@ router.get("/ai-picks", async (req, res) => {
 
     // NHL: Anytime goal scorer parlay — uses "player_goals" Over 0.5 (FanDuel posts 0.5 lines;
     // buildSpecificPropLegs picks the lowest available line per player, so 0.5 wins over 1.5/2.5).
-    const goalScorerLegs = buildSpecificPropLegs("icehockey_nhl", "goals", 4, true);
+    const goalScorerLegs = buildSpecificPropLegs("icehockey_nhl", "goals", 4, true, true);
     const goalScorerParlay: AIParlay | null = goalScorerLegs.length >= 2 ? {
       id: "goal-scorer-1",
       name: `NHL Goal Scorer ${goalScorerLegs.length}-Legger`,

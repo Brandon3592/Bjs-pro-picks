@@ -393,7 +393,7 @@ function DailyLadderCard({
 }: {
   parlay: AILadderParlay;
   progress: LadderProgress | undefined;
-  onBet: (leg: AIPickLeg) => void;
+  onBet: (legs: AIPickLeg[]) => void;
   onLog: () => void;
   onSettle: (won: boolean) => void;
   isSettling: boolean;
@@ -517,7 +517,7 @@ function DailyLadderCard({
 
         <TouchableOpacity
           style={[styles.actionBtnFull, { backgroundColor: LADDER_ACCENT, marginTop: 10 }]}
-          onPress={() => onBet(today.legs[0])}
+          onPress={() => onBet(today.legs)}
         >
           <Feather name="external-link" size={14} color="#fff" />
           <Text style={styles.betBtnText}>Place Today's 2-Leg Bet</Text>
@@ -560,7 +560,7 @@ function DailyLadderCard({
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionBtnFull, { backgroundColor: LADDER_ACCENT, flex: 2 }]}
-          onPress={() => onBet(today.legs[0])}
+          onPress={() => onBet(today.legs)}
         >
           <Feather name="external-link" size={14} color="#fff" />
           <Text style={styles.betBtnText}>Place Bet</Text>
@@ -703,8 +703,10 @@ export default function AiPicksScreen() {
   const ladderSportIcon = sportIconMap[selectedSport] ?? "🏆";
   const ladderSportLabel = selectedSport === "all" ? "All Sports" : selectedSport;
 
-  // Sports that support player props (prop/mix parlay sections shown)
-  const PROPS_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL", "WNBA", "Soccer"]);
+  // Sports that support player props (prop/mix parlay sections shown).
+  // WNBA and Soccer are excluded: the Odds API has no h2h coverage for WNBA and
+  // no player prop markets for Soccer, so those sections would always be empty.
+  const PROPS_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL"]);
   const hasSportProps  = PROPS_SPORTS.has(selectedSport);
   const hasSportLadder = activeLadder !== null;
 
@@ -743,6 +745,20 @@ export default function AiPicksScreen() {
       odds: pick.odds,
       sport: pick.sport,
       preferredBookmaker: pick.bookmaker,
+    });
+  }
+
+  function openBetParlay(legs: AIPickLeg[]) {
+    if (!legs.length) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const combined = calcCombinedOdds(legs);
+    const pickText = legs.map((l, i) => `Leg ${i + 1}: ${l.pick}`).join("  ·  ");
+    setBookmakerBet({
+      matchup: legs.length > 1 ? `${legs.length}-Leg Parlay` : `${legs[0].awayTeam} @ ${legs[0].homeTeam}`,
+      pick: pickText,
+      odds: combined,
+      sport: legs[0].sport,
+      preferredBookmaker: legs[0].bookmaker,
     });
   }
 
@@ -1145,7 +1161,7 @@ export default function AiPicksScreen() {
                     <DailyLadderCard
                       parlay={activeLadder!}
                       progress={ladderProgress}
-                      onBet={(leg) => openBet({ ...leg })}
+                      onBet={(legs) => openBetParlay(legs)}
                       onLog={() => logLadder(activeLadder!)}
                       onSettle={handleSettle}
                       isSettling={isSettling}
