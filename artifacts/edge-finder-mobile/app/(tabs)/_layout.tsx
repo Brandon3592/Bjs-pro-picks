@@ -266,7 +266,10 @@ export default function TabLayout() {
             tabBarIcon: ({ color, focused }) => (
               <TabIcon name={icon} color={color} focused={focused} />
             ),
-            ...(hideFromTabBar && { tabBarButton: () => null }),
+            ...(hideFromTabBar && {
+              tabBarButton: () => null,
+              tabBarItemStyle: { width: 0, overflow: "hidden" },
+            }),
           }}
         />
       ))}

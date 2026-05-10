@@ -13,12 +13,9 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
+import { customFetch } from "@workspace/api-client-react";
 
 type Status = "idle" | "submitting" | "success" | "error";
-
-const API_BASE = process.env.EXPO_PUBLIC_DOMAIN
-  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-  : "";
 
 export default function HelpScreen() {
   const colors = useColors();
@@ -26,9 +23,8 @@ export default function HelpScreen() {
 
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
-    fetch(`${API_BASE}/api/auth/user`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d: any) => setIsAdmin(d?.isAdmin === true))
+    customFetch<{ isAdmin?: boolean }>("/api/auth/user")
+      .then((d) => setIsAdmin(d?.isAdmin === true))
       .catch(() => {});
   }, []);
 
@@ -44,10 +40,9 @@ export default function HelpScreen() {
     setStatus("submitting");
     setErrorMsg("");
     try {
-      const res = await fetch(`${API_BASE}/api/support/help`, {
+      await customFetch<unknown>("/api/support/help", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim(),
@@ -55,10 +50,6 @@ export default function HelpScreen() {
           message: message.trim(),
         }),
       });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error((j as any).error || "Failed to submit");
-      }
       setStatus("success");
       setSubject("");
       setMessage("");
