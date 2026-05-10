@@ -5,6 +5,7 @@ import {
   useRefreshAiPicks,
   useGetLadderProgress,
   useSettleLadder,
+  getGetAiPicksQueryKey,
   getGetLadderProgressQueryKey,
   type LadderProgress,
 } from "@workspace/api-client-react";
@@ -611,8 +612,9 @@ export default function TodayPage() {
   function handleRefresh() {
     doRefresh(undefined, {
       onSettled: () => {
-        refetchAll();
-        if (selectedSport !== "all") refetchSport();
+        // Invalidate ALL ai-picks cache entries (all-sports + every sport tab variant)
+        // so every query instance re-fetches fresh data from the server.
+        queryClient.invalidateQueries({ queryKey: getGetAiPicksQueryKey() });
       },
     });
   }

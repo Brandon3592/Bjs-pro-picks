@@ -2422,17 +2422,22 @@ router.get("/ai-picks", async (req, res) => {
         return impliedProb + (PARK_HR_FACTOR[p.homeTeam] ?? 0) * 0.4;
       }
 
-      // Build a quality pool: one player per game, sorted by base score, keep top 3×n
-      // candidates so the daily seed always draws from a meaningful set of real options.
+      // Build a quality pool: one player per game, minimum quality bar only.
+      // No size cap — we want the full eligible roster so random selection produces
+      // genuinely different players on each refresh, not the same top-5 names cycling.
       const seenGamesPool = new Set<string>();
       const qualityPool = [...bestPerPlayer.values()]
-        .sort((a, b) => baseHrScore(b) - baseHrScore(a))
         .filter((p) => {
+          // Minimum quality: implied HR probability ≥ 15% (odds ≤ ~+567)
+          // This excludes extreme longshots while keeping a wide field.
+          const impliedProb = p.minOverOdds > 0
+            ? (100 / (p.minOverOdds + 100)) * 100
+            : (Math.abs(p.minOverOdds) / (Math.abs(p.minOverOdds) + 100)) * 100;
+          if (impliedProb < 15) return false;
           if (seenGamesPool.has(p.gameId)) return false;
           seenGamesPool.add(p.gameId);
           return true;
-        })
-        .slice(0, Math.max(n * 3, 9)); // keep top 9+ for daily rotation
+        });
 
       // Random selection from the quality pool — true randomness so each Refresh
       // gives genuinely different picks. Picks are stable all day via DB persistence;
