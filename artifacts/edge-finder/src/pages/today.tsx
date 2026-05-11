@@ -1101,46 +1101,41 @@ export default function TodayPage() {
             )}
           </div>
 
-          {/* Safe Parlay */}
-          <div>
-            <SectionHeader icon={Zap} label="Safe Parlay of the Day" sublabel="2–3 legs, solid value (+175 to +500)" accent="#22c55e" />
-            {(safeParlay?.legs?.length ?? 0) > 0
-              ? <ParlayCard parlay={safeParlay!} accent="#22c55e"
-                  onBet={() => openBetForParlay(safeParlay!)}
-                  onLog={logBetToTracker}
-                />
-              : <EmptyCard>No safe parlay — try refreshing.</EmptyCard>
-            }
-          </div>
-
-          {/* Lotto Parlay */}
-          <div>
-            <SectionHeader icon={Dices} label="Lotto Parlay of the Day" sublabel="4–6 legs, big payout (+800 to +3000)" accent="#a855f7" />
-            {(lottoParlay?.legs?.length ?? 0) > 0
-              ? <ParlayCard parlay={lottoParlay!} accent="#a855f7"
-                  onBet={() => openBetForParlay(lottoParlay!)}
-                  onLog={logBetToTracker}
-                />
-              : <EmptyCard>No lotto parlay — try refreshing.</EmptyCard>
-            }
-          </div>
-
-          {/* Game Parlay — team sports only */}
-          {!isIndividualSport && (
+          {/* Safe Parlay — hidden when null */}
+          {(safeParlay?.legs?.length ?? 0) > 0 && (
             <div>
-              <SectionHeader icon={Trophy} label="Game Picks Parlay" sublabel="Moneyline, spread & O/U only — no props" accent="#3b82f6" />
-              {(gameParlay?.legs?.length ?? 0) > 0
-                ? <ParlayCard parlay={gameParlay!} accent="#3b82f6"
-                    onBet={() => openBetForParlay(gameParlay!)}
-                    onLog={logBetToTracker}
-                  />
-                : <EmptyCard>No game parlay — try refreshing.</EmptyCard>
-              }
+              <SectionHeader icon={Zap} label="Safe Parlay of the Day" sublabel="2–3 legs, solid value (+175 to +500)" accent="#22c55e" />
+              <ParlayCard parlay={safeParlay!} accent="#22c55e"
+                onBet={() => openBetForParlay(safeParlay!)}
+                onLog={logBetToTracker}
+              />
             </div>
           )}
 
-          {/* Fight Picks Parlay — MMA and Boxing only */}
-          {COMBAT_SPORTS.has(selectedSport) && (
+          {/* Lotto Parlay — hidden when null */}
+          {(lottoParlay?.legs?.length ?? 0) > 0 && (
+            <div>
+              <SectionHeader icon={Dices} label="Lotto Parlay of the Day" sublabel="4–6 legs, big payout (+800 to +3000)" accent="#a855f7" />
+              <ParlayCard parlay={lottoParlay!} accent="#a855f7"
+                onBet={() => openBetForParlay(lottoParlay!)}
+                onLog={logBetToTracker}
+              />
+            </div>
+          )}
+
+          {/* Game Parlay — team sports only, hidden when null */}
+          {!isIndividualSport && (gameParlay?.legs?.length ?? 0) > 0 && (
+            <div>
+              <SectionHeader icon={Trophy} label="Game Picks Parlay" sublabel="Moneyline, spread & O/U only — no props" accent="#3b82f6" />
+              <ParlayCard parlay={gameParlay!} accent="#3b82f6"
+                onBet={() => openBetForParlay(gameParlay!)}
+                onLog={logBetToTracker}
+              />
+            </div>
+          )}
+
+          {/* Fight Picks Parlay — MMA and Boxing only, hidden when no data */}
+          {COMBAT_SPORTS.has(selectedSport) && ((propParlay?.legs?.length ?? 0) > 0 || (gameParlay?.legs?.length ?? 0) > 0) && (
             <div>
               <SectionHeader icon={Target} label="Fight Picks Parlay" sublabel="KO, submission & decision method props" accent="#ef4444" />
               {(propParlay?.legs?.length ?? 0) > 0
@@ -1148,32 +1143,27 @@ export default function TodayPage() {
                     onBet={() => openBetForParlay(propParlay!)}
                     onLog={logBetToTracker}
                   />
-                : (gameParlay?.legs?.length ?? 0) > 0
-                  ? <ParlayCard parlay={gameParlay!} accent="#ef4444"
-                      onBet={() => openBetForParlay(gameParlay!)}
-                      onLog={logBetToTracker}
-                    />
-                  : <EmptyCard>No fight picks parlay today — check back on event days.</EmptyCard>
-              }
-            </div>
-          )}
-
-          {/* Match Picks Parlay — Tennis only (MMA/Boxing covered by Fight Picks above) */}
-          {selectedSport === "Tennis" && (
-            <div>
-              <SectionHeader icon={Target} label="Match Picks Parlay" sublabel="Best value match picks combined" accent="#ec4899" />
-              {(gameParlay?.legs?.length ?? 0) > 0
-                ? <ParlayCard parlay={gameParlay!} accent="#ec4899"
+                : <ParlayCard parlay={gameParlay!} accent="#ef4444"
                     onBet={() => openBetForParlay(gameParlay!)}
                     onLog={logBetToTracker}
                   />
-                : <EmptyCard>No match picks today — check back on tournament days.</EmptyCard>
               }
             </div>
           )}
 
-          {/* Props Parlay — team sports only */}
-          {hasSportProps && (
+          {/* Match Picks Parlay — Tennis only, hidden when no data */}
+          {selectedSport === "Tennis" && (gameParlay?.legs?.length ?? 0) > 0 && (
+            <div>
+              <SectionHeader icon={Target} label="Match Picks Parlay" sublabel="Best value match picks combined" accent="#ec4899" />
+              <ParlayCard parlay={gameParlay!} accent="#ec4899"
+                onBet={() => openBetForParlay(gameParlay!)}
+                onLog={logBetToTracker}
+              />
+            </div>
+          )}
+
+          {/* Props Parlay — team sports only, hidden when null */}
+          {hasSportProps && (propParlay?.legs?.length ?? 0) > 0 && (
             <div>
               <SectionHeader icon={Target}
                 label={
@@ -1189,28 +1179,31 @@ export default function TodayPage() {
                   "All player performance props"
                 }
                 accent="#f97316" />
-              {(propParlay?.legs?.length ?? 0) > 0
-                ? <ParlayCard parlay={propParlay!} accent="#f97316"
-                    onBet={() => openBetForParlay(propParlay!)}
-                    onLog={logBetToTracker}
-                  />
-                : <EmptyCard>No props parlay — try refreshing.</EmptyCard>
-              }
+              <ParlayCard parlay={propParlay!} accent="#f97316"
+                onBet={() => openBetForParlay(propParlay!)}
+                onLog={logBetToTracker}
+              />
             </div>
           )}
 
-          {/* Mix Parlay — team sports + non-Golf individual sports */}
-          {hasMixParlay && (
+          {/* Mix Parlay — team sports + non-Golf individual sports, hidden when null */}
+          {hasMixParlay && (mixParlay?.legs?.length ?? 0) > 0 && (
             <div>
               <SectionHeader icon={Shuffle} label="Mix Parlay" sublabel="Game bets + player props combined" accent="#14b8a6" />
-              {(mixParlay?.legs?.length ?? 0) > 0
-                ? <ParlayCard parlay={mixParlay!} accent="#14b8a6"
-                    onBet={() => openBetForParlay(mixParlay!)}
-                    onLog={logBetToTracker}
-                  />
-                : <EmptyCard>No mix parlay — try refreshing.</EmptyCard>
-              }
+              <ParlayCard parlay={mixParlay!} accent="#14b8a6"
+                onBet={() => openBetForParlay(mixParlay!)}
+                onLog={logBetToTracker}
+              />
             </div>
+          )}
+
+          {/* Notice when lock exists but no multi-leg parlays could be built */}
+          {lock && (safeParlay?.legs?.length ?? 0) === 0 && (lottoParlay?.legs?.length ?? 0) === 0
+            && (gameParlay?.legs?.length ?? 0) === 0 && (propParlay?.legs?.length ?? 0) === 0
+            && (mixParlay?.legs?.length ?? 0) === 0 && (
+            <EmptyCard>
+              Not enough games on the board today to build multi-leg parlays — the Lock of the Day above is your best bet. Parlays will populate as more {isAllTab ? "sports" : selectedSport} games are added to the board.
+            </EmptyCard>
           )}
 
           {/* All Sports Scorer Parlay — All Sports tab only */}

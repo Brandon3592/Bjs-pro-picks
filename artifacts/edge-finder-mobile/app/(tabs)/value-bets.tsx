@@ -977,88 +977,63 @@ export default function AiPicksScreen() {
 
             {selectedSport !== "NFL" || NFL_SEASON_ACTIVE ? (
               <>
-                {/* ── Safe Parlay — every tab ── */}
-                <View style={styles.section}>
-                  <SectionHeader icon="⚡" label="Safe Parlay of the Day" sublabel="2–3 legs, solid value (+175 to +500)" accent="#22c55e" />
-                  {(safeParlay?.legs?.length ?? 0) > 0 ? (
+                {/* ── Safe Parlay — hidden when null ── */}
+                {(safeParlay?.legs?.length ?? 0) > 0 && (
+                  <View style={styles.section}>
+                    <SectionHeader icon="⚡" label="Safe Parlay of the Day" sublabel="2–3 legs, solid value (+175 to +500)" accent="#22c55e" />
                     <ParlayCard parlay={safeParlay!} accent="#22c55e"
                       onBet={(leg) => openBet({ ...leg, pick: `${safeParlay!.name} (safe parlay)`, odds: safeParlay!.combinedOdds })}
                       onLog={() => logParlay(safeParlay!)} />
-                  ) : (
-                    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No safe parlay — pull to refresh.</Text>
-                    </View>
-                  )}
-                </View>
+                  </View>
+                )}
 
-                {/* ── Lotto Parlay — every tab ── */}
-                <View style={styles.section}>
-                  <SectionHeader icon="🎰" label="Lotto Parlay of the Day" sublabel="4–6 legs, big payout (+800 to +3000)" accent="#a855f7" />
-                  {(lottoParlay?.legs?.length ?? 0) > 0 ? (
+                {/* ── Lotto Parlay — hidden when null ── */}
+                {(lottoParlay?.legs?.length ?? 0) > 0 && (
+                  <View style={styles.section}>
+                    <SectionHeader icon="🎰" label="Lotto Parlay of the Day" sublabel="4–6 legs, big payout (+800 to +3000)" accent="#a855f7" />
                     <ParlayCard parlay={lottoParlay!} accent="#a855f7"
                       onBet={(leg) => openBet({ ...leg, pick: `${lottoParlay!.name} (lotto parlay)`, odds: lottoParlay!.combinedOdds })}
                       onLog={() => logParlay(lottoParlay!)} />
-                  ) : (
-                    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No lotto parlay — pull to refresh.</Text>
-                    </View>
-                  )}
-                </View>
+                  </View>
+                )}
 
-                {/* ── Game Picks Parlay — team sports only (not Tennis/Golf/MMA/Boxing) ── */}
-                {!isIndividualSport && (
+                {/* ── Game Picks Parlay — team sports only, hidden when null ── */}
+                {!isIndividualSport && (gameParlay?.legs?.length ?? 0) > 0 && (
                   <View style={styles.section}>
                     <SectionHeader icon="🏆" label="Game Picks Parlay" sublabel="Moneyline, spread & O/U only — no props" accent="#3b82f6" />
-                    {(gameParlay?.legs?.length ?? 0) > 0 ? (
-                      <ParlayCard parlay={gameParlay!} accent="#3b82f6"
-                        onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (game parlay)`, odds: gameParlay!.combinedOdds })}
-                        onLog={() => logParlay(gameParlay!)} />
-                    ) : (
-                      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No game parlay — pull to refresh.</Text>
-                      </View>
-                    )}
+                    <ParlayCard parlay={gameParlay!} accent="#3b82f6"
+                      onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (game parlay)`, odds: gameParlay!.combinedOdds })}
+                      onLog={() => logParlay(gameParlay!)} />
                   </View>
                 )}
 
-                {/* ── Fight Picks Parlay — MMA and Boxing only ── */}
-                {COMBAT_SPORTS.has(selectedSport) && (
+                {/* ── Fight Picks Parlay — MMA and Boxing only, hidden when no data ── */}
+                {COMBAT_SPORTS.has(selectedSport) && ((propParlay?.legs?.length ?? 0) > 0 || (gameParlay?.legs?.length ?? 0) > 0) && (
                   <View style={styles.section}>
                     <SectionHeader icon="🥊" label="Fight Picks Parlay" sublabel="KO, submission & decision method props" accent="#ef4444" />
-                    {(propParlay?.legs?.length ?? 0) > 0 ? (
-                      <ParlayCard parlay={propParlay!} accent="#ef4444"
-                        onBet={(leg) => openBet({ ...leg, pick: `${propParlay!.name} (fight picks)`, odds: propParlay!.combinedOdds })}
-                        onLog={() => logParlay(propParlay!)} />
-                    ) : (gameParlay?.legs?.length ?? 0) > 0 ? (
-                      <ParlayCard parlay={gameParlay!} accent="#ef4444"
-                        onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (fight picks)`, odds: gameParlay!.combinedOdds })}
-                        onLog={() => logParlay(gameParlay!)} />
-                    ) : (
-                      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No fight picks parlay today.</Text>
-                      </View>
-                    )}
+                    {(propParlay?.legs?.length ?? 0) > 0
+                      ? <ParlayCard parlay={propParlay!} accent="#ef4444"
+                          onBet={(leg) => openBet({ ...leg, pick: `${propParlay!.name} (fight picks)`, odds: propParlay!.combinedOdds })}
+                          onLog={() => logParlay(propParlay!)} />
+                      : <ParlayCard parlay={gameParlay!} accent="#ef4444"
+                          onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (fight picks)`, odds: gameParlay!.combinedOdds })}
+                          onLog={() => logParlay(gameParlay!)} />
+                    }
                   </View>
                 )}
 
-                {/* ── Match Picks Parlay — Tennis only ── */}
-                {selectedSport === "Tennis" && (
+                {/* ── Match Picks Parlay — Tennis only, hidden when no data ── */}
+                {selectedSport === "Tennis" && (gameParlay?.legs?.length ?? 0) > 0 && (
                   <View style={styles.section}>
                     <SectionHeader icon="🎾" label="Match Picks Parlay" sublabel="Best value match picks combined" accent="#ec4899" />
-                    {(gameParlay?.legs?.length ?? 0) > 0 ? (
-                      <ParlayCard parlay={gameParlay!} accent="#ec4899"
-                        onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (match picks)`, odds: gameParlay!.combinedOdds })}
-                        onLog={() => logParlay(gameParlay!)} />
-                    ) : (
-                      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No match picks today — check back on tournament days.</Text>
-                      </View>
-                    )}
+                    <ParlayCard parlay={gameParlay!} accent="#ec4899"
+                      onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (match picks)`, odds: gameParlay!.combinedOdds })}
+                      onLog={() => logParlay(gameParlay!)} />
                   </View>
                 )}
 
-                {/* ── Player Props Parlay — team sports only ── */}
-                {hasSportProps && (
+                {/* ── Player Props Parlay — team sports only, hidden when null ── */}
+                {hasSportProps && (propParlay?.legs?.length ?? 0) > 0 && (
                   <View style={styles.section}>
                     <SectionHeader icon="🎯"
                       label={
@@ -1074,31 +1049,30 @@ export default function AiPicksScreen() {
                         "All player performance props"
                       }
                       accent="#f97316" />
-                    {(propParlay?.legs?.length ?? 0) > 0 ? (
-                      <ParlayCard parlay={propParlay!} accent="#f97316"
-                        onBet={(leg) => openBet({ ...leg, pick: `${propParlay!.name} (props parlay)`, odds: propParlay!.combinedOdds })}
-                        onLog={() => logParlay(propParlay!)} />
-                    ) : (
-                      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No props parlay — pull to refresh.</Text>
-                      </View>
-                    )}
+                    <ParlayCard parlay={propParlay!} accent="#f97316"
+                      onBet={(leg) => openBet({ ...leg, pick: `${propParlay!.name} (props parlay)`, odds: propParlay!.combinedOdds })}
+                      onLog={() => logParlay(propParlay!)} />
                   </View>
                 )}
 
-                {/* ── Mix Parlay — team sports + non-Golf individual sports ── */}
-                {hasMixParlay && (
+                {/* ── Mix Parlay — team sports + non-Golf individual sports, hidden when null ── */}
+                {hasMixParlay && (mixParlay?.legs?.length ?? 0) > 0 && (
                   <View style={styles.section}>
                     <SectionHeader icon="🔀" label="Mix Parlay" sublabel="Game bets + player props combined" accent="#14b8a6" />
-                    {(mixParlay?.legs?.length ?? 0) > 0 ? (
-                      <ParlayCard parlay={mixParlay!} accent="#14b8a6"
-                        onBet={(leg) => openBet({ ...leg, pick: `${mixParlay!.name} (mix parlay)`, odds: mixParlay!.combinedOdds })}
-                        onLog={() => logParlay(mixParlay!)} />
-                    ) : (
-                      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No mix parlay — pull to refresh.</Text>
-                      </View>
-                    )}
+                    <ParlayCard parlay={mixParlay!} accent="#14b8a6"
+                      onBet={(leg) => openBet({ ...leg, pick: `${mixParlay!.name} (mix parlay)`, odds: mixParlay!.combinedOdds })}
+                      onLog={() => logParlay(mixParlay!)} />
+                  </View>
+                )}
+
+                {/* ── Notice when lock exists but parlays couldn't be built ── */}
+                {lock && (safeParlay?.legs?.length ?? 0) === 0 && (lottoParlay?.legs?.length ?? 0) === 0
+                  && (gameParlay?.legs?.length ?? 0) === 0 && (propParlay?.legs?.length ?? 0) === 0
+                  && (mixParlay?.legs?.length ?? 0) === 0 && (
+                  <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border, marginHorizontal: 16 }]}>
+                    <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>
+                      Not enough games on the board today for multi-leg parlays — the Lock of the Day above is your best bet. Parlays will populate as more {isAllTab ? "sports" : selectedSport} games are added.
+                    </Text>
                   </View>
                 )}
 
