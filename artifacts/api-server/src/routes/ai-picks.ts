@@ -310,8 +310,14 @@ async function loadLadderFromDb(sport: string): Promise<AILadderParlay | null> {
       // Self-heal: "All Sports" ladder is invalid if both legs in step 1 share the same sport.
       // This can happen when a stale cache entry was saved before the cross-sport logic was in place.
       if (sport === "All Sports") {
+        // Strong sports for All Sports ladder: must have real bookmaker h2h coverage
+        const STRONG_SPORTS = new Set(["NBA", "MLB", "NHL", "NFL", "Soccer", "MMA", "Boxing", "Tennis", "Golf"]);
         const legs = ladder.steps?.[0]?.legs;
-        if (legs && legs.length >= 2 && legs[0].sport && legs[0].sport === legs[1].sport) {
+        const invalid = !legs || legs.length < 2
+          || legs[0].sport === legs[1].sport
+          || !STRONG_SPORTS.has(legs[0].sport)
+          || !STRONG_SPORTS.has(legs[1].sport);
+        if (invalid) {
           await db.delete(dailyLaddersTable)
             .where(and(eq(dailyLaddersTable.sport, sport), eq(dailyLaddersTable.date, todayEasternDate())));
           return null;
@@ -1984,7 +1990,11 @@ router.get("/ai-picks", async (req, res) => {
           if (!sportQueue.has(leg.sport)) sportQueue.set(leg.sport, []);
           sportQueue.get(leg.sport)!.push(leg);
         }
+        // Core sports only for game-leg fallback in the All Sports ladder.
+        // WNBA and other low-coverage sports are excluded to prevent weak legs.
+        const ALL_SPORTS_CORE = new Set(["NBA", "MLB", "NHL", "NFL", "Soccer", "MMA", "Boxing", "Tennis", "Golf"]);
         for (const [s, legs] of legsBySport.entries()) {
+          if (!ALL_SPORTS_CORE.has(s)) continue;
           if ((sportQueue.get(s)?.length ?? 0) > 0) continue;
           const favs = legs.filter((l) => l.odds >= -350 && l.odds <= -110);
           if (favs.length > 0) sportQueue.set(s, [...favs]);
@@ -2054,7 +2064,9 @@ router.get("/ai-picks", async (req, res) => {
 
     // All-sports ladder: pool candidates from EVERY sport that has props today,
     // not just the top 2 — so the best legs genuinely come from across all sports.
-    const allPropSportKeys = [...new Set(realProps.map((p) => p.sport))];
+    // Exclude WNBA — limited bookmaker coverage means its legs are unreliable there.
+    const ALL_LADDER_EXCLUDED = new Set(["basketball_wnba"]);
+    const allPropSportKeys = [...new Set(realProps.map((p) => p.sport))].filter(k => !ALL_LADDER_EXCLUDED.has(k));
 
     // Soccer ladder uses game-leg favorites since soccer has no player prop markets.
     // WNBA ladder also falls back to game legs: WNBA props tend to be -130 to -160

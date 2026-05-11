@@ -84,12 +84,29 @@ async function getLiveGames() {
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
+// Return the current date in Eastern Time as "YYYY-MM-DD"
+function todayET(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
 router.get("/games", async (req, res) => {
   const parsed = GetGamesQueryParams.safeParse(req.query);
   if (!parsed.success) return res.status(400).json({ error: "Invalid query params" });
   const { sport, status } = parsed.data;
 
   let games = await getLiveGames();
+
+  // Only show games from today (ET). Live games are always shown; upcoming/final
+  // games must have a startTime that falls on today's ET date. This prevents
+  // multi-day lookahead games (e.g. tomorrow's MLB, off-season NFL) from showing up.
+  const today = todayET();
+  games = games.filter((g) => {
+    if (g.status === "live") return true;
+    if (!g.startTime) return false;
+    const gameDate = new Date(g.startTime).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    return gameDate === today;
+  });
+
   if (sport !== "all") games = games.filter((g) => g.sport === sport);
   if (status !== "all") games = games.filter((g) => g.status === status);
   return res.json(games);
