@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.edgefinder.app"
+      "bundleIdentifier": "com.bjspropicks.app"
     },
     "android": {
-      "package": "com.edgefinder.app"
+      "package": "com.bjspropicks.app"
     },
     "web": {
       "favicon": "./assets/bjspropicks-logo.png"
