@@ -973,7 +973,8 @@ export default function TodayPage() {
 
   // Sports where Props Parlay and Mix Parlay sections are shown.
   // All team sports are included; individual sports handle their own sections.
-  const TEAM_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF", "NCAABSB", "WNBA", "Soccer"]);
+  // Soccer excluded: no player prop or mix parlay markets available via The Odds API
+  const TEAM_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF", "NCAABSB", "WNBA"]);
   const hasSportProps  = TEAM_SPORTS.has(selectedSport);
   // Mix Parlay shown for team sports + combat sports only (not Tennis or Golf)
   const hasMixParlay   = TEAM_SPORTS.has(selectedSport) || COMBAT_SPORTS.has(selectedSport);
