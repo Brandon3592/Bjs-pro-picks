@@ -95,10 +95,14 @@ function formatMatchup(pick: AIPick | AIPickLeg) {
 
 function formatTime(iso: string) {
   const d = new Date(iso);
-  const h = d.getHours() % 12 || 12;
-  const m = d.getMinutes().toString().padStart(2, "0");
-  const ampm = d.getHours() >= 12 ? "PM" : "AM";
-  return `${h}:${m} ${ampm}`;
+  const todayET    = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  const gameET     = d.toLocaleDateString("en-CA",    { timeZone: "America/New_York" });
+  const timeStr    = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+  if (gameET === todayET) return timeStr;
+  const tom = new Date(); tom.setDate(tom.getDate() + 1);
+  const tomorrowET = tom.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  if (gameET === tomorrowET) return `Tomorrow · ${timeStr}`;
+  return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · ${timeStr}`;
 }
 
 // ─── Section header ───────────────────────────────────────────────────────────
@@ -716,7 +720,8 @@ export default function AiPicksScreen() {
   // All team sports included; individual sports handle their own sections.
   const TEAM_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF", "NCAABSB", "WNBA", "Soccer"]);
   const hasSportProps  = TEAM_SPORTS.has(selectedSport);
-  const hasMixParlay   = TEAM_SPORTS.has(selectedSport) || MATCH_PICKS_SPORTS.has(selectedSport);
+  // Mix Parlay shown for team sports + combat sports only (not Tennis or Golf)
+  const hasMixParlay   = TEAM_SPORTS.has(selectedSport) || COMBAT_SPORTS.has(selectedSport);
   const hasSportLadder = activeLadder !== null;
 
   // True when the API returned no picks for this sport (no qualifying games today).

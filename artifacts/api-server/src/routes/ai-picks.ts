@@ -623,8 +623,7 @@ router.get("/ai-picks", async (req, res) => {
     }
     const todayCutoffMs =
       hasUpcomingGames(endOfDayEasternMs(0)) ? endOfDayEasternMs(0) :
-      hasUpcomingGames(endOfDayEasternMs(1)) ? endOfDayEasternMs(1) :
-      endOfDayEasternMs(2); // fallback: 2 days ahead
+      endOfDayEasternMs(1); // fallback: tomorrow only (never jump 2 days — avoids unconfirmed tentative games)
 
     // Combat sports (Boxing/MMA) run Saturday night US = early Sunday UTC.
     // Always look 36h ahead so fight cards are never cut off when other sports

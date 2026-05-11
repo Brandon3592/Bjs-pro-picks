@@ -156,7 +156,15 @@ function combinedOddsPayout(odds: number): string {
 }
 
 function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const d = new Date(iso);
+  const todayET    = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  const gameET     = d.toLocaleDateString("en-CA",    { timeZone: "America/New_York" });
+  const timeStr    = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+  if (gameET === todayET) return timeStr;
+  const tom = new Date(); tom.setDate(tom.getDate() + 1);
+  const tomorrowET = tom.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  if (gameET === tomorrowET) return `Tomorrow · ${timeStr}`;
+  return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })} · ${timeStr}`;
 }
 
 function sportBadgeClass(sport: string) {
@@ -406,21 +414,6 @@ function LockCard({
           </p>
         </div>
       </div>
-
-      {/* Confidence bar */}
-      {pick.confidence != null && (
-        <div className="flex items-center gap-3 px-4 pb-2">
-          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full rounded-full"
-              style={{ width: `${pick.confidence * 100}%`, backgroundColor: GOLD }}
-            />
-          </div>
-          <span className="text-[11px] font-semibold" style={{ color: GOLD }}>
-            {Math.round((pick.confidence ?? 0) * 100)}% confidence · {impliedProb(pick.odds)} implied
-          </span>
-        </div>
-      )}
 
       {/* Model Analysis */}
       <div className="border-t border-border mx-4 pt-3 pb-4">
@@ -981,8 +974,8 @@ export default function TodayPage() {
   // All team sports are included; individual sports handle their own sections.
   const TEAM_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF", "NCAABSB", "WNBA", "Soccer"]);
   const hasSportProps  = TEAM_SPORTS.has(selectedSport);
-  // Mix Parlay shown for team sports + non-Golf individual sports
-  const hasMixParlay   = TEAM_SPORTS.has(selectedSport) || MATCH_PICKS_SPORTS.has(selectedSport);
+  // Mix Parlay shown for team sports + combat sports only (not Tennis or Golf)
+  const hasMixParlay   = TEAM_SPORTS.has(selectedSport) || COMBAT_SPORTS.has(selectedSport);
   const hasSportLadder = activeLadder !== null;
 
   const activeSports = (allData as any)?.activeSports as string[] | undefined;
