@@ -18,6 +18,7 @@ import Props from "@/pages/props";
 import AllMarkets from "@/pages/all-markets";
 import Picks from "@/pages/picks";
 import Today from "@/pages/today";
+import Privacy from "@/pages/privacy";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +48,7 @@ function Router() {
             <Route path="/settings" component={Settings} />
             <Route path="/help" component={Help} />
             <Route path="/admin" component={Admin} />
+            <Route path="/privacy" component={Privacy} />
             <Route component={NotFound} />
           </Switch>
         </AppLayout>
