@@ -28,13 +28,20 @@ const NFL_SEASON_ACTIVE = (() => {
 
 // Ordered list of all possible sport tabs — shown only when that sport is active today
 const ALL_POSSIBLE_TABS = [
-  { key: "all",   label: "All Sports", emoji: "🌐" },
-  { key: "NBA",   label: "NBA",        emoji: "🏀" },
-  { key: "MLB",   label: "MLB",        emoji: "⚾" },
-  { key: "NHL",   label: "NHL",        emoji: "🏒" },
-  { key: "NFL",   label: "NFL",        emoji: "🏈" },
-  { key: "NCAAB", label: "NCAAB",      emoji: "🎓" },
-  { key: "NCAAF", label: "NCAAF",      emoji: "🎓" },
+  { key: "all",     label: "All Sports", emoji: "🌐" },
+  { key: "NBA",     label: "NBA",        emoji: "🏀" },
+  { key: "MLB",     label: "MLB",        emoji: "⚾" },
+  { key: "NHL",     label: "NHL",        emoji: "🏒" },
+  { key: "NFL",     label: "NFL",        emoji: "🏈" },
+  { key: "NCAAB",   label: "NCAAB",      emoji: "🎓" },
+  { key: "NCAAF",   label: "NCAAF",      emoji: "🎓" },
+  { key: "NCAABSB", label: "NCAABSB",    emoji: "🥎" },
+  { key: "WNBA",    label: "WNBA",       emoji: "🏀" },
+  { key: "Soccer",  label: "Soccer",     emoji: "⚽" },
+  { key: "MMA",     label: "MMA",        emoji: "🥊" },
+  { key: "Boxing",  label: "Boxing",     emoji: "🥊" },
+  { key: "Tennis",  label: "Tennis",     emoji: "🎾" },
+  { key: "Golf",    label: "Golf",       emoji: "⛳" },
 ];
 
 type SportKey = string;
@@ -933,6 +940,7 @@ export default function TodayPage() {
   const goalScorerParlay = sportData?.goalScorerParlay ?? allData?.goalScorerParlay ?? null;
   const threePtParlay    = sportData?.threePtParlay    ?? allData?.threePtParlay    ?? null;
   const tdParlay         = sportData?.tdParlay         ?? allData?.tdParlay         ?? null;
+  const allScorerParlay  = isAllTab ? ((allData as any)?.allScorerParlay ?? null) : null;
 
   // Ladders
   const allLadder    = (allData?.allLadder    ?? null) as AILadderParlay | null;
@@ -944,9 +952,11 @@ export default function TodayPage() {
   const soccerLadder = (sportData?.soccerLadder ?? allData?.soccerLadder ?? null) as AILadderParlay | null;
   const isAI = allData?.isAI ?? false;
 
-  // Combat sports (MMA, Boxing) and individual sports (Tennis, Golf) — hide Game Picks Parlay
+  // Individual sports (Tennis, Golf) and combat sports (MMA, Boxing) — hide Game Picks Parlay
   const INDIVIDUAL_SPORTS = new Set(["Tennis", "Golf"]);
   const COMBAT_SPORTS     = new Set(["MMA", "Boxing"]);
+  // Match Picks shown for MMA/Boxing (as Fight Picks) and Tennis — NOT for Golf
+  const MATCH_PICKS_SPORTS = new Set(["MMA", "Boxing", "Tennis"]);
   const isIndividualSport = INDIVIDUAL_SPORTS.has(selectedSport) || COMBAT_SPORTS.has(selectedSport);
 
   const noPicksForSport = !isAllTab && !isLoading && !lock && !safeParlay && !lottoParlay
@@ -967,14 +977,17 @@ export default function TodayPage() {
 
   const isNflOffSeason = selectedSport === "NFL" && !NFL_SEASON_ACTIVE;
 
-  const PROPS_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL"]);
-  const hasSportProps  = PROPS_SPORTS.has(selectedSport);
+  // Sports where Props Parlay and Mix Parlay sections are shown.
+  // All team sports are included; individual sports handle their own sections.
+  const TEAM_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF", "NCAABSB", "WNBA", "Soccer"]);
+  const hasSportProps  = TEAM_SPORTS.has(selectedSport);
+  // Mix Parlay shown for team sports + non-Golf individual sports
+  const hasMixParlay   = TEAM_SPORTS.has(selectedSport) || MATCH_PICKS_SPORTS.has(selectedSport);
   const hasSportLadder = activeLadder !== null;
 
   const activeSports = (allData as any)?.activeSports as string[] | undefined;
-  const ALLOWED_SPORT_KEYS = new Set(["all", "NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF"]);
   const sportTabs = activeSports
-    ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || (activeSports.includes(t.key) && ALLOWED_SPORT_KEYS.has(t.key)))
+    ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || activeSports.includes(t.key))
     : ALL_POSSIBLE_TABS.filter((t) => ["all", "NBA", "MLB", "NHL", "NFL"].includes(t.key));
 
   return (
@@ -1145,12 +1158,36 @@ export default function TodayPage() {
             </div>
           )}
 
-          {/* Props Parlay */}
+          {/* Match Picks Parlay — Tennis only (MMA/Boxing covered by Fight Picks above) */}
+          {selectedSport === "Tennis" && (
+            <div>
+              <SectionHeader icon={Target} label="Match Picks Parlay" sublabel="Best value match picks combined" accent="#ec4899" />
+              {(gameParlay?.legs?.length ?? 0) > 0
+                ? <ParlayCard parlay={gameParlay!} accent="#ec4899"
+                    onBet={() => openBetForParlay(gameParlay!)}
+                    onLog={logBetToTracker}
+                  />
+                : <EmptyCard>No match picks today — check back on tournament days.</EmptyCard>
+              }
+            </div>
+          )}
+
+          {/* Props Parlay — team sports only */}
           {hasSportProps && (
             <div>
               <SectionHeader icon={Target}
-                label={selectedSport === "Soccer" ? "Match Value Parlay" : selectedSport === "WNBA" ? "WNBA Value Parlay" : "Player Props Parlay"}
-                sublabel={selectedSport === "Soccer" ? "Best value soccer match picks combined" : selectedSport === "WNBA" ? "Best value WNBA game picks combined" : "All player performance props"}
+                label={
+                  selectedSport === "Soccer" ? "Match Value Parlay" :
+                  selectedSport === "WNBA" ? "WNBA Props Parlay" :
+                  selectedSport === "NCAAB" ? "NCAAB Props Parlay" :
+                  selectedSport === "NCAAF" ? "NCAAF Props Parlay" :
+                  selectedSport === "NCAABSB" ? "NCAABSB Props Parlay" :
+                  "Player Props Parlay"
+                }
+                sublabel={
+                  selectedSport === "Soccer" ? "Best value soccer match picks combined" :
+                  "All player performance props"
+                }
                 accent="#f97316" />
               {(propParlay?.legs?.length ?? 0) > 0
                 ? <ParlayCard parlay={propParlay!} accent="#f97316"
@@ -1162,8 +1199,8 @@ export default function TodayPage() {
             </div>
           )}
 
-          {/* Mix Parlay */}
-          {hasSportProps && (
+          {/* Mix Parlay — team sports + non-Golf individual sports */}
+          {hasMixParlay && (
             <div>
               <SectionHeader icon={Shuffle} label="Mix Parlay" sublabel="Game bets + player props combined" accent="#14b8a6" />
               {(mixParlay?.legs?.length ?? 0) > 0
@@ -1176,19 +1213,38 @@ export default function TodayPage() {
             </div>
           )}
 
-          {/* Sport-specific prop parlays */}
+          {/* All Sports Scorer Parlay — All Sports tab only */}
+          {isAllTab && allScorerParlay && (
+            <div>
+              <Divider label="ALL SPORTS SCORER" />
+              <SectionHeader icon={TrendingUp} label="All Sports Scorer Parlay" sublabel="HR + 3PT + TD + Goal scorer legs combined" accent="#f59e0b" />
+              <ParlayCard parlay={allScorerParlay} accent="#f59e0b"
+                onBet={() => openBetForParlay(allScorerParlay)}
+                onLog={logBetToTracker}
+              />
+            </div>
+          )}
+
+          {/* Sport-specific scorer parlays — team sports per-sport tab */}
           {hasSportProps && selectedSport !== "all" && (() => {
-            const hasNba3pt  = selectedSport === "NBA" && (threePtParlay?.legs?.length ?? 0) > 0;
-            const hasMlbHr   = selectedSport === "MLB" && (hrParlay?.legs?.length ?? 0) > 0;
-            const hasNhlGs   = selectedSport === "NHL" && (goalScorerParlay?.legs?.length ?? 0) > 0;
-            const hasNflTd   = selectedSport === "NFL" && NFL_SEASON_ACTIVE && (tdParlay?.legs?.length ?? 0) > 0;
+            const hasNba3pt  = (selectedSport === "NBA" || selectedSport === "WNBA" || selectedSport === "NCAAB") && (threePtParlay?.legs?.length ?? 0) > 0;
+            const hasMlbHr   = (selectedSport === "MLB" || selectedSport === "NCAABSB") && (hrParlay?.legs?.length ?? 0) > 0;
+            const hasNhlGs   = (selectedSport === "NHL" || selectedSport === "Soccer") && (goalScorerParlay?.legs?.length ?? 0) > 0;
+            const hasNflTd   = (selectedSport === "NFL" || selectedSport === "NCAAF") && NFL_SEASON_ACTIVE && (tdParlay?.legs?.length ?? 0) > 0;
             if (!hasNba3pt && !hasMlbHr && !hasNhlGs && !hasNflTd) return null;
+            const scorerLabel =
+              selectedSport === "WNBA" ? "WNBA 3-Pointer Parlay" :
+              selectedSport === "NCAAB" ? "NCAAB 3-Pointer Parlay" :
+              selectedSport === "NCAABSB" ? "NCAABSB Home Run Parlay" :
+              selectedSport === "Soccer" ? "Soccer Goal Scorer Parlay" :
+              selectedSport === "NCAAF" ? "NCAAF TD Scorer Parlay" :
+              null;
             return (
               <>
-                <Divider label={`${selectedSport} PROP PARLAYS`} />
+                <Divider label={`${selectedSport} SCORER PARLAY`} />
                 {hasNba3pt && (
                   <div>
-                    <SectionHeader icon={Target} label="NBA 3-Pointer Parlay" sublabel="Volume shooters from deep" accent="#f97316" />
+                    <SectionHeader icon={Target} label={scorerLabel ?? "3-Pointer Parlay"} sublabel="Volume shooters from deep" accent="#f97316" />
                     <ParlayCard parlay={threePtParlay!} accent="#f97316"
                       onBet={() => openBetForParlay(threePtParlay!)}
                       onLog={logBetToTracker}
@@ -1197,7 +1253,7 @@ export default function TodayPage() {
                 )}
                 {hasMlbHr && (
                   <div>
-                    <SectionHeader icon={TrendingUp} label="MLB Home Run Parlay" sublabel="Multi-HR bomber parlay · high variance" accent="#3b82f6" />
+                    <SectionHeader icon={TrendingUp} label={scorerLabel ?? "Home Run Parlay"} sublabel="Multi-HR bomber parlay · high variance" accent="#3b82f6" />
                     <ParlayCard parlay={hrParlay!} accent="#3b82f6"
                       onBet={() => openBetForParlay(hrParlay!)}
                       onLog={logBetToTracker}
@@ -1206,7 +1262,7 @@ export default function TodayPage() {
                 )}
                 {hasNhlGs && (
                   <div>
-                    <SectionHeader icon={Target} label="NHL Goal Scorer Parlay" sublabel="Anytime goal or assist combo" accent="#8b5cf6" />
+                    <SectionHeader icon={Target} label={scorerLabel ?? "Goal Scorer Parlay"} sublabel="Anytime goal or assist combo" accent="#8b5cf6" />
                     <ParlayCard parlay={goalScorerParlay!} accent="#8b5cf6"
                       onBet={() => openBetForParlay(goalScorerParlay!)}
                       onLog={logBetToTracker}
@@ -1215,7 +1271,7 @@ export default function TodayPage() {
                 )}
                 {hasNflTd && (
                   <div>
-                    <SectionHeader icon={Target} label="NFL TD Scorer Parlay" sublabel="Anytime touchdown combo" accent="#22c55e" />
+                    <SectionHeader icon={Target} label={scorerLabel ?? "TD Scorer Parlay"} sublabel="Anytime touchdown combo" accent="#22c55e" />
                     <ParlayCard parlay={tdParlay!} accent="#22c55e"
                       onBet={() => openBetForParlay(tdParlay!)}
                       onLog={logBetToTracker}

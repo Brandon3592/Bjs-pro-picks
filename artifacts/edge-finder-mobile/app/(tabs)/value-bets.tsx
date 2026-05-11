@@ -33,17 +33,21 @@ import type { AIPick, AIParlay, AIPickLeg, AILadderParlay } from "@workspace/api
 
 // Ordered list of all possible sport tabs. Only those returned in activeSports are shown.
 const ALL_POSSIBLE_TABS = [
-  { key: "all",   label: "All Sports", icon: "🌐" },
-  { key: "NBA",   label: "NBA",        icon: "🏀" },
-  { key: "MLB",   label: "MLB",        icon: "⚾" },
-  { key: "NHL",   label: "NHL",        icon: "🏒" },
-  { key: "NFL",   label: "NFL",        icon: "🏈" },
-  { key: "NCAAB", label: "NCAAB",      icon: "🎓" },
-  { key: "NCAAF", label: "NCAAF",      icon: "🎓" },
+  { key: "all",     label: "All Sports", icon: "🌐" },
+  { key: "NBA",     label: "NBA",        icon: "🏀" },
+  { key: "MLB",     label: "MLB",        icon: "⚾" },
+  { key: "NHL",     label: "NHL",        icon: "🏒" },
+  { key: "NFL",     label: "NFL",        icon: "🏈" },
+  { key: "NCAAB",   label: "NCAAB",      icon: "🎓" },
+  { key: "NCAAF",   label: "NCAAF",      icon: "🎓" },
+  { key: "NCAABSB", label: "NCAABSB",    icon: "🥎" },
+  { key: "WNBA",    label: "WNBA",       icon: "🏀" },
+  { key: "Soccer",  label: "Soccer",     icon: "⚽" },
+  { key: "MMA",     label: "MMA",        icon: "🥊" },
+  { key: "Boxing",  label: "Boxing",     icon: "🥊" },
+  { key: "Tennis",  label: "Tennis",     icon: "🎾" },
+  { key: "Golf",    label: "Golf",       icon: "⛳" },
 ];
-
-// Sports tabs that the app supports — used to filter activeSports from the API.
-const ALLOWED_SPORT_KEYS = new Set(["all", "NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF"]);
 
 // NFL season: Sept (9) through Feb (2). Show content ~2 weeks before kickoff (mid-Aug).
 const NFL_SEASON_ACTIVE = (() => {
@@ -672,6 +676,7 @@ export default function AiPicksScreen() {
   const goalScorerParlay = sportData?.goalScorerParlay ?? allData?.goalScorerParlay ?? null;
   const threePtParlay    = sportData?.threePtParlay    ?? allData?.threePtParlay    ?? null;
   const tdParlay         = sportData?.tdParlay         ?? allData?.tdParlay         ?? null;
+  const allScorerParlay  = isAllTab ? ((allData as any)?.allScorerParlay ?? null) : null;
 
   // Ladders — prefer sportData (sport-specific) then fall back to allData (pre-computed)
   const allLadder    = (allData?.allLadder    ?? null) as AILadderParlay | null;
@@ -700,17 +705,19 @@ export default function AiPicksScreen() {
   const ladderSportIcon = sportIconMap[selectedSport] ?? "🏆";
   const ladderSportLabel = selectedSport === "all" ? "All Sports" : selectedSport;
 
-  // Sports that support player props (prop/mix parlay sections shown).
-  // WNBA and Soccer are excluded: the Odds API has no h2h coverage for WNBA and
-  // no player prop markets for Soccer, so those sections would always be empty.
-  const PROPS_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL"]);
-  const hasSportProps  = PROPS_SPORTS.has(selectedSport);
-  const hasSportLadder = activeLadder !== null;
-
   // Individual sports (no team matchups) and combat sports — hide "Game Picks Parlay"
   const INDIVIDUAL_SPORTS = new Set(["Tennis", "Golf"]);
   const COMBAT_SPORTS = new Set(["MMA", "Boxing"]);
+  // Match Picks shown for MMA/Boxing (Fight Picks) and Tennis — NOT Golf
+  const MATCH_PICKS_SPORTS = new Set(["MMA", "Boxing", "Tennis"]);
   const isIndividualSport = INDIVIDUAL_SPORTS.has(selectedSport) || COMBAT_SPORTS.has(selectedSport);
+
+  // Sports where Props Parlay and Mix Parlay sections are shown.
+  // All team sports included; individual sports handle their own sections.
+  const TEAM_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF", "NCAABSB", "WNBA", "Soccer"]);
+  const hasSportProps  = TEAM_SPORTS.has(selectedSport);
+  const hasMixParlay   = TEAM_SPORTS.has(selectedSport) || MATCH_PICKS_SPORTS.has(selectedSport);
+  const hasSportLadder = activeLadder !== null;
 
   // True when the API returned no picks for this sport (no qualifying games today).
   // Individual sports (Tennis, Golf) don't have game parlays, so don't gate on it.
@@ -721,7 +728,7 @@ export default function AiPicksScreen() {
   // While loading, fall back to the 4 core US sports.
   const activeSports = (allData as any)?.activeSports as string[] | undefined;
   const sportTabs = activeSports
-    ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || (activeSports.includes(t.key) && ALLOWED_SPORT_KEYS.has(t.key)))
+    ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || activeSports.includes(t.key))
     : ALL_POSSIBLE_TABS.filter((t) => ["all", "NBA", "MLB", "NHL", "NFL"].includes(t.key));
 
   function openTrack(pick: AIPick) {
@@ -1034,12 +1041,38 @@ export default function AiPicksScreen() {
                   </View>
                 )}
 
-                {/* ── Player Props Parlay — only for sports with prop markets ── */}
+                {/* ── Match Picks Parlay — Tennis only ── */}
+                {selectedSport === "Tennis" && (
+                  <View style={styles.section}>
+                    <SectionHeader icon="🎾" label="Match Picks Parlay" sublabel="Best value match picks combined" accent="#ec4899" />
+                    {(gameParlay?.legs?.length ?? 0) > 0 ? (
+                      <ParlayCard parlay={gameParlay!} accent="#ec4899"
+                        onBet={(leg) => openBet({ ...leg, pick: `${gameParlay!.name} (match picks)`, odds: gameParlay!.combinedOdds })}
+                        onLog={() => logParlay(gameParlay!)} />
+                    ) : (
+                      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No match picks today — check back on tournament days.</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* ── Player Props Parlay — team sports only ── */}
                 {hasSportProps && (
                   <View style={styles.section}>
                     <SectionHeader icon="🎯"
-                      label={selectedSport === "Soccer" ? "Match Value Parlay" : selectedSport === "WNBA" ? "WNBA Value Parlay" : "Player Props Parlay"}
-                      sublabel={selectedSport === "Soccer" ? "Best value soccer match picks combined" : selectedSport === "WNBA" ? "Best value WNBA game picks combined" : "All player performance props"}
+                      label={
+                        selectedSport === "Soccer" ? "Match Value Parlay" :
+                        selectedSport === "WNBA" ? "WNBA Props Parlay" :
+                        selectedSport === "NCAAB" ? "NCAAB Props Parlay" :
+                        selectedSport === "NCAAF" ? "NCAAF Props Parlay" :
+                        selectedSport === "NCAABSB" ? "NCAABSB Props Parlay" :
+                        "Player Props Parlay"
+                      }
+                      sublabel={
+                        selectedSport === "Soccer" ? "Best value soccer match picks combined" :
+                        "All player performance props"
+                      }
                       accent="#f97316" />
                     {(propParlay?.legs?.length ?? 0) > 0 ? (
                       <ParlayCard parlay={propParlay!} accent="#f97316"
@@ -1053,8 +1086,8 @@ export default function AiPicksScreen() {
                   </View>
                 )}
 
-                {/* ── Mix Parlay — only for sports with prop markets ── */}
-                {hasSportProps && (
+                {/* ── Mix Parlay — team sports + non-Golf individual sports ── */}
+                {hasMixParlay && (
                   <View style={styles.section}>
                     <SectionHeader icon="🔀" label="Mix Parlay" sublabel="Game bets + player props combined" accent="#14b8a6" />
                     {(mixParlay?.legs?.length ?? 0) > 0 ? (
@@ -1069,74 +1102,98 @@ export default function AiPicksScreen() {
                   </View>
                 )}
 
-                {/* ── Sport-specific prop parlay — prop-enabled sports only ── */}
-                {hasSportProps && selectedSport !== "all" && (
+                {/* ── All Sports Scorer Parlay — All Sports tab only ── */}
+                {isAllTab && allScorerParlay && (
                   <>
                     <View style={[styles.dividerSection, { borderTopColor: colors.border }]}>
-                      <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>{selectedSport} PROP PARLAYS</Text>
+                      <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>ALL SPORTS SCORER</Text>
                     </View>
-
-                    {selectedSport === "NBA" && (
-                      <View style={styles.section}>
-                        <SectionHeader icon="🏀" label="NBA 3-Pointer Parlay" sublabel="Volume shooters from deep" accent="#f97316" />
-                        {(threePtParlay?.legs?.length ?? 0) > 0 ? (
-                          <ParlayCard parlay={threePtParlay!} accent="#f97316"
-                            onBet={(leg) => openBet({ ...leg, pick: `${threePtParlay!.name} (3PT parlay)`, odds: threePtParlay!.combinedOdds })}
-                            onLog={() => logParlay(threePtParlay!)} />
-                        ) : (
-                          <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No 3PT parlay — check back on NBA game days.</Text>
-                          </View>
-                        )}
-                      </View>
-                    )}
-
-                    {selectedSport === "MLB" && (
-                      <View style={styles.section}>
-                        <SectionHeader icon="💣" label="MLB Home Run Parlay" sublabel="Multi-HR bomber parlay · high variance" accent="#3b82f6" />
-                        {(hrParlay?.legs?.length ?? 0) > 0 ? (
-                          <ParlayCard parlay={hrParlay!} accent="#3b82f6"
-                            onBet={(leg) => openBet({ ...leg, pick: `${hrParlay!.name} (HR parlay)`, odds: hrParlay!.combinedOdds })}
-                            onLog={() => logParlay(hrParlay!)} />
-                        ) : (
-                          <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>Home run prop odds haven't been posted yet — check back closer to first pitch.</Text>
-                          </View>
-                        )}
-                      </View>
-                    )}
-
-                    {selectedSport === "NHL" && (
-                      <View style={styles.section}>
-                        <SectionHeader icon="🏒" label="NHL Points Parlay" sublabel="Anytime goal or assist combo" accent="#8b5cf6" />
-                        {(goalScorerParlay?.legs?.length ?? 0) > 0 ? (
-                          <ParlayCard parlay={goalScorerParlay!} accent="#8b5cf6"
-                            onBet={(leg) => openBet({ ...leg, pick: `${goalScorerParlay!.name} (goal scorer parlay)`, odds: goalScorerParlay!.combinedOdds })}
-                            onLog={() => logParlay(goalScorerParlay!)} />
-                        ) : (
-                          <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No goal scorer parlay — check back on NHL game days.</Text>
-                          </View>
-                        )}
-                      </View>
-                    )}
-
-                    {selectedSport === "NFL" && NFL_SEASON_ACTIVE && (
-                      <View style={styles.section}>
-                        <SectionHeader icon="🏈" label="NFL TD Scorer Parlay" sublabel="Anytime touchdown combo" accent="#22c55e" />
-                        {(tdParlay?.legs?.length ?? 0) > 0 ? (
-                          <ParlayCard parlay={tdParlay!} accent="#22c55e"
-                            onBet={(leg) => openBet({ ...leg, pick: `${tdParlay!.name} (TD parlay)`, odds: tdParlay!.combinedOdds })}
-                            onLog={() => logParlay(tdParlay!)} />
-                        ) : (
-                          <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No TD parlay — check back on NFL game days.</Text>
-                          </View>
-                        )}
-                      </View>
-                    )}
+                    <View style={styles.section}>
+                      <SectionHeader icon="🏆" label="All Sports Scorer Parlay" sublabel="HR + 3PT + TD + Goal scorer legs combined" accent="#f59e0b" />
+                      <ParlayCard parlay={allScorerParlay} accent="#f59e0b"
+                        onBet={(leg) => openBet({ ...leg, pick: `${allScorerParlay.name}`, odds: allScorerParlay.combinedOdds })}
+                        onLog={() => logParlay(allScorerParlay)} />
+                    </View>
                   </>
                 )}
+
+                {/* ── Sport-specific scorer parlays — team sports per-sport tab ── */}
+                {hasSportProps && selectedSport !== "all" && (() => {
+                  const has3pt = (selectedSport === "NBA" || selectedSport === "WNBA" || selectedSport === "NCAAB") && (threePtParlay?.legs?.length ?? 0) > 0;
+                  const hasHr  = (selectedSport === "MLB" || selectedSport === "NCAABSB") && (hrParlay?.legs?.length ?? 0) > 0;
+                  const hasGs  = (selectedSport === "NHL" || selectedSport === "Soccer") && (goalScorerParlay?.legs?.length ?? 0) > 0;
+                  const hasTd  = (selectedSport === "NFL" || selectedSport === "NCAAF") && NFL_SEASON_ACTIVE && (tdParlay?.legs?.length ?? 0) > 0;
+                  if (!has3pt && !hasHr && !hasGs && !hasTd) return null;
+                  const scorerLabel =
+                    selectedSport === "WNBA" ? "WNBA 3-Pointer Parlay" :
+                    selectedSport === "NCAAB" ? "NCAAB 3-Pointer Parlay" :
+                    selectedSport === "NCAABSB" ? "NCAABSB Home Run Parlay" :
+                    selectedSport === "Soccer" ? "Soccer Goal Scorer Parlay" :
+                    selectedSport === "NCAAF" ? "NCAAF TD Scorer Parlay" : null;
+                  return (
+                    <>
+                      <View style={[styles.dividerSection, { borderTopColor: colors.border }]}>
+                        <Text style={[styles.dividerLabel, { color: colors.mutedForeground }]}>{selectedSport} SCORER PARLAY</Text>
+                      </View>
+                      {has3pt && (
+                        <View style={styles.section}>
+                          <SectionHeader icon="🏀" label={scorerLabel ?? "3-Pointer Parlay"} sublabel="Volume shooters from deep" accent="#f97316" />
+                          {(threePtParlay?.legs?.length ?? 0) > 0 ? (
+                            <ParlayCard parlay={threePtParlay!} accent="#f97316"
+                              onBet={(leg) => openBet({ ...leg, pick: `${threePtParlay!.name} (3PT parlay)`, odds: threePtParlay!.combinedOdds })}
+                              onLog={() => logParlay(threePtParlay!)} />
+                          ) : (
+                            <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                              <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No 3PT parlay — check back on game days.</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                      {hasHr && (
+                        <View style={styles.section}>
+                          <SectionHeader icon="💣" label={scorerLabel ?? "Home Run Parlay"} sublabel="Multi-HR bomber parlay · high variance" accent="#3b82f6" />
+                          {(hrParlay?.legs?.length ?? 0) > 0 ? (
+                            <ParlayCard parlay={hrParlay!} accent="#3b82f6"
+                              onBet={(leg) => openBet({ ...leg, pick: `${hrParlay!.name} (HR parlay)`, odds: hrParlay!.combinedOdds })}
+                              onLog={() => logParlay(hrParlay!)} />
+                          ) : (
+                            <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                              <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>Home run props not yet posted — check back closer to first pitch.</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                      {hasGs && (
+                        <View style={styles.section}>
+                          <SectionHeader icon="🏒" label={scorerLabel ?? "Goal Scorer Parlay"} sublabel="Anytime goal or assist combo" accent="#8b5cf6" />
+                          {(goalScorerParlay?.legs?.length ?? 0) > 0 ? (
+                            <ParlayCard parlay={goalScorerParlay!} accent="#8b5cf6"
+                              onBet={(leg) => openBet({ ...leg, pick: `${goalScorerParlay!.name} (goal scorer)`, odds: goalScorerParlay!.combinedOdds })}
+                              onLog={() => logParlay(goalScorerParlay!)} />
+                          ) : (
+                            <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                              <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No goal scorer parlay — check back on game days.</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                      {hasTd && (
+                        <View style={styles.section}>
+                          <SectionHeader icon="🏈" label={scorerLabel ?? "TD Scorer Parlay"} sublabel="Anytime touchdown combo" accent="#22c55e" />
+                          {(tdParlay?.legs?.length ?? 0) > 0 ? (
+                            <ParlayCard parlay={tdParlay!} accent="#22c55e"
+                              onBet={(leg) => openBet({ ...leg, pick: `${tdParlay!.name} (TD parlay)`, odds: tdParlay!.combinedOdds })}
+                              onLog={() => logParlay(tdParlay!)} />
+                          ) : (
+                            <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                              <Text style={[styles.emptyCardText, { color: colors.mutedForeground }]}>No TD parlay — check back on game days.</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             ) : null}
 

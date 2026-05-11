@@ -75,6 +75,7 @@ export interface AIPicksResponse {
   allGameParlay: AIParlay | null;
   allPropsParlay: AIParlay | null;
   allMixParlay: AIParlay | null;
+  allScorerParlay: AIParlay | null;
   hrParlay: AIParlay | null;
   goalScorerParlay: AIParlay | null;
   threePtParlay: AIParlay | null;
@@ -358,7 +359,7 @@ function picksAreStale(picks: AIPicksResponse): boolean {
   const parlayFields: Array<keyof AIPicksResponse> = [
     "safeParlay", "lottoParlay", "gameParlayOfTheDay", "propParlayOfTheDay",
     "mixParlayOfTheDay", "allSafeParlay", "allLottoParlay", "allGameParlay",
-    "allPropsParlay", "allMixParlay", "hrParlay", "goalScorerParlay",
+    "allPropsParlay", "allMixParlay", "allScorerParlay", "hrParlay", "goalScorerParlay",
     "threePtParlay", "tdParlay",
   ];
 
@@ -408,7 +409,7 @@ function picksHaveInvalidLeg(
   const parlayFields: Array<keyof AIPicksResponse> = [
     "safeParlay", "lottoParlay", "gameParlayOfTheDay", "propParlayOfTheDay",
     "mixParlayOfTheDay", "allSafeParlay", "allLottoParlay", "allGameParlay",
-    "allPropsParlay", "allMixParlay", "hrParlay", "goalScorerParlay",
+    "allPropsParlay", "allMixParlay", "allScorerParlay", "hrParlay", "goalScorerParlay",
     "threePtParlay", "tdParlay",
   ];
   for (const field of parlayFields) {
@@ -519,7 +520,7 @@ function buildEmptyResult(activeSportsList: string[], summary: string): AIPicksR
     lockOfTheDay: null, safeParlay: null, lottoParlay: null,
     gameParlayOfTheDay: null, propParlayOfTheDay: null, mixParlayOfTheDay: null,
     allSafeParlay: null, allLottoParlay: null, allGameParlay: null,
-    allPropsParlay: null, allMixParlay: null,
+    allPropsParlay: null, allMixParlay: null, allScorerParlay: null,
     hrParlay: null, goalScorerParlay: null, threePtParlay: null, tdParlay: null,
     allLadder: null, nbaLadder: null, mlbLadder: null, nhlLadder: null, nflLadder: null,
     wnbaLadder: null, soccerLadder: null,
@@ -1151,7 +1152,7 @@ router.get("/ai-picks", async (req, res) => {
             propParlayOfTheDay: filterParlay(all.propParlayOfTheDay),
             mixParlayOfTheDay: filterParlay(all.mixParlayOfTheDay),
             allSafeParlay: null, allLottoParlay: null, allGameParlay: null,
-            allPropsParlay: null, allMixParlay: null,
+            allPropsParlay: null, allMixParlay: null, allScorerParlay: null,
             hrParlay:          cacheKey === "MLB" ? all.hrParlay : null,
             goalScorerParlay:  cacheKey === "NHL" ? all.goalScorerParlay : null,
             threePtParlay:     cacheKey === "NBA" ? all.threePtParlay : null,
@@ -1185,7 +1186,7 @@ router.get("/ai-picks", async (req, res) => {
           lockOfTheDay: null, safeParlay: null, lottoParlay: null,
           gameParlayOfTheDay: null, propParlayOfTheDay: null, mixParlayOfTheDay: null,
           allSafeParlay: null, allLottoParlay: null, allGameParlay: null,
-          allPropsParlay: null, allMixParlay: null,
+          allPropsParlay: null, allMixParlay: null, allScorerParlay: null,
           hrParlay: null, goalScorerParlay: null, threePtParlay: null, tdParlay: null,
           allLadder: null, nbaLadder: null, mlbLadder: null, nhlLadder: null, nflLadder: null,
           wnbaLadder: null, soccerLadder: null,
@@ -1918,6 +1919,40 @@ router.get("/ai-picks", async (req, res) => {
       reasoning: `${tdLegs.length} anytime TD scorer props from today's NFL slate. Each target has high red zone usage and faces a defense ranked bottom-third in TDs allowed.`,
     } : null;
 
+    // ── ALL SPORTS SCORER PARLAY: cross-sport HR + 3PT + TD + Goal mix ───────
+    // Round-robin one leg per scorer pool so no single sport dominates.
+    const allScorerLegs = (() => {
+      const pools = new Map<string, AIPickLeg[]>([
+        ["MLB", hrLegs.slice()],
+        ["NBA", threePtLegs.slice()],
+        ["NFL", tdLegs.slice()],
+        ["NHL", goalScorerLegs.slice()],
+      ]);
+      const result: AIPickLeg[] = [];
+      const seenPlayers = new Set<string>();
+      const sportOrder = ["MLB", "NBA", "NFL", "NHL"];
+      for (let pass = 0; pass < 2 && result.length < 5; pass++) {
+        for (const sport of sportOrder) {
+          if (result.length >= 5) break;
+          const pool = pools.get(sport) ?? [];
+          const leg = pool.find(l => !seenPlayers.has(l.player ?? l.pick));
+          if (leg) {
+            seenPlayers.add(leg.player ?? leg.pick);
+            result.push(leg);
+          }
+        }
+      }
+      return result;
+    })();
+    const allScorerParlay: AIParlay | null = allScorerLegs.length >= 3 ? {
+      id: "all-scorer-1",
+      name: `${allScorerLegs.length}-Leg All Sports Scorer`,
+      legs: allScorerLegs,
+      combinedOdds: calcCombinedOdds(allScorerLegs),
+      confidence: Math.min(22, Math.round(12 + allScorerLegs.length * 3)),
+      reasoning: `Cross-sport scorer parlay blending HR, 3PT, TD, and Goal scorer legs — one standout scorer from each active sport today.`,
+    } : null;
+
     // ── DAILY COMPOUNDING LADDERS ($10 → $10K) ───────────────────────────────
     // Each step = one day's 2-leg parlay. Win both legs, roll the payout to tomorrow.
     // Each individual leg has odds between -150 and +150.
@@ -2097,6 +2132,7 @@ router.get("/ai-picks", async (req, res) => {
       allGameParlay,
       allPropsParlay,
       allMixParlay,
+      allScorerParlay,
       hrParlay,
       goalScorerParlay,
       threePtParlay,
@@ -2114,15 +2150,14 @@ router.get("/ai-picks", async (req, res) => {
       // Only show a sport tab when it has actual game legs — prevents empty Boxing/Tennis
       // tabs from appearing on days with no events for that sport.
       activeSports: (() => {
-        const ALLOWED_SPORT_TABS = new Set(["NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF"]);
         const sportsWithLegs = new Set(
           [...legsBySport.keys()].filter((s) => (legsBySport.get(s)?.length ?? 0) > 0),
         );
-        const filtered = catalogActiveSports.filter(
-          (s) => sportsWithLegs.has(s) && ALLOWED_SPORT_TABS.has(s),
-        );
-        // Fall back to core sports if filtering produces nothing (e.g. first run)
-        return filtered.length > 0 ? filtered : ["NBA", "MLB", "NHL", "NFL"];
+        const filtered = catalogActiveSports.filter((s) => sportsWithLegs.has(s));
+        // Fall back to catalogActiveSports if filtering produces nothing, then core sports
+        return filtered.length > 0 ? filtered
+          : catalogActiveSports.length > 0 ? catalogActiveSports
+          : ["NBA", "MLB", "NHL", "NFL"];
       })(),
     };
 

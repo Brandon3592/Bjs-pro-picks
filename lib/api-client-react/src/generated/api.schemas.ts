@@ -552,6 +552,7 @@ export interface AIPicksResponse {
   allGameParlay?: AIParlay | null;
   allPropsParlay?: AIParlay | null;
   allMixParlay?: AIParlay | null;
+  allScorerParlay?: AIParlay | null;
   hrParlay?: AIParlay | null;
   goalScorerParlay?: AIParlay | null;
   threePtParlay?: AIParlay | null;

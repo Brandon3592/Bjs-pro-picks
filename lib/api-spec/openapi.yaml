@@ -1538,6 +1538,9 @@ components:
         allMixParlay:
           $ref: "#/components/schemas/AIParlay"
           nullable: true
+        allScorerParlay:
+          $ref: "#/components/schemas/AIParlay"
+          nullable: true
         hrParlay:
           $ref: "#/components/schemas/AIParlay"
           nullable: true

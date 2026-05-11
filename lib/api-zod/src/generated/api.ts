@@ -272,6 +272,29 @@ export const GetAiPicksResponse = zod.object({
       reasoning: zod.string(),
     })
     .nullish(),
+  allScorerParlay: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      legs: zod.array(
+        zod.object({
+          gameId: zod.string(),
+          sport: zod.string(),
+          homeTeam: zod.string(),
+          awayTeam: zod.string(),
+          startTime: zod.coerce.date(),
+          pick: zod.string(),
+          betType: zod.string(),
+          bookmaker: zod.string(),
+          odds: zod.number(),
+          player: zod.string().nullish(),
+        }),
+      ),
+      combinedOdds: zod.number(),
+      confidence: zod.number(),
+      reasoning: zod.string(),
+    })
+    .nullish(),
   hrParlay: zod
     .object({
       id: zod.string(),
