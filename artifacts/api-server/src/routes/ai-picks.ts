@@ -231,6 +231,10 @@ function parsePropEvent(
           }
           // Min over odds: most negative (tightest market = true probability consensus)
           if (pair.over < existing.minOverOdds) existing.minOverOdds = pair.over;
+          // Best under odds: track the real Under price across all books.
+          // The sentinel 9999 means a book doesn't post the Under side — a subsequent book
+          // that DOES post the Under should override the sentinel.
+          if (pair.under < 9000 && pair.under < existing.underOdds) existing.underOdds = pair.under;
         }
       }
     }
@@ -1927,18 +1931,20 @@ router.get("/ai-picks", async (req, res) => {
       const TOTAL_DAYS = 10;
       const seenPlayers = new Set<string>();
 
-      // Use props where the FAVORITE side is a heavy favorite: -180 to -400
-      // Two heavy favorites combined (~-250 each) give a near even-money parlay
+      // Use props where the FAVORITE side is a clear favorite: -140 to -600.
+      // Wider range ensures ladders are always populated even on light-slate days.
+      // Ignore the 9999 sentinel (Over-only markets where Under wasn't posted by any book).
       const rawPropCandidates: AIPickLeg[] = realProps
         .filter((p) => {
           if (!apiKeys.includes(p.sport)) return false;
-          const favOdds = Math.min(p.overOdds, p.underOdds); // most negative = heavier favorite
-          return favOdds >= -400 && favOdds <= -180;
+          const under = p.underOdds >= 9000 ? Infinity : p.underOdds;
+          const favOdds = Math.min(p.overOdds, under); // most negative = heavier favorite
+          return favOdds >= -600 && favOdds <= -140;
         })
         .sort((a, b) => {
           // Prefer favorites around -240 (combined pair ≈ even money)
-          const aFav = Math.min(a.overOdds, a.underOdds);
-          const bFav = Math.min(b.overOdds, b.underOdds);
+          const aFav = Math.min(a.overOdds, a.underOdds >= 9000 ? Infinity : a.underOdds);
+          const bFav = Math.min(b.overOdds, b.underOdds >= 9000 ? Infinity : b.underOdds);
           return Math.abs(aFav + 240) - Math.abs(bFav + 240);
         })
         .map(propToFavoriteLeg)
@@ -2002,13 +2008,18 @@ router.get("/ai-picks", async (req, res) => {
           stake = targetWin;
         }
       } else {
-        // Single-sport: walk flat candidates array, skip same-game duplicates only.
+        // Single-sport: walk flat candidates array.  Prefer cross-game pairings so both
+        // legs aren't from the same event, but fall back to same-game when there is only
+        // one game on the slate (otherwise the ladder always returns null on single-game days).
         let idx = 0;
         for (let day = 1; day <= TOTAL_DAYS && idx + 1 < candidates.length; day++) {
           const leg1 = candidates[idx++];
-          while (idx < candidates.length && candidates[idx].gameId === leg1.gameId) idx++;
-          if (idx >= candidates.length) break;
-          const leg2 = candidates[idx++];
+          // Try to find a leg from a DIFFERENT game; if none exists, use the next leg anyway.
+          const crossIdx = candidates.slice(idx).findIndex((l) => l.gameId !== leg1.gameId);
+          const leg2Idx = crossIdx >= 0 ? idx + crossIdx : idx;
+          if (leg2Idx >= candidates.length) break;
+          const leg2 = candidates[leg2Idx];
+          idx = leg2Idx + 1;
           const combined = americanToDecimal(leg1.odds) * americanToDecimal(leg2.odds);
           const targetWin = parseFloat((stake * combined).toFixed(2));
           steps.push({ day, stake: parseFloat(stake.toFixed(2)), targetWin, legs: [leg1, leg2] });
