@@ -733,6 +733,14 @@ export default function AiPicksScreen() {
     ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || activeSports.includes(t.key))
     : ALL_POSSIBLE_TABS.filter((t) => ["all", "NBA", "MLB", "NHL", "NFL"].includes(t.key));
 
+  // True when the All Sports tab has no team-sport content today (only individual/combat
+  // sports like Boxing/MMA/Tennis/Golf are active). We show a clear redirect message
+  // rather than a confusing "No lock available" placeholder.
+  const TEAM_SPORT_KEYS = new Set(["NBA","MLB","NHL","NFL","NCAAB","NCAAF","NCAABSB","WNBA","Soccer"]);
+  const noTeamSportsToday = activeSports ? !activeSports.some((s: string) => TEAM_SPORT_KEYS.has(s)) : false;
+  const isAllTabEmpty = isAllTab && !isLoading && noTeamSportsToday
+    && !lock && !safeParlay && !lottoParlay && !gameParlay && !propParlay && !mixParlay;
+
   function openTrack(pick: AIPick) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setQuickAdd({
@@ -941,6 +949,23 @@ export default function AiPicksScreen() {
             <Text style={[styles.emptyCardText, { color: colors.mutedForeground, textAlign: "center" }]}>
               No {selectedSport} picks today — either no games are on the board or market coverage is too thin.{"\n\n"}Check back later or switch to another sport.
             </Text>
+          </View>
+        ) : isAllTabEmpty ? (
+          /* ── All Sports tab: no team-sport games today (only individual/combat sports active) ── */
+          <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border, marginHorizontal: 16 }]}>
+            <Text style={{ fontSize: 32, textAlign: "center", marginBottom: 8 }}>🌐</Text>
+            <Text style={[styles.emptyCardText, { color: colors.foreground, fontFamily: "Inter_600SemiBold", textAlign: "center", marginBottom: 6 }]}>
+              No team sport games today
+            </Text>
+            <Text style={[styles.emptyCardText, { color: colors.mutedForeground, textAlign: "center" }]}>
+              The All Sports tab only shows picks for team sports (NBA, MLB, NHL, NFL, Soccer, etc.).{"\n\n"}
+              Today only individual or combat sports are on the board — tap a sport tab above to see those picks.
+            </Text>
+            {activeSports && activeSports.filter((s: string) => !["NBA","MLB","NHL","NFL","NCAAB","NCAAF","NCAABSB","WNBA","Soccer"].includes(s)).length > 0 && (
+              <Text style={{ fontSize: 12, color: colors.mutedForeground, textAlign: "center", marginTop: 8 }}>
+                Available today: {activeSports.filter((s: string) => !["NBA","MLB","NHL","NFL","NCAAB","NCAAF","NCAABSB","WNBA","Soccer"].includes(s)).join(", ")}
+              </Text>
+            )}
           </View>
         ) : (
           <>

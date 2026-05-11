@@ -992,6 +992,14 @@ export default function TodayPage() {
     ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || activeSports.includes(t.key))
     : ALL_POSSIBLE_TABS.filter((t) => ["all", "NBA", "MLB", "NHL", "NFL"].includes(t.key));
 
+  // True when the All Sports tab has no team-sport content today (only individual/combat
+  // sports like Boxing/MMA/Tennis/Golf are active). We show a clear redirect message
+  // rather than a confusing "No lock available" placeholder inside the full content area.
+  const TEAM_SPORT_KEYS = new Set(["NBA","MLB","NHL","NFL","NCAAB","NCAAF","NCAABSB","WNBA","Soccer"]);
+  const noTeamSportsToday = activeSports ? !activeSports.some(s => TEAM_SPORT_KEYS.has(s)) : false;
+  const isAllTabEmpty = isAllTab && !isLoading && noTeamSportsToday
+    && !lock && !safeParlay && !lottoParlay && !gameParlay && !propParlay && !mixParlay;
+
   return (
     <div className="p-4 md:p-6 space-y-5 pb-20 md:pb-8">
       {/* Page header */}
@@ -1086,6 +1094,21 @@ export default function TodayPage() {
         <EmptyCard>
           No {selectedSport} picks available today — either no games are on the board or market coverage is too thin. Check back later or switch to another sport.
         </EmptyCard>
+      ) : isAllTabEmpty ? (
+        <div className="bg-card border border-border rounded-xl p-6 text-center space-y-3">
+          <p className="text-2xl">🌐</p>
+          <p className="font-semibold text-foreground">No team sport games today</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            The All Sports tab only shows picks for team sports (NBA, MLB, NHL, NFL, Soccer, etc.).
+            Today only individual or combat sports are on the board — use the sport tabs above to see those picks.
+          </p>
+          {activeSports && activeSports.filter(s => !["NBA","MLB","NHL","NFL","NCAAB","NCAAF","NCAABSB","WNBA","Soccer"].includes(s)).length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Available today:{" "}
+              {activeSports.filter(s => !["NBA","MLB","NHL","NFL","NCAAB","NCAAF","NCAABSB","WNBA","Soccer"].includes(s)).join(", ")}
+            </p>
+          )}
+        </div>
       ) : (
         <div className="space-y-8">
           {/* Lock of the Day */}
