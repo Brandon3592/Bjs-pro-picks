@@ -727,10 +727,10 @@ export default function AiPicksScreen() {
   // Build the tab list dynamically — show only sports with games today.
   // While loading, fall back to the 4 core US sports.
   const activeSports = (allData as any)?.activeSports as string[] | undefined;
-  // Only team sports get dedicated tabs — MMA, Boxing, Tennis, Golf are individual/combat
-  // sports covered under the All Sports aggregate, not their own tabs.
+  // All active sports (team + individual) get their own tab.
+  // The All Sports tab content is separately filtered to team sports only in the API.
   const sportTabs = activeSports
-    ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || (activeSports.includes(t.key) && TEAM_SPORTS.has(t.key)))
+    ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || activeSports.includes(t.key))
     : ALL_POSSIBLE_TABS.filter((t) => ["all", "NBA", "MLB", "NHL", "NFL"].includes(t.key));
 
   function openTrack(pick: AIPick) {

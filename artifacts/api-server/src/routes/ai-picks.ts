@@ -63,6 +63,13 @@ export interface AILadderParlay {
   reasoning: string;
 }
 
+// Sports that appear on the "All Sports" aggregate tab.
+// Individual/combat sports (MMA, Boxing, Tennis, Golf) have their own dedicated tabs
+// and are intentionally excluded from the All Sports parlay content.
+const TEAM_SPORT_LABELS = new Set([
+  "NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF", "NCAABSB", "WNBA", "Soccer",
+]);
+
 export interface AIPicksResponse {
   lockOfTheDay: AIPick | null;
   safeParlay: AIParlay | null;
@@ -686,6 +693,15 @@ router.get("/ai-picks", async (req, res) => {
       ? allOddsRaw.filter((s) => s.sport === cacheKey)
       : allOddsRaw;
 
+    // When building the "all" tab, only pull game legs from team sports.
+    // Individual/combat sports (MMA, Boxing, Tennis, Golf) are excluded from the
+    // All Sports aggregate so their picks don't surface there — they appear only on
+    // their own dedicated sport tab. For single-sport requests allOdds is already
+    // pre-filtered to one sport, so teamFilteredOdds === allOdds in that case.
+    const teamFilteredOdds = cacheKey === "all"
+      ? allOdds.filter((s) => TEAM_SPORT_LABELS.has(s.sport))
+      : allOdds;
+
     // Fetch real player props — always use the full slate (all sports) so sport-specific
     // parlay builders (HR, goal scorer, 3PT, TD, ladders) have data regardless of the
     // active sport filter. The filteredProps variable below re-applies the sport filter
@@ -1063,7 +1079,7 @@ router.get("/ai-picks", async (req, res) => {
 
     // ── FAVORITE game leg pool (used for safe, game, mix, cross-sport parlays) ──
     const gameLegPool: AIPickLeg[] = [];
-    for (const { sport: sportLabel, events } of allOdds) {
+    for (const { sport: sportLabel, events } of teamFilteredOdds) {
       for (const ev of events) {
         const t = new Date(ev.commence_time).getTime();
         const effectiveCutoff = (sportLabel === "Boxing" || sportLabel === "MMA") ? combatCutoffMs : todayCutoffMs;
@@ -1079,7 +1095,7 @@ router.get("/ai-picks", async (req, res) => {
 
     // ── UNDERDOG game leg pool (used exclusively for lotto parlays) ──
     const underdogLegPool: AIPickLeg[] = [];
-    for (const { sport: sportLabel, events } of allOdds) {
+    for (const { sport: sportLabel, events } of teamFilteredOdds) {
       for (const ev of events) {
         const t = new Date(ev.commence_time).getTime();
         const effectiveCutoff = (sportLabel === "Boxing" || sportLabel === "MMA") ? combatCutoffMs : todayCutoffMs;
@@ -2149,16 +2165,11 @@ router.get("/ai-picks", async (req, res) => {
       isAI: false,
       // Only show a sport tab when it has actual game legs — prevents empty Boxing/Tennis
       // tabs from appearing on days with no events for that sport.
-      activeSports: (() => {
-        const sportsWithLegs = new Set(
-          [...legsBySport.keys()].filter((s) => (legsBySport.get(s)?.length ?? 0) > 0),
-        );
-        const filtered = catalogActiveSports.filter((s) => sportsWithLegs.has(s));
-        // Fall back to catalogActiveSports if filtering produces nothing, then core sports
-        return filtered.length > 0 ? filtered
-          : catalogActiveSports.length > 0 ? catalogActiveSports
-          : ["NBA", "MLB", "NHL", "NFL"];
-      })(),
+      // activeSports drives which sport tabs appear. Use catalogActiveSports directly
+      // (computed from allOddsRaw including individual sports) so every sport with
+      // games today gets a tab — even MMA/Boxing/Tennis/Golf whose legs are excluded
+      // from the All Sports parlay content via teamFilteredOdds above.
+      activeSports: catalogActiveSports.length > 0 ? catalogActiveSports : ["NBA", "MLB", "NHL", "NFL"],
     };
 
     // Cache until the next game starts (+ 30s so it's definitely in progress), or until
