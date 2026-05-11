@@ -641,11 +641,13 @@ router.get("/ai-picks", async (req, res) => {
       // only by upcoming games. The actual picks still only use upcoming games.
       const todayStartMs = startOfDayEasternMs();
       const fromOdds = allOddsRaw
-        .filter(({ sport, events }) => {
-          const cutoff = (sport === "Boxing" || sport === "MMA") ? combatCutoffMs : todayCutoffMs;
+        .filter(({ events }) => {
+          // All sports (including Boxing/MMA) use todayCutoffMs for TAB VISIBILITY.
+          // This ensures Boxing/MMA only show a tab when fights are actually today —
+          // not days ahead. The wider combatCutoffMs is still used for pick building.
           return events.some((ev) => {
             const t = new Date(ev.commence_time).getTime();
-            if (t < todayStartMs || t > cutoff) return false;
+            if (t < todayStartMs || t > todayCutoffMs) return false;
             return ev.bookmakers.some((b) => b.markets.some((m) => m.key === "h2h"));
           });
         })

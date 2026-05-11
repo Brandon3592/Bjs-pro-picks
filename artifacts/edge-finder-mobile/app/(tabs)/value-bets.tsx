@@ -95,13 +95,14 @@ function formatMatchup(pick: AIPick | AIPickLeg) {
 
 function formatTime(iso: string) {
   const d = new Date(iso);
-  const todayET    = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-  const gameET     = d.toLocaleDateString("en-CA",    { timeZone: "America/New_York" });
-  const timeStr    = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
-  if (gameET === todayET) return timeStr;
+  // Compare dates in the user's LOCAL timezone so "today/tomorrow" matches their clock
+  const todayLocal    = new Date().toLocaleDateString("en-CA");
+  const gameLocal     = d.toLocaleDateString("en-CA");
+  const timeStr       = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  if (gameLocal === todayLocal) return timeStr;
   const tom = new Date(); tom.setDate(tom.getDate() + 1);
-  const tomorrowET = tom.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-  if (gameET === tomorrowET) return `Tomorrow · ${timeStr}`;
+  const tomorrowLocal = tom.toLocaleDateString("en-CA");
+  if (gameLocal === tomorrowLocal) return `Tomorrow · ${timeStr}`;
   return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · ${timeStr}`;
 }
 
@@ -1127,15 +1128,15 @@ export default function AiPicksScreen() {
                 {hasSportProps && selectedSport !== "all" && (() => {
                   const has3pt = (selectedSport === "NBA" || selectedSport === "WNBA" || selectedSport === "NCAAB") && (threePtParlay?.legs?.length ?? 0) > 0;
                   const hasHr  = (selectedSport === "MLB" || selectedSport === "NCAABSB") && (hrParlay?.legs?.length ?? 0) > 0;
-                  const hasGs  = (selectedSport === "NHL" || selectedSport === "Soccer") && (goalScorerParlay?.legs?.length ?? 0) > 0;
+                  // NHL only — Soccer has no player_goals prop market; never fall through to NHL data on Soccer tab
+                  const hasGs  = selectedSport === "NHL" && (goalScorerParlay?.legs?.length ?? 0) > 0;
                   const hasTd  = (selectedSport === "NFL" || selectedSport === "NCAAF") && NFL_SEASON_ACTIVE && (tdParlay?.legs?.length ?? 0) > 0;
                   if (!has3pt && !hasHr && !hasGs && !hasTd) return null;
                   const scorerLabel =
-                    selectedSport === "WNBA" ? "WNBA 3-Pointer Parlay" :
-                    selectedSport === "NCAAB" ? "NCAAB 3-Pointer Parlay" :
+                    selectedSport === "WNBA"    ? "WNBA 3-Pointer Parlay" :
+                    selectedSport === "NCAAB"   ? "NCAAB 3-Pointer Parlay" :
                     selectedSport === "NCAABSB" ? "NCAABSB Home Run Parlay" :
-                    selectedSport === "Soccer" ? "Soccer Goal Scorer Parlay" :
-                    selectedSport === "NCAAF" ? "NCAAF TD Scorer Parlay" : null;
+                    selectedSport === "NCAAF"   ? "NCAAF TD Scorer Parlay" : null;
                   return (
                     <>
                       <View style={[styles.dividerSection, { borderTopColor: colors.border }]}>
