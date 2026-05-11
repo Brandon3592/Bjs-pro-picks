@@ -986,8 +986,10 @@ export default function TodayPage() {
   const hasSportLadder = activeLadder !== null;
 
   const activeSports = (allData as any)?.activeSports as string[] | undefined;
+  // Only team sports get dedicated tabs — MMA, Boxing, Tennis, Golf are individual/combat
+  // sports covered under the All Sports aggregate, not their own tabs.
   const sportTabs = activeSports
-    ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || activeSports.includes(t.key))
+    ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || (activeSports.includes(t.key) && TEAM_SPORTS.has(t.key)))
     : ALL_POSSIBLE_TABS.filter((t) => ["all", "NBA", "MLB", "NHL", "NFL"].includes(t.key));
 
   return (
