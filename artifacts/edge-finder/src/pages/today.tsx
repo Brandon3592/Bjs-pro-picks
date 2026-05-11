@@ -14,6 +14,7 @@ import {
   RefreshCw, Lock, Zap, Dices, Trophy, Shuffle, Target,
   TrendingUp, Cpu, Share2, ExternalLink, AlertTriangle,
   Check, X, ArrowRight, ChevronDown, ChevronUp, BookOpen,
+  BookMarked, ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AIPick, AIParlay, AIPickLeg, AILadderParlay } from "@workspace/api-client-react";
@@ -46,6 +47,97 @@ type SportKey = string;
 
 const LADDER_ACCENT = "#10b981";
 
+// ─── Sportsbooks ───────────────────────────────────────────────────────────────
+
+interface Sportsbook {
+  name: string;
+  color: string;
+  getUrl: (sport?: SportKey) => string;
+}
+
+const SPORTSBOOKS_LIST: Sportsbook[] = [
+  {
+    name: "DraftKings",
+    color: "#53D16A",
+    getUrl: (sport) => {
+      const paths: Record<string, string> = {
+        NBA: "https://sportsbook.draftkings.com/leagues/basketball/nba",
+        NFL: "https://sportsbook.draftkings.com/leagues/football/nfl",
+        MLB: "https://sportsbook.draftkings.com/leagues/baseball/mlb",
+        NHL: "https://sportsbook.draftkings.com/leagues/hockey/nhl",
+      };
+      return paths[sport ?? ""] ?? "https://sportsbook.draftkings.com/";
+    },
+  },
+  {
+    name: "FanDuel",
+    color: "#1493FF",
+    getUrl: (sport) => {
+      const paths: Record<string, string> = {
+        NBA: "https://sportsbook.fanduel.com/basketball/nba",
+        NFL: "https://sportsbook.fanduel.com/football/nfl",
+        MLB: "https://sportsbook.fanduel.com/baseball/mlb",
+        NHL: "https://sportsbook.fanduel.com/hockey/nhl",
+      };
+      return paths[sport ?? ""] ?? "https://sportsbook.fanduel.com/";
+    },
+  },
+  {
+    name: "BetMGM",
+    color: "#C9A84C",
+    getUrl: (sport) => {
+      const paths: Record<string, string> = {
+        NBA: "https://sports.betmgm.com/en/sports/basketball-7/betting/usa-9/nba-6004",
+        NFL: "https://sports.betmgm.com/en/sports/football-11/betting/usa-9/nfl-35",
+        MLB: "https://sports.betmgm.com/en/sports/baseball-23/betting/usa-9/mlb-75",
+        NHL: "https://sports.betmgm.com/en/sports/hockey-12/betting/usa-9/nhl-41",
+      };
+      return paths[sport ?? ""] ?? "https://sports.betmgm.com/en/sports";
+    },
+  },
+  {
+    name: "Caesars",
+    color: "#003087",
+    getUrl: (sport) => {
+      const paths: Record<string, string> = {
+        NBA: "https://www.caesars.com/sportsbook-and-casino/sport/basketball",
+        NFL: "https://www.caesars.com/sportsbook-and-casino/sport/football",
+        MLB: "https://www.caesars.com/sportsbook-and-casino/sport/baseball",
+        NHL: "https://www.caesars.com/sportsbook-and-casino/sport/hockey",
+      };
+      return paths[sport ?? ""] ?? "https://www.caesars.com/sportsbook-and-casino";
+    },
+  },
+  {
+    name: "BetRivers",
+    color: "#E4002B",
+    getUrl: () => "https://www.betrivers.com/",
+  },
+  {
+    name: "Bovada",
+    color: "#FF6900",
+    getUrl: (sport) => {
+      const paths: Record<string, string> = {
+        NBA: "https://www.bovada.lv/sports/basketball/nba",
+        NFL: "https://www.bovada.lv/sports/football/nfl",
+        MLB: "https://www.bovada.lv/sports/baseball/mlb",
+        NHL: "https://www.bovada.lv/sports/hockey/nhl",
+      };
+      return paths[sport ?? ""] ?? "https://www.bovada.lv/sports";
+    },
+  },
+  {
+    name: "BetOnline",
+    color: "#4CAF50",
+    getUrl: () => "https://www.betonline.ag/sportsbook",
+  },
+  {
+    name: "ESPN Bet",
+    color: "#CC0000",
+    getUrl: () => "https://www.espnbet.com",
+  },
+];
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtOdds(o: number) {
@@ -64,25 +156,6 @@ function combinedOddsPayout(odds: number): string {
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
-
-const BOOKMAKER_URLS: Record<string, string> = {
-  "DraftKings":  "https://www.draftkings.com",
-  "FanDuel":     "https://www.fanduel.com",
-  "BetMGM":      "https://www.betmgm.com",
-  "Caesars":     "https://www.caesars.com/sportsbook-online",
-  "PointsBet":   "https://www.pointsbet.com",
-  "BetRivers":   "https://www.betrivers.com",
-  "ESPN Bet":    "https://www.espnbet.com",
-  "Bet365":      "https://www.bet365.com",
-  "WynnBet":     "https://www.wynnbet.com",
-  "Betway":      "https://www.betway.com",
-  "Fliff":       "https://www.getfliff.com",
-  "Hard Rock":   "https://www.hardrock.bet",
-};
-
-function bookmakerUrl(name: string): string {
-  return BOOKMAKER_URLS[name] ?? "https://www.draftkings.com";
 }
 
 function sportBadgeClass(sport: string) {
@@ -157,9 +230,151 @@ function Skeleton({ className }: { className?: string }) {
   return <div className={cn("rounded-xl bg-muted animate-pulse", className)} />;
 }
 
+// ─── Generic Bookmaker Modal ────────────────────────────────────────────────────
+// Mirrors the mobile BookmakerSheet — shows all sportsbooks sorted by preferred first,
+// auto-copies the pick to clipboard, lets the user choose where to place the bet.
+
+type BookmakerBet = {
+  matchup: string;
+  pick: string;
+  odds: number;
+  sport?: string;
+  preferredBookmaker?: string;
+};
+
+function BookmakerModal({ bet, onClose }: { bet: BookmakerBet | null; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  const oddsStr = bet ? fmtOdds(bet.odds) : "";
+  const pickText = bet ? `${bet.matchup} — ${bet.pick} (${oddsStr})` : "";
+
+  useEffect(() => {
+    if (!bet) return;
+    navigator.clipboard.writeText(pickText).then(() => {
+      setCopied(true);
+      const t = setTimeout(() => setCopied(false), 3000);
+      return () => clearTimeout(t);
+    }).catch(() => {});
+  }, [bet, pickText]);
+
+  if (!bet) return null;
+
+  const sortedBooks = [...SPORTSBOOKS_LIST].sort((a, b) => {
+    const pref = bet.preferredBookmaker?.toLowerCase() ?? "";
+    const aMatch = a.name.toLowerCase() === pref ? -1 : 0;
+    const bMatch = b.name.toLowerCase() === pref ? 1 : 0;
+    return aMatch + bMatch;
+  });
+
+  const preferredBook = sortedBooks[0];
+  const otherBooks = sortedBooks.slice(1);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-background border border-border rounded-t-2xl sm:rounded-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Handle */}
+        <div className="w-9 h-1 rounded-full bg-border self-center mt-3 mb-0 flex-shrink-0" />
+
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 pt-4 pb-3 flex-shrink-0">
+          <div>
+            <p className="text-lg font-semibold">Place Your Bet</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Pick is copied — just open your book and search</p>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors mt-0.5">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Bet summary */}
+        <div className="mx-5 mb-3 bg-card border border-border rounded-xl p-3 flex-shrink-0">
+          <p className="text-sm font-semibold truncate">{bet.matchup}</p>
+          <div className="flex items-start justify-between gap-2 mt-1">
+            <p className="text-sm font-medium flex-1 leading-snug">{bet.pick}</p>
+            <p className="text-lg font-bold text-primary flex-shrink-0">{oddsStr}</p>
+          </div>
+          <div className={cn(
+            "flex items-center gap-2 mt-2 px-2.5 py-1.5 rounded-lg border text-xs font-medium",
+            copied
+              ? "bg-primary/10 border-primary/30 text-primary"
+              : "bg-muted border-border text-muted-foreground"
+          )}>
+            {copied
+              ? <Check className="h-3.5 w-3.5 flex-shrink-0" />
+              : <ClipboardCheck className="h-3.5 w-3.5 flex-shrink-0" />
+            }
+            {copied ? "Pick copied to clipboard!" : "Copying pick…"}
+          </div>
+        </div>
+
+        {/* Preferred sportsbook — big CTA */}
+        <div className="px-5 flex-shrink-0">
+          <p className="text-xs text-muted-foreground mb-2">Best odds found at</p>
+          <a
+            href={preferredBook.getUrl(bet.sport)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl mb-1"
+            style={{ backgroundColor: preferredBook.color }}
+            onClick={onClose}
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="h-3 w-3 rounded-full bg-white/35" />
+              <span className="text-base font-bold text-white">{preferredBook.name}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-white">Open &amp; Bet</span>
+              <ExternalLink className="h-4 w-4 text-white" />
+            </div>
+          </a>
+        </div>
+
+        {/* Other sportsbooks */}
+        <div className="px-5 flex-1 overflow-y-auto py-3">
+          <p className="text-xs text-muted-foreground mb-2">Or choose another sportsbook</p>
+          <div className="space-y-2">
+            {otherBooks.map((sb) => (
+              <a
+                key={sb.name}
+                href={sb.getUrl(bet.sport)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center gap-2.5 px-3.5 py-3 rounded-xl border border-border bg-card hover:bg-muted/50 transition-colors"
+                onClick={onClose}
+              >
+                <div className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: sb.color }} />
+                <span className="text-sm font-medium flex-1">{sb.name}</span>
+                <ExternalLink className="h-4 w-4 text-muted-foreground" />
+              </a>
+            ))}
+          </div>
+        </div>
+
+        <div className="h-4 flex-shrink-0" />
+      </div>
+    </div>
+  );
+}
+
 // ─── Lock of the Day card ──────────────────────────────────────────────────────
 
-function LockCard({ pick }: { pick: AIPick }) {
+function LockCard({
+  pick,
+  onTrack,
+  onLog,
+  onBet,
+}: {
+  pick: AIPick;
+  onTrack: () => void;
+  onLog: () => void;
+  onBet: () => void;
+}) {
   const [open, setOpen] = useState(true);
   const bullets = pick.reasoning.split(/\.\s+/).filter((s) => s.trim().length > 6);
   const GOLD = "#f59e0b";
@@ -191,6 +406,20 @@ function LockCard({ pick }: { pick: AIPick }) {
         </div>
       </div>
 
+      {/* Confidence bar */}
+      {pick.confidence != null && (
+        <div className="flex items-center gap-3 px-4 pb-2">
+          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${pick.confidence * 100}%`, backgroundColor: GOLD }}
+            />
+          </div>
+          <span className="text-[11px] font-semibold" style={{ color: GOLD }}>
+            {Math.round((pick.confidence ?? 0) * 100)}% confidence · {impliedProb(pick.odds)} implied
+          </span>
+        </div>
+      )}
 
       {/* Model Analysis */}
       <div className="border-t border-border mx-4 pt-3 pb-4">
@@ -226,22 +455,32 @@ function LockCard({ pick }: { pick: AIPick }) {
         )}
       </div>
 
-      {/* Actions */}
+      {/* Actions — Track | Log Bet | Place Bet (mirrors mobile 3-button layout) */}
       <div className="flex items-center gap-2 px-4 pb-4">
-        <Link href="/tracker" className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors hover:opacity-80" style={{ borderColor: GOLD + "66", color: GOLD }}>
+        <button
+          onClick={onTrack}
+          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors hover:opacity-80"
+          style={{ borderColor: GOLD + "66", color: GOLD }}
+        >
+          <BookMarked className="h-3.5 w-3.5" />
+          Track
+        </button>
+        <button
+          onClick={onLog}
+          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors hover:opacity-80"
+          style={{ borderColor: GOLD + "66", color: GOLD }}
+        >
           <BookOpen className="h-3.5 w-3.5" />
           Log Bet
-        </Link>
-        <a
-          href={bookmakerUrl(pick.bookmaker)}
-          target="_blank"
-          rel="noopener noreferrer"
+        </button>
+        <button
+          onClick={onBet}
           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:opacity-80"
           style={{ backgroundColor: GOLD, color: "#000" }}
         >
           <ExternalLink className="h-3.5 w-3.5" />
           Place Bet
-        </a>
+        </button>
       </div>
     </div>
   );
@@ -249,7 +488,17 @@ function LockCard({ pick }: { pick: AIPick }) {
 
 // ─── Parlay card ───────────────────────────────────────────────────────────────
 
-function ParlayCard({ parlay, accent }: { parlay: AIParlay; accent: string }) {
+function ParlayCard({
+  parlay,
+  accent,
+  onBet,
+  onLog,
+}: {
+  parlay: AIParlay;
+  accent: string;
+  onBet: () => void;
+  onLog: () => void;
+}) {
   const [open, setOpen] = useState(false);
 
   const shareText = () => {
@@ -321,7 +570,7 @@ function ParlayCard({ parlay, accent }: { parlay: AIParlay; accent: string }) {
         )}
       </div>
 
-      {/* Actions */}
+      {/* Actions — Share | Log Bet | Place Bet */}
       <div className="flex items-center gap-2 px-4 pb-4 pt-1">
         <button
           onClick={shareText}
@@ -331,24 +580,22 @@ function ParlayCard({ parlay, accent }: { parlay: AIParlay; accent: string }) {
         >
           <Share2 className="h-3.5 w-3.5" />
         </button>
-        <Link
-          href="/tracker"
+        <button
+          onClick={onLog}
           className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors hover:opacity-80"
           style={{ borderColor: accent + "55", color: accent }}
         >
           <BookOpen className="h-3.5 w-3.5" />
           Log Bet
-        </Link>
-        <a
-          href={bookmakerUrl(parlay.legs[0]?.bookmaker ?? "")}
-          target="_blank"
-          rel="noopener noreferrer"
+        </button>
+        <button
+          onClick={onBet}
           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:opacity-80"
           style={{ backgroundColor: accent, color: "#fff" }}
         >
           <ExternalLink className="h-3.5 w-3.5" />
           Place Bet
-        </a>
+        </button>
       </div>
     </div>
   );
@@ -362,12 +609,14 @@ function DailyLadderCard({
   onSettle,
   isSettling,
   onPlaceBet,
+  onLog,
 }: {
   parlay: AILadderParlay;
   progress: LadderProgress | undefined;
   onSettle: (won: boolean) => void;
   isSettling: boolean;
   onPlaceBet: () => void;
+  onLog: () => void;
 }) {
   const steps = parlay.steps ?? [];
   const today = steps[0];
@@ -493,7 +742,7 @@ function DailyLadderCard({
 
       {/* Settlement */}
       {!settled && (
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-3">
           <p className="text-xs text-muted-foreground mb-2 text-center">Did today's bet win?</p>
           <div className="flex gap-2">
             <button
@@ -515,6 +764,26 @@ function DailyLadderCard({
           </div>
         </div>
       )}
+
+      {/* Bottom actions — Log Bet | Place Bet (mirrors mobile DailyLadderCard bottom row) */}
+      <div className="flex items-center gap-2 px-4 pb-4 pt-2 border-t border-border mt-1">
+        <button
+          onClick={onLog}
+          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors hover:opacity-80 flex-1"
+          style={{ borderColor: ACCENT + "55", color: ACCENT }}
+        >
+          <BookOpen className="h-3.5 w-3.5" />
+          Log Bet
+        </button>
+        <button
+          onClick={onPlaceBet}
+          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:opacity-80"
+          style={{ backgroundColor: ACCENT, color: "#fff" }}
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          Place Bet
+        </button>
+      </div>
     </div>
   );
 }
@@ -533,82 +802,9 @@ function Divider({ label }: { label: string }) {
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
-// ─── Bookmaker chooser modal ────────────────────────────────────────────────
-// Shows all bookmakers referenced in the ladder legs so the user can pick
-// which sportsbook to open, rather than auto-redirecting to one.
-
-function BookmakerModal({ legs, onClose }: { legs: AIPickLeg[]; onClose: () => void }) {
-  const books = Array.from(new Set(legs.map((l) => l.bookmaker).filter(Boolean)));
-  if (books.length === 0) books.push("DraftKings");
-
-  const parlayText = legs.map((l, i) =>
-    `${i + 1}. ${l.player ? `${l.player} — ` : ""}${l.pick} (${fmtOdds(l.odds)}) via ${l.bookmaker}`
-  ).join("\n");
-  const copyText = `🎯 Today's 2-Leg Parlay\n\n${parlayText}\n\nGenerated by BJ's Pro Picks`;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="bg-card border border-border rounded-t-2xl sm:rounded-2xl w-full max-w-md p-5 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-bold">Place Today's 2-Leg Bet</p>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="space-y-2">
-          {legs.map((leg, i) => (
-            <div key={i} className="flex items-start gap-2 text-xs">
-              <span className="font-bold text-primary mt-0.5">{i + 1}.</span>
-              <span className="text-foreground">{leg.pick}</span>
-              <span className="font-mono font-bold text-green-400 ml-auto flex-shrink-0">{fmtOdds(leg.odds)}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="border-t border-border pt-3 space-y-2">
-          <p className="text-[10px] text-muted-foreground font-medium tracking-wider">CHOOSE SPORTSBOOK</p>
-          {books.map((book) => (
-            <a
-              key={book}
-              href={bookmakerUrl(book)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-primary/30 bg-primary/10 text-sm font-semibold text-primary hover:bg-primary/20 transition-colors"
-            >
-              <span>{book}</span>
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          ))}
-        </div>
-
-        <button
-          onClick={() => {
-            if (navigator.share) {
-              navigator.share({ title: "Today's 2-Leg Parlay", text: copyText }).catch(() => {});
-            } else {
-              navigator.clipboard.writeText(copyText).catch(() => {});
-            }
-          }}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Share2 className="h-3.5 w-3.5" />
-          Copy parlay to clipboard
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function TodayPage() {
   const [selectedSport, setSelectedSport] = useState<SportKey>("all");
-  const [ladderBetLegs, setLadderBetLegs] = useState<AIPickLeg[] | null>(null);
+  const [bookmakerBet, setBookmakerBet] = useState<BookmakerBet | null>(null);
   const queryClient = useQueryClient();
 
   // All-sports data — cross-sport parlays for All Sports tab
@@ -672,8 +868,7 @@ export default function TodayPage() {
     );
   }
 
-  // Auto-refresh banner: shown when picks were silently regenerated due to
-  // a canceled game or a ruled-out player — auto-dismisses after 15s.
+  // Auto-refresh banner
   const [autoRefreshedBanner, setAutoRefreshedBanner] = useState(false);
   const autoRefreshedFlag = (allData as any)?.autoRefreshed as boolean | undefined;
   useEffect(() => {
@@ -686,11 +881,49 @@ export default function TodayPage() {
   function handleRefresh() {
     doRefresh(undefined, {
       onSettled: () => {
-        // Invalidate ALL ai-picks cache entries (all-sports + every sport tab variant)
-        // so every query instance re-fetches fresh data from the server.
         queryClient.invalidateQueries({ queryKey: getGetAiPicksQueryKey() });
       },
     });
+  }
+
+  // ── Bet action helpers (mirrors mobile openBet / openBetParlay) ──────────────
+
+  function openBet(pick: AIPick | { awayTeam: string; homeTeam: string; pick: string; odds: number; bookmaker: string; sport?: string }) {
+    setBookmakerBet({
+      matchup: `${"awayTeam" in pick ? pick.awayTeam : (pick as any).awayTeam} @ ${"homeTeam" in pick ? pick.homeTeam : (pick as any).homeTeam}`,
+      pick: pick.pick,
+      odds: pick.odds,
+      sport: (pick as any).sport,
+      preferredBookmaker: pick.bookmaker,
+    });
+  }
+
+  function openBetParlay(legs: AIPickLeg[]) {
+    if (!legs.length) return;
+    const combined = calcCombinedOdds(legs);
+    const pickText = legs.map((l, i) => `Leg ${i + 1}: ${l.pick}`).join("  ·  ");
+    setBookmakerBet({
+      matchup: legs.length > 1 ? `${legs.length}-Leg Parlay` : `${legs[0].awayTeam} @ ${legs[0].homeTeam}`,
+      pick: pickText,
+      odds: combined,
+      sport: legs[0]?.sport,
+      preferredBookmaker: legs[0]?.bookmaker,
+    });
+  }
+
+  function openBetForParlay(p: AIParlay) {
+    setBookmakerBet({
+      matchup: p.name,
+      pick: p.legs.map((l, i) => `Leg ${i + 1}: ${l.pick}`).join("  ·  "),
+      odds: p.combinedOdds,
+      sport: p.legs[0]?.sport,
+      preferredBookmaker: p.legs[0]?.bookmaker,
+    });
+  }
+
+  // Log Bet — navigates to /tracker (web equivalent of mobile QuickAddModal)
+  function logBetToTracker() {
+    window.location.href = "/tracker";
   }
 
   // Parlay mapping
@@ -722,8 +955,6 @@ export default function TodayPage() {
   const COMBAT_SPORTS     = new Set(["MMA", "Boxing"]);
   const isIndividualSport = INDIVIDUAL_SPORTS.has(selectedSport) || COMBAT_SPORTS.has(selectedSport);
 
-  // True when the API returned no picks for this sport (no qualifying games today).
-  // Individual/combat sports don't have game parlays, so don't gate on gameParlay for them.
   const noPicksForSport = !isAllTab && !isLoading && !lock && !safeParlay && !lottoParlay
     && (isIndividualSport || !gameParlay);
 
@@ -742,14 +973,10 @@ export default function TodayPage() {
 
   const isNflOffSeason = selectedSport === "NFL" && !NFL_SEASON_ACTIVE;
 
-  // Sports that support player props (prop/mix parlay sections shown).
-  // WNBA and Soccer excluded: Odds API has no h2h/prop coverage for them.
   const PROPS_SPORTS = new Set(["all", "NBA", "MLB", "NHL", "NFL"]);
   const hasSportProps  = PROPS_SPORTS.has(selectedSport);
   const hasSportLadder = activeLadder !== null;
 
-  // Build the tab list dynamically — show only sports with games today.
-  // While loading, fall back to the 4 core US sports.
   const activeSports = (allData as any)?.activeSports as string[] | undefined;
   const sportTabs = activeSports
     ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || activeSports.includes(t.key))
@@ -780,7 +1007,7 @@ export default function TodayPage() {
         </button>
       </div>
 
-      {/* Auto-refresh banner — appears when picks were silently regenerated */}
+      {/* Auto-refresh banner */}
       {autoRefreshedBanner && (
         <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
           <AlertTriangle className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
@@ -796,7 +1023,7 @@ export default function TodayPage() {
         </div>
       )}
 
-      {/* Sport tabs — dynamically shown based on what's active today */}
+      {/* Sport tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         {sportTabs.map((tab) => (
           <button
@@ -836,7 +1063,6 @@ export default function TodayPage() {
           <Skeleton className="h-48" />
         </div>
       ) : isNflOffSeason ? (
-        /* ── NFL off-season ── */
         <div className="space-y-5">
           <Divider label="NFL PICKS" />
           <EmptyCard>🏈 NFL season starts in September. Check back then for NFL-specific picks.</EmptyCard>
@@ -855,14 +1081,26 @@ export default function TodayPage() {
           {/* Lock of the Day */}
           <div>
             <SectionHeader icon={Lock} label="Lock of the Day" sublabel="Highest confidence single pick" accent="#f59e0b" />
-            {lock ? <LockCard pick={lock} /> : <EmptyCard>No lock available — try refreshing.</EmptyCard>}
+            {lock ? (
+              <LockCard
+                pick={lock}
+                onTrack={logBetToTracker}
+                onLog={logBetToTracker}
+                onBet={() => openBet(lock)}
+              />
+            ) : (
+              <EmptyCard>No lock available — try refreshing.</EmptyCard>
+            )}
           </div>
 
           {/* Safe Parlay */}
           <div>
             <SectionHeader icon={Zap} label="Safe Parlay of the Day" sublabel="2–3 legs, solid value (+175 to +500)" accent="#22c55e" />
             {(safeParlay?.legs?.length ?? 0) > 0
-              ? <ParlayCard parlay={safeParlay!} accent="#22c55e" />
+              ? <ParlayCard parlay={safeParlay!} accent="#22c55e"
+                  onBet={() => openBetForParlay(safeParlay!)}
+                  onLog={logBetToTracker}
+                />
               : <EmptyCard>No safe parlay — try refreshing.</EmptyCard>
             }
           </div>
@@ -871,17 +1109,23 @@ export default function TodayPage() {
           <div>
             <SectionHeader icon={Dices} label="Lotto Parlay of the Day" sublabel="4–6 legs, big payout (+800 to +3000)" accent="#a855f7" />
             {(lottoParlay?.legs?.length ?? 0) > 0
-              ? <ParlayCard parlay={lottoParlay!} accent="#a855f7" />
+              ? <ParlayCard parlay={lottoParlay!} accent="#a855f7"
+                  onBet={() => openBetForParlay(lottoParlay!)}
+                  onLog={logBetToTracker}
+                />
               : <EmptyCard>No lotto parlay — try refreshing.</EmptyCard>
             }
           </div>
 
-          {/* Game Parlay — team sports only, not Tennis/Golf/MMA/Boxing */}
+          {/* Game Parlay — team sports only */}
           {!isIndividualSport && (
             <div>
               <SectionHeader icon={Trophy} label="Game Picks Parlay" sublabel="Moneyline, spread & O/U only — no props" accent="#3b82f6" />
               {(gameParlay?.legs?.length ?? 0) > 0
-                ? <ParlayCard parlay={gameParlay!} accent="#3b82f6" />
+                ? <ParlayCard parlay={gameParlay!} accent="#3b82f6"
+                    onBet={() => openBetForParlay(gameParlay!)}
+                    onLog={logBetToTracker}
+                  />
                 : <EmptyCard>No game parlay — try refreshing.</EmptyCard>
               }
             </div>
@@ -892,15 +1136,21 @@ export default function TodayPage() {
             <div>
               <SectionHeader icon={Target} label="Fight Picks Parlay" sublabel="KO, submission & decision method props" accent="#ef4444" />
               {(propParlay?.legs?.length ?? 0) > 0
-                ? <ParlayCard parlay={propParlay!} accent="#ef4444" />
+                ? <ParlayCard parlay={propParlay!} accent="#ef4444"
+                    onBet={() => openBetForParlay(propParlay!)}
+                    onLog={logBetToTracker}
+                  />
                 : (gameParlay?.legs?.length ?? 0) > 0
-                  ? <ParlayCard parlay={gameParlay!} accent="#ef4444" />
+                  ? <ParlayCard parlay={gameParlay!} accent="#ef4444"
+                      onBet={() => openBetForParlay(gameParlay!)}
+                      onLog={logBetToTracker}
+                    />
                   : <EmptyCard>No fight picks parlay today — check back on event days.</EmptyCard>
               }
             </div>
           )}
 
-          {/* Props Parlay — only for sports with player prop markets */}
+          {/* Props Parlay */}
           {hasSportProps && (
             <div>
               <SectionHeader icon={Target}
@@ -908,24 +1158,30 @@ export default function TodayPage() {
                 sublabel={selectedSport === "Soccer" ? "Best value soccer match picks combined" : selectedSport === "WNBA" ? "Best value WNBA game picks combined" : "All player performance props"}
                 accent="#f97316" />
               {(propParlay?.legs?.length ?? 0) > 0
-                ? <ParlayCard parlay={propParlay!} accent="#f97316" />
+                ? <ParlayCard parlay={propParlay!} accent="#f97316"
+                    onBet={() => openBetForParlay(propParlay!)}
+                    onLog={logBetToTracker}
+                  />
                 : <EmptyCard>No props parlay — try refreshing.</EmptyCard>
               }
             </div>
           )}
 
-          {/* Mix Parlay — only for sports with player prop markets */}
+          {/* Mix Parlay */}
           {hasSportProps && (
             <div>
               <SectionHeader icon={Shuffle} label="Mix Parlay" sublabel="Game bets + player props combined" accent="#14b8a6" />
               {(mixParlay?.legs?.length ?? 0) > 0
-                ? <ParlayCard parlay={mixParlay!} accent="#14b8a6" />
+                ? <ParlayCard parlay={mixParlay!} accent="#14b8a6"
+                    onBet={() => openBetForParlay(mixParlay!)}
+                    onLog={logBetToTracker}
+                  />
                 : <EmptyCard>No mix parlay — try refreshing.</EmptyCard>
               }
             </div>
           )}
 
-          {/* Sport-specific prop parlays — only rendered when real data is available */}
+          {/* Sport-specific prop parlays */}
           {hasSportProps && selectedSport !== "all" && (() => {
             const hasNba3pt  = selectedSport === "NBA" && (threePtParlay?.legs?.length ?? 0) > 0;
             const hasMlbHr   = selectedSport === "MLB" && (hrParlay?.legs?.length ?? 0) > 0;
@@ -938,32 +1194,44 @@ export default function TodayPage() {
                 {hasNba3pt && (
                   <div>
                     <SectionHeader icon={Target} label="NBA 3-Pointer Parlay" sublabel="Volume shooters from deep" accent="#f97316" />
-                    <ParlayCard parlay={threePtParlay!} accent="#f97316" />
+                    <ParlayCard parlay={threePtParlay!} accent="#f97316"
+                      onBet={() => openBetForParlay(threePtParlay!)}
+                      onLog={logBetToTracker}
+                    />
                   </div>
                 )}
                 {hasMlbHr && (
                   <div>
                     <SectionHeader icon={TrendingUp} label="MLB Home Run Parlay" sublabel="Multi-HR bomber parlay · high variance" accent="#3b82f6" />
-                    <ParlayCard parlay={hrParlay!} accent="#3b82f6" />
+                    <ParlayCard parlay={hrParlay!} accent="#3b82f6"
+                      onBet={() => openBetForParlay(hrParlay!)}
+                      onLog={logBetToTracker}
+                    />
                   </div>
                 )}
                 {hasNhlGs && (
                   <div>
                     <SectionHeader icon={Target} label="NHL Goal Scorer Parlay" sublabel="Anytime goal or assist combo" accent="#8b5cf6" />
-                    <ParlayCard parlay={goalScorerParlay!} accent="#8b5cf6" />
+                    <ParlayCard parlay={goalScorerParlay!} accent="#8b5cf6"
+                      onBet={() => openBetForParlay(goalScorerParlay!)}
+                      onLog={logBetToTracker}
+                    />
                   </div>
                 )}
                 {hasNflTd && (
                   <div>
                     <SectionHeader icon={Target} label="NFL TD Scorer Parlay" sublabel="Anytime touchdown combo" accent="#22c55e" />
-                    <ParlayCard parlay={tdParlay!} accent="#22c55e" />
+                    <ParlayCard parlay={tdParlay!} accent="#22c55e"
+                      onBet={() => openBetForParlay(tdParlay!)}
+                      onLog={logBetToTracker}
+                    />
                   </div>
                 )}
               </>
             );
           })()}
 
-          {/* Daily Ladder — only for sports that have a ladder (NBA/MLB/NHL/NFL/All) */}
+          {/* Daily Ladder */}
           {hasSportLadder && (
             <>
               <Divider label="DAILY LADDER · $10 → $10K" />
@@ -976,7 +1244,8 @@ export default function TodayPage() {
                       progress={ladderProgress}
                       onSettle={handleSettle}
                       isSettling={isSettling}
-                      onPlaceBet={() => setLadderBetLegs(activeLadder!.steps?.[0]?.legs ?? [])}
+                      onPlaceBet={() => openBetParlay(activeLadder!.steps?.[0]?.legs ?? [])}
+                      onLog={logBetToTracker}
                     />
                   )
                   : (
@@ -997,8 +1266,9 @@ export default function TodayPage() {
         For entertainment only. Bet responsibly. Past performance does not guarantee future results.
       </p>
 
-      {ladderBetLegs && (
-        <BookmakerModal legs={ladderBetLegs} onClose={() => setLadderBetLegs(null)} />
+      {/* Bookmaker chooser modal — used by all Place Bet buttons */}
+      {bookmakerBet && (
+        <BookmakerModal bet={bookmakerBet} onClose={() => setBookmakerBet(null)} />
       )}
     </div>
   );
