@@ -311,7 +311,7 @@ async function loadLadderFromDb(sport: string): Promise<AILadderParlay | null> {
       // This can happen when a stale cache entry was saved before the cross-sport logic was in place.
       if (sport === "All Sports") {
         // Strong sports for All Sports ladder: must have real bookmaker h2h coverage
-        const STRONG_SPORTS = new Set(["NBA", "MLB", "NHL", "NFL", "Soccer", "MMA", "Boxing", "Tennis", "Golf"]);
+        const STRONG_SPORTS = new Set(["NBA", "MLB", "NHL", "NFL"]);
         const legs = ladder.steps?.[0]?.legs;
         const invalid = !legs || legs.length < 2
           || legs[0].sport === legs[1].sport
@@ -1970,11 +1970,8 @@ router.get("/ai-picks", async (req, res) => {
         return interleaved;
       })();
 
-      // Fall back to game legs for prop-less sports (Soccer, Tennis, MMA).
-      // Game favorites in the -120 to -350 range behave similarly to heavy prop favorites.
-      const candidates: AIPickLeg[] = propCandidates.length >= 2
-        ? propCandidates
-        : (fallbackGameLegs ?? []).filter((l) => l.odds >= -350 && l.odds <= -110);
+      // Ladders are prop-bet only — no game line fallback.
+      const candidates: AIPickLeg[] = propCandidates;
 
       if (candidates.length < 2) return null;
 
@@ -1990,16 +1987,6 @@ router.get("/ai-picks", async (req, res) => {
           if (!sportQueue.has(leg.sport)) sportQueue.set(leg.sport, []);
           sportQueue.get(leg.sport)!.push(leg);
         }
-        // Core sports only for game-leg fallback in the All Sports ladder.
-        // WNBA and other low-coverage sports are excluded to prevent weak legs.
-        const ALL_SPORTS_CORE = new Set(["NBA", "MLB", "NHL", "NFL", "Soccer", "MMA", "Boxing", "Tennis", "Golf"]);
-        for (const [s, legs] of legsBySport.entries()) {
-          if (!ALL_SPORTS_CORE.has(s)) continue;
-          if ((sportQueue.get(s)?.length ?? 0) > 0) continue;
-          const favs = legs.filter((l) => l.odds >= -350 && l.odds <= -110);
-          if (favs.length > 0) sportQueue.set(s, [...favs]);
-        }
-
         // Each day: pick the top leg from the sport with the most remaining candidates,
         // then pick the top leg from the sport with the second-most — guaranteed different sports.
         for (let day = 1; day <= TOTAL_DAYS; day++) {
@@ -2068,23 +2055,16 @@ router.get("/ai-picks", async (req, res) => {
     const ALL_LADDER_EXCLUDED = new Set(["basketball_wnba"]);
     const allPropSportKeys = [...new Set(realProps.map((p) => p.sport))].filter(k => !ALL_LADDER_EXCLUDED.has(k));
 
-    // Soccer ladder uses game-leg favorites since soccer has no player prop markets.
-    // WNBA ladder also falls back to game legs: WNBA props tend to be -130 to -160
-    // (below the -180 prop threshold), so the game-leg fallback ensures the ladder builds.
-    const soccerGameFavLegs = (legsBySport.get("Soccer") ?? [])
-      .filter((l) => l.odds >= -350 && l.odds <= -110);
-    const wnbaGameFavLegs = (legsBySport.get("WNBA") ?? [])
-      .filter((l) => l.odds >= -350 && l.odds <= -110);
-
-    const [nbaLadder, mlbLadder, nhlLadder, nflLadder, wnbaLadder, soccerLadder, allLadder] = await Promise.all([
+    // All ladders are prop-bet only — no game line legs, no Soccer/WNBA ladders.
+    const [nbaLadder, mlbLadder, nhlLadder, nflLadder, allLadder] = await Promise.all([
       getOrBuildLadder(["basketball_nba"], "NBA"),
       getOrBuildLadder(["baseball_mlb"], "MLB"),
       getOrBuildLadder(["icehockey_nhl"], "NHL"),
       getOrBuildLadder(["americanfootball_nfl"], "NFL"),
-      getOrBuildLadder(["basketball_wnba"], "WNBA", wnbaGameFavLegs),
-      getOrBuildLadder([], "Soccer", soccerGameFavLegs),
       allPropSportKeys.length > 0 ? getOrBuildLadder(allPropSportKeys, "All Sports") : Promise.resolve(null),
     ]);
+    const wnbaLadder = null;
+    const soccerLadder = null;
 
     const sportsInPlay = [...new Set([
       ...gameLegPool.slice(0, 6).map((l) => normSport(l.sport)),
@@ -2123,12 +2103,15 @@ router.get("/ai-picks", async (req, res) => {
       // Only show a sport tab when it has actual game legs — prevents empty Boxing/Tennis
       // tabs from appearing on days with no events for that sport.
       activeSports: (() => {
+        const ALLOWED_SPORT_TABS = new Set(["NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF"]);
         const sportsWithLegs = new Set(
           [...legsBySport.keys()].filter((s) => (legsBySport.get(s)?.length ?? 0) > 0),
         );
-        const filtered = catalogActiveSports.filter((s) => sportsWithLegs.has(s));
-        // Fall back to full catalog if filtering produces nothing (e.g. first run)
-        return filtered.length > 0 ? filtered : catalogActiveSports;
+        const filtered = catalogActiveSports.filter(
+          (s) => sportsWithLegs.has(s) && ALLOWED_SPORT_TABS.has(s),
+        );
+        // Fall back to core sports if filtering produces nothing (e.g. first run)
+        return filtered.length > 0 ? filtered : ["NBA", "MLB", "NHL", "NFL"];
       })(),
     };
 

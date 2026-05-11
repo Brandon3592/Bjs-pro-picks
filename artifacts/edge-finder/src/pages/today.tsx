@@ -28,19 +28,13 @@ const NFL_SEASON_ACTIVE = (() => {
 
 // Ordered list of all possible sport tabs — shown only when that sport is active today
 const ALL_POSSIBLE_TABS = [
-  { key: "all",    label: "All Sports", emoji: "🌐" },
-  { key: "NBA",    label: "NBA",        emoji: "🏀" },
-  { key: "MLB",    label: "MLB",        emoji: "⚾" },
-  { key: "NHL",    label: "NHL",        emoji: "🏒" },
-  { key: "NFL",    label: "NFL",        emoji: "🏈" },
-  { key: "NCAAB",  label: "NCAAB",     emoji: "🎓" },
-  { key: "NCAAF",  label: "NCAAF",     emoji: "🎓" },
-  { key: "WNBA",   label: "WNBA",      emoji: "🏀" },
-  { key: "Soccer", label: "Soccer",    emoji: "⚽" },
-  { key: "Tennis", label: "Tennis",    emoji: "🎾" },
-  { key: "Golf",   label: "Golf",      emoji: "⛳" },
-  { key: "MMA",    label: "MMA",       emoji: "🥊" },
-  { key: "Boxing", label: "Boxing",    emoji: "🥊" },
+  { key: "all",   label: "All Sports", emoji: "🌐" },
+  { key: "NBA",   label: "NBA",        emoji: "🏀" },
+  { key: "MLB",   label: "MLB",        emoji: "⚾" },
+  { key: "NHL",   label: "NHL",        emoji: "🏒" },
+  { key: "NFL",   label: "NFL",        emoji: "🏈" },
+  { key: "NCAAB", label: "NCAAB",      emoji: "🎓" },
+  { key: "NCAAF", label: "NCAAF",      emoji: "🎓" },
 ];
 
 type SportKey = string;
@@ -978,8 +972,9 @@ export default function TodayPage() {
   const hasSportLadder = activeLadder !== null;
 
   const activeSports = (allData as any)?.activeSports as string[] | undefined;
+  const ALLOWED_SPORT_KEYS = new Set(["all", "NBA", "MLB", "NHL", "NFL", "NCAAB", "NCAAF"]);
   const sportTabs = activeSports
-    ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || activeSports.includes(t.key))
+    ? ALL_POSSIBLE_TABS.filter((t) => t.key === "all" || (activeSports.includes(t.key) && ALLOWED_SPORT_KEYS.has(t.key)))
     : ALL_POSSIBLE_TABS.filter((t) => ["all", "NBA", "MLB", "NHL", "NFL"].includes(t.key));
 
   return (
